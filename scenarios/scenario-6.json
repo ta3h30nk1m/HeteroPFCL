@@ -1,0 +1,26 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "Co-Instruct-DB","subset_id": 5, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "Co-Instruct-DB","subset_id": 6, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 2,
+        "datasets":[
+            {"dataset": "Co-Instruct-DB","subset_id": 7, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 3,
+        "datasets":[
+            {"dataset": "Co-Instruct-DB","subset_id": 8, "type":"multi-choice"}
+        ]
+    }
+]

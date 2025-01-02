@@ -1,0 +1,14 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "Mantis_contrastive_caption","subset_id": 0, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "Mantis_contrastive_caption","subset_id": 1, "type":"multi-choice"}
+        ]
+    }
+]

@@ -1,0 +1,14 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "HRVQA","subset_id": 1, "type":"multi-choice"},
+            {"dataset": "HRVQA","subset_id": 6, "type":"multi-choice"},
+            {"dataset": "iconqa","subset_id": 4, "type":"multi-choice"},
+            {"dataset": "ALFRED","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
+            {"dataset": "DiDeMoSV","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
+            {"dataset": "COMICS_Dialogue","subset_id": 0, "type":"multi-choice"},
+            {"dataset": "RecipeQA_ImageCoherence","subset_id": 0,"type":"multi-choice"}
+        ]
+    }
+]

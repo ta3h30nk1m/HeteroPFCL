@@ -1,0 +1,26 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "DreamSim","subset_id": 0,"type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "Mementos","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+        ]
+    },
+    {
+        "client_id": 2,
+        "datasets":[
+            {"dataset": "Bongard-HOI","subset_id": 2, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 3,
+        "datasets":[
+            {"dataset": "Co-Instruct-DB","subset_id": 8, "type":"multi-choice"}
+        ]
+    }
+]

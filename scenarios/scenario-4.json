@@ -1,0 +1,14 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "mPLUG","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+        ]
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "iconqa","subset_id": 4, "type":"multi-choice"}
+        ]
+    }
+]

@@ -1,0 +1,26 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "ALFRED","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+        ]
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "DiDeMoSV","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+        ]
+    },
+    {
+        "client_id": 2,
+        "datasets":[
+            {"dataset": "COMICS_Dialogue","subset_id": 0, "type":"multi-choice"}
+        ]
+    },
+    {
+        "client_id": 3,
+        "datasets":[
+            {"dataset": "RecipeQA_ImageCoherence","subset_id": 0,"type":"multi-choice"}
+        ]
+    }
+]

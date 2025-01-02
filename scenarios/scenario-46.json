@@ -1,0 +1,9 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "Fashion200K","subset_id": 0,"type":"multi-choice"},
+            {"dataset": "Fashion200K","subset_id": 1,"type":"multi-choice"}
+        ]
+    }
+]

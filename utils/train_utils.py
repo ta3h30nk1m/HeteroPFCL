@@ -1,0 +1,413 @@
+import torch
+import os
+import logging
+import transformers
+from models.llava.language_model.llava_llama import LlavaLlamaForCausalLM
+from models.llava.language_model.llava_mpt import LlavaMptForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer, CLIPTextModel, CLIPProcessor, CLIPModel
+import models.llava.conversation as conversation_lib_llava
+from peft.tuners.lora import LoraLayer
+
+from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration
+
+import copy
+ACCESS_TOKEN = "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"
+
+def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args):
+    compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
+    attn_implementation = "flash_attention_2"
+
+    # load tokenizer
+    # for llava
+    if model_args.model_type == "mpt":
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right"
+        )
+    elif model_args.model_type == 'llama': 
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=False,
+        )
+    
+    # for bunny
+    elif (
+        model_args.model_type == 'phi-1.5' or model_args.model_type == 'phi-2'
+            or model_args.model_type == 'qwen1.5-1.8b' or model_args.model_type == 'minicpm'):
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=True,
+        )
+    elif model_args.model_type == 'llama3-8b':
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=True,
+            token=ACCESS_TOKEN
+        )
+    elif model_args.model_type == 'stablelm-2':
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=True,
+            trust_remote_code=True
+        )
+    elif model_args.model_type == 'gemma-2':
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            token=ACCESS_TOKEN
+        )
+
+    if tokenizer.unk_token is not None and tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.unk_token
+    
+    if model_args.model_type == 'llama3-8b':
+        tokenizer.pad_token = tokenizer.eos_token
+        
+    if training_args.is_eval:
+        tokenizer.padding_side = "left"
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
+    model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
+        model_args.model_name_or_path,
+        torch_dtype=torch.bfloat16, 
+        low_cpu_mem_usage=True,
+        use_flash_attention_2=True
+    )
+    
+    model.language_model.config._attn_implementation='flash_attention_2'
+
+    model.config.use_cache = False
+    model.vision_tower.requires_grad_(False)
+
+    # FIXME
+    if training_args.bits >= 16:
+        model = model.to(training_args.device)
+    
+    if training_args.bits in [4, 8]:
+        from peft import prepare_model_for_kbit_training
+        model.config.torch_dtype=(torch.float32 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_args.gradient_checkpointing)
+
+    if training_args.gradient_checkpointing:
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        else:
+            def make_inputs_require_grad(module, input, output):
+                output.requires_grad_(True)
+            model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+    
+    if training_args.bits == 16:
+            if training_args.bf16:
+                model.to(torch.bfloat16)
+            if training_args.fp16:
+                model.to(torch.float16)
+    
+    if training_args.lora_enable:
+        from peft import LoraConfig, get_peft_model
+        
+        target_modules = ['k_proj', 'v_proj']
+        
+        lora_config = LoraConfig(
+            r=training_args.lora_r,
+            lora_alpha=training_args.lora_alpha,
+            target_modules=target_modules,#find_all_linear_names(model),
+            lora_dropout=training_args.lora_dropout,
+            bias=training_args.lora_bias,
+            task_type="CAUSAL_LM",
+            exclude_modules=r".*vision_tower.*",
+        )
+        
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours'] or training_args.mode =='feddat':
+            from models.duallora.dualloramodel import DualLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
+            lora_config.peft_type = 'DUALLORA'
+        
+        # rank0_print("Adding LoRA adapters...")
+        model = get_peft_model(model, lora_config)
+    
+    elif training_args.ia3_enable:
+        from peft import IA3Config, get_peft_model
+        ia3_config = IA3Config(
+            exclude_modules=r".*vision_tower.*",
+            target_modules=["k_proj", "v_proj", "down_proj"], 
+            feedforward_modules=["down_proj"],
+            task_type="CAUSAL_LM",
+        )
+        
+        # create pool
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours'] or training_args.mode =='feddat':
+            from models.dual_ia3.dual_ia3_model import DualIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALIA3'] = DualIA3Model
+            ia3_config.peft_type = 'DUALIA3'
+        
+        elif 'L2P' in training_args.mode or 'DAP' in training_args.mode or 'CodaPrompt' in training_args.mode:
+            from models.empty_ia3.empty_ia3_model import EmptyIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['EMPTYIA3'] = EmptyIA3Model
+            ia3_config.peft_type = 'EMPTYIA3'
+        
+        elif training_args.mode in ['LAE', 'LAE_FedAvg', 'LAE_FedPer']:
+            from models.lae_ia3.lae_ia3_model import LAEIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['LAEIA3'] = LAEIA3Model
+            ia3_config.peft_type = 'LAEIA3'
+        
+        elif training_args.mode in ['LAE_FedDAT', 'LAE_Ditto']:
+            from models.lae_ia3_dual.dual_lae_ia3_model import DualLAEIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALLAEIA3'] = DualLAEIA3Model
+            ia3_config.peft_type = 'DUALLAEIA3'
+        
+        elif training_args.mode in ['EvoPrompt']:
+            from models.evo_ia3.evoia3model import EVOIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['EVOIA3'] = EVOIA3Model
+            ia3_config.peft_type = 'EVOIA3'
+            ia3_config.generator_output_size = 1024
+            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
+        elif training_args.mode in ['EvoPrompt_T']:
+            from models.evo_ia3.evoia3model import EVOIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['EVOIA3'] = EVOIA3Model
+            ia3_config.peft_type = 'EVOIA3'
+            ia3_config.generator_output_size = 768
+            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
+
+        elif training_args.mode in ['ours_generator']:
+            from models.ours_ia3.ours_ia3_model import DualEVOIA3Model
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['OURSGEN'] = DualEVOIA3Model
+            ia3_config.peft_type = 'OURSGEN'
+            ia3_config.generator_output_size = training_args.generator_output_size
+            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
+        elif training_args.mode in ['ours_generator2', 'ours_generator3', 'ours_generator4']:
+            from models.ours_ia3_2.ours_ia3_model2 import DualEVOIA3Model2
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['OURSGEN2'] = DualEVOIA3Model2
+            ia3_config.peft_type = 'OURSGEN2'
+        
+        model = get_peft_model(model, ia3_config)
+        model = model.to(device=training_args.device, dtype=compute_dtype)
+
+    if model_args.version in conversation_lib_llava.conv_templates:
+        conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates[model_args.version]
+    else:
+        conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates["vicuna_v1"]
+
+    data_args.image_processor = processor.image_processor
+
+    model.config.tokenizer_padding_side = tokenizer.padding_side
+    model.config.tokenizer_model_max_length = tokenizer.model_max_length
+
+    # freeze some layers
+    # FIXME
+    
+    model.config.mm_use_im_start_end = data_args.mm_use_im_start_end = model_args.mm_use_im_start_end
+    model.config.mm_projector_lr = training_args.mm_projector_lr
+    training_args.use_im_start_end = model_args.mm_use_im_start_end
+    model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
+    
+    total_count = 0
+    for n, p in model.named_parameters():
+        if p.requires_grad:
+            print(n, p.shape)
+            total_count += p.numel()
+    print(total_count)
+    return model, tokenizer, processor, data_args
+
+def find_all_linear_names(model):
+    cls = torch.nn.Linear
+    lora_module_names = set()
+    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler']
+    for name, module in model.named_modules():
+        if any(mm_keyword in name for mm_keyword in multimodal_keywords):
+            continue
+        if isinstance(module, cls):
+            names = name.split('.')
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if 'lm_head' in lora_module_names: # needed for 16-bit
+        lora_module_names.remove('lm_head')
+    return list(lora_module_names)
+
+from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
+from transformers.trainer_pt_utils import get_parameter_names
+
+def get_decay_parameter_names(model):
+    """
+    Get all parameter names that weight decay will be applied to
+
+    Note that some models implement their own layernorm instead of calling nn.LayerNorm, weight decay could still
+    apply to those modules since this function only filter out instance of nn.LayerNorm
+    """
+    decay_parameters = get_parameter_names(model, ALL_LAYERNORM_LAYERS)
+    decay_parameters = [name for name in decay_parameters if "bias" not in name]
+    return decay_parameters
+
+
+
+# Borrowed from peft.utils.get_peft_model_state_dict
+def get_peft_state_maybe_zero_3(named_params, bias):
+    if bias == "none":
+        to_return = {k: t for k, t in named_params if "lora_" in k}
+    elif bias == "all":
+        to_return = {k: t for k, t in named_params if "lora_" in k or "bias" in k}
+    elif bias == "lora_only":
+        to_return = {}
+        maybe_lora_bias = {}
+        lora_bias_names = set()
+        for k, t in named_params:
+            if "lora_" in k:
+                to_return[k] = t
+                bias_name = k.split("lora_")[0] + "bias"
+                lora_bias_names.add(bias_name)
+            elif "bias" in k:
+                maybe_lora_bias[k] = t
+        for k, t in maybe_lora_bias:
+            if bias_name in lora_bias_names:
+                to_return[bias_name] = t
+    else:
+        raise NotImplementedError
+    to_return = {k: maybe_zero_3(v, ignore_status=True) for k, v in to_return.items()}
+    return to_return
+
+
+def get_peft_state_non_lora_maybe_zero_3(named_params, require_grad_only=True):
+    to_return = {k: t for k, t in named_params if "lora_" not in k}
+    if require_grad_only:
+        to_return = {k: t for k, t in to_return.items() if t.requires_grad}
+    to_return = {k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()}
+    return to_return
+
+
+def get_mm_adapter_state_maybe_zero_3(named_params, keys_to_match):
+    to_return = {k: t for k, t in named_params if any(key_match in k for key_match in keys_to_match)}
+    to_return = {k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()}
+    return to_return
+
+
+def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
+                                   output_dir: str):
+    """Collects the state dict and dump to disk."""
+
+    if getattr(trainer.args, "tune_mm_mlp_adapter", False):
+        # Only save Adapter
+        keys_to_match = ['mm_projector']
+        if getattr(trainer.args, "use_im_start_end", False):
+            keys_to_match.extend(['embed_tokens', 'embed_in'])
+
+        weight_to_save = get_mm_adapter_state_maybe_zero_3(trainer.model.named_parameters(), keys_to_match)
+        trainer.model.config.save_pretrained(output_dir)
+
+        current_folder = output_dir.split('/')[-1]
+        parent_folder = os.path.dirname(output_dir)
+        if trainer.args.local_rank == 0 or trainer.args.local_rank == -1:
+            if current_folder.startswith('checkpoint-'):
+                mm_projector_folder = os.path.join(parent_folder, "mm_projector")
+                os.makedirs(mm_projector_folder, exist_ok=True)
+                torch.save(weight_to_save, os.path.join(mm_projector_folder, f'{current_folder}.bin'))
+            else:
+                torch.save(weight_to_save, os.path.join(output_dir, f'mm_projector.bin'))
+        return
+
+    if trainer.deepspeed:
+        torch.cuda.synchronize()
+        trainer.save_model(output_dir)
+        return
+
+    state_dict = trainer.model.state_dict()
+    if trainer.args.should_save:
+        cpu_state_dict = {
+            key: value.cpu()
+            for key, value in state_dict.items()
+        }
+        del state_dict
+        trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
+        
+
+def maybe_zero_3(param, ignore_status=False, name=None):
+    from deepspeed import zero
+    from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
+    if hasattr(param, "ds_id"):
+        if param.ds_status == ZeroParamStatus.NOT_AVAILABLE:
+            if not ignore_status:
+                logging.warning(f"{name}: param.ds_status != ZeroParamStatus.NOT_AVAILABLE: {param.ds_status}")
+        with zero.GatheredParameters([param]):
+            param = param.data.detach().cpu().clone()
+    else:
+        param = param.detach().cpu().clone()
+    return param
+
+from torch import nn
+
+def load_deepspeed(state_dict, module: nn.Module, prefix="", strict=True):
+    import deepspeed
+    # because zero3 puts placeholders in model params, this context
+    # manager gathers (unpartitions) the params of the current layer, then loads from
+    # the state dict and then re-partitions them again
+    with deepspeed.zero.GatheredParameters(list(module.parameters(recurse=False)), modifier_rank=0):
+        if deepspeed.comm.get_rank() == 0:
+            module._load_from_state_dict(state_dict, prefix, {}, strict, [], [], [])
+            # module.load_state_dict(state_dict, strict=strict)
+
+    for name, child in module._modules.items():
+        if child is not None:
+            load_deepspeed(state_dict, child, prefix + name + ".")
+
+import random
+from federated_methods.fedours import fedours_ema_distill_create_trainer
+def get_task_vectors(model, tokenizer, train_datalists, training_args, data_args, global_state_dict, make_supervised_data_module, grad_subsample_idx):
+    random.seed(training_args.seed)
+    client_task_vectors = []
+    for client_id in range(len(train_datalists)):
+        datalist = train_datalists[client_id][0]['datalist']
+        
+        sub_datalist = random.sample(datalist, 4*20)
+        
+        data_module = make_supervised_data_module(client_data=sub_datalist, # sub_dataset
+                                                tokenizer=tokenizer,
+                                                data_args=copy.deepcopy(data_args))
+    
+        extra_state_dict_dict = {}
+        extra_state_dict_dict['client_id']=0
+        extra_state_dict_dict['curr_round']=0
+        extra_state_dict_dict['fisher_freq'] = 1
+        extra_state_dict_dict['grad_subsample_idx']= grad_subsample_idx
+        copy_training_args = copy.deepcopy(training_args)
+        copy_training_args.per_gpu_train_batch_size = 4
+        copy_training_args.gradient_accumulation_steps = 1
+        trainer = fedours_ema_distill_create_trainer(model, tokenizer, copy_training_args, data_module, extra_state_dict_dict)
+
+        results = trainer.train()
+        
+        task_vector = trainer.task_vector
+        
+        client_task_vectors.append(task_vector)
+        
+        trainer.deepspeed.empty_partition_cache()
+        del trainer
+        
+        with torch.no_grad():
+            model.load_state_dict(global_state_dict, strict=False)
+    
+    extra_state_dict_dict['fisher_freq']=5
+    return client_task_vectors

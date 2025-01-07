@@ -6,7 +6,7 @@ import string
 
 import numpy as np
 import torch
-from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingArguments
+from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
 from utils.train_utils import get_VLMmodel
 
@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from models.llava.mm_utils import KeywordsStoppingCriteria
 from models.llava import conversation as conversation_lib_llava
-from models.bunny import conversation as conversation_lib_bunny
+# from models.bunny import conversation as conversation_lib_bunny
 from models.duallora.dualloralayer import DualLoraLayer
 from models.dual_ia3.dual_ia3_layer import DualIA3Layer
 
@@ -62,12 +62,12 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=0, drop_last=False, collate_fn=DataCollatorForGenerationDataset(tokenizer))
     # dataloader = DataLoader(dataset, batch_size=1, shuffle=False, pin_memory=True, num_workers=4, drop_last=False)
     
-    if 'llava' in model_args.model_name_or_path.lower():
-        conv = conversation_lib_llava.default_conversation
-    elif 'bunny' in model_args.model_name_or_path.lower():
-        conv = conversation_lib_bunny.default_conversation
+    # if 'llava' in model_args.model_name_or_path.lower():
+    conv = conversation_lib_llava.default_conversation
+    # elif 'bunny' in model_args.model_name_or_path.lower():
+    #     conv = conversation_lib_bunny.default_conversation
     repeat_criteria = CustomStoppingCriteria()
-    stop_str = conv.sep2
+    stop_str = conv.sep#2
     keywords = [stop_str]
     
     # img_feat_size = 729
@@ -78,9 +78,9 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
     n_word_correct = 1
     cnt = 0
     with torch.no_grad():
-        # for i, (inputs, imgs, golds, prompts, img_files) in enumerate(tqdm(dataloader)):
+        # for i, (inputs, pixel_values, golds, prompts, img_files) in enumerate(tqdm(dataloader)):
         for i, batch in enumerate((dataloader)): #tqdm
-            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['images'], batch['gold'], batch['prompt'], batch['image_file']
+            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['pixel_values'], batch['gold'], batch['prompt'], batch['image_file']
             attention_mask = batch['attention_mask'].to(device=device)
             
             inputs = inputs.to(device=device, non_blocking=True)
@@ -96,7 +96,7 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
                 output_ids = model.generate(
                     inputs,
                     attention_mask=attention_mask,
-                    images=imgs,
+                    pixel_values=imgs,
                     # image_sizes=image_sizes,
                     do_sample=True,# if args.temperature > 0 else False,
                     temperature=training_args.eval_temp,#args.temperature,
@@ -106,15 +106,13 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
                     use_cache=True,
                     pad_token_id=tokenizer.eos_token_id,
                     stopping_criteria = stopping_criteria,
-                    prompt=prompts if training_args.is_prompt else None,
+                    # prompt=prompts if training_args.is_prompt else None,
                 )
-            
-            if 'bunny_stablelm2' in model_args.model_name_or_path.lower():
-                input_token_len = inputs.shape[1]
-                output_ids = output_ids[:,input_token_len:]
+            # if 'vl' in model_args.model_name_or_path.lower():
+            input_token_len = inputs.shape[1]
+            output_ids = output_ids[:,input_token_len:]
             
             pred_sentences = tokenizer.batch_decode(output_ids, skip_special_tokens=True)#[0].strip()
-            # breakpoint()
             for pred_sentence, gold, prompt, img_file in zip(pred_sentences, golds, prompts, img_files):
                 pred_sentence = pred_sentence.strip()
                 input_label = tokenizer.encode(gold)
@@ -156,12 +154,9 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
 def evaluate_choices(dataset, dataname, round, model, tokenizer, device, model_args, training_args, logger, client_id=None, batch_size=2):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=0, drop_last=False, collate_fn=DataCollatorForGenerationDataset(tokenizer))
 
-    if 'llava' in model_args.model_name_or_path.lower():
-        conv = conversation_lib_llava.default_conversation
-    elif 'bunny' in model_args.model_name_or_path.lower():
-        conv = conversation_lib_bunny.default_conversation
+    conv = conversation_lib_llava.default_conversation
     repeat_criteria = CustomStoppingCriteria()
-    stop_str = conv.sep2
+    stop_str = conv.sep#2
     keywords = [stop_str]
     
     # img_feat_size = 729
@@ -172,7 +167,7 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, model_a
     with torch.no_grad():
         # for i, (inputs, imgs, golds, prompts, img_files) in enumerate(tqdm(dataloader)):
         for i, batch in enumerate((dataloader)): #tqdm
-            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['images'], batch['gold'], batch['prompt'], batch['image_file']
+            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['pixel_values'], batch['gold'], batch['prompt'], batch['image_file']
             attention_mask = batch['attention_mask'].to(device=device)
             
             inputs = inputs.to(device=device, non_blocking=True)
@@ -188,24 +183,22 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, model_a
                 output_ids = model.generate(
                     inputs,
                     attention_mask=attention_mask,
-                    images=imgs,
+                    pixel_values=imgs,
                     # image_sizes=image_sizes,
                     do_sample=True,# if args.temperature > 0 else False,
                     temperature=training_args.eval_temp,#args.temperature,
                     top_p=None,#args.top_p,
                     num_beams=1,#args.num_beams,
                     max_new_tokens=model_args.max_new_tokens,#args.max_new_tokens,
-                    use_cache=False,
+                    use_cache=True,
                     pad_token_id=tokenizer.eos_token_id,
                     stopping_criteria = stopping_criteria,
-                    prompt=prompts if training_args.is_prompt else None,
+                    # prompt=prompts if training_args.is_prompt else None,
                 )
-            
-            if 'bunny_stablelm2' in model_args.model_name_or_path.lower():
-                input_token_len = inputs.shape[1]
-                output_ids = output_ids[:,input_token_len:]
+            # if 'vl' in model_args.model_name_or_path.lower():
+            input_token_len = inputs.shape[1]
+            output_ids = output_ids[:,input_token_len:]
             pred_sentences = tokenizer.batch_decode(output_ids, skip_special_tokens=True)#[0].strip()
-
             for pred_sentence, gold, prompt, img_file in zip(pred_sentences, golds, prompts, img_files):
                 pred_sentence = pred_sentence.strip()
                 
@@ -286,6 +279,8 @@ def parse_choice_list(input_string):
     return []
 
 def can_infer(answer, choices):
+    if len(answer) == 0:
+        return False
     answer = str(answer).lower()
     
     # Special case for ['Positive', 'Negative']
@@ -331,7 +326,7 @@ def can_infer(answer, choices):
 def main():
     
     parser = transformers.HfArgumentParser(
-        (ModelArguments, DataArguments, TrainingArguments))
+        (ModelArguments, DataArguments, TrainingConfig))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
     bnb_model_from_pretrained_args = {}
@@ -378,11 +373,11 @@ def main():
     np.random.seed(training_args.seed)
     random.seed(training_args.seed)
 
-    model, tokenizer, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
+    model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
-    batch_size = 2 #if 'l2p' in training_args.mode or 'dap' in training_args.mode or 'LAE' in training_args.mode or 'fedsim' in training_args.mode else 4
+    batch_size = 8 #if 'l2p' in training_args.mode or 'dap' in training_args.mode or 'LAE' in training_args.mode or 'fedsim' in training_args.mode else 4
     
     logger.info(f'Evaluatiing clients and server at round {training_args.round_to_eval}')
     start_time = time.time()
@@ -397,7 +392,7 @@ def main():
         model.load_state_dict(server_state_dict, strict=False)
         for data_info in test_datalist:
             print(data_info['data_name'])
-            dataset = GenerationDataset(data_info['data'], tokenizer, data_args)
+            dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             if data_info['type'] == 'open-ended':
                 evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
             elif data_info['type'] == 'multi-choice':
@@ -440,7 +435,7 @@ def main():
                 #         module.set_state('lora2')
                 model.set_state('lora2')
                 # model.base_model.model.model.mm_projector = model.base_model.model.model.local_mm_projector
-            dataset = GenerationDataset(data_info['data'], tokenizer, data_args)
+            dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             if not training_args.eval_server:
                 # if training_args.mode not in ['fedsim', 'feddat']:
                 if os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"):
@@ -516,6 +511,7 @@ def get_datalists(args, scenario_num):
     return train_datalists, test_datalists
 
 def anytime_evaluation(model, tokenizer, test_datalist, eval_batchsize, curr_round, client_id, training_args, model_args, data_args, logger):
+    torch.cuda.empty_cache()
     final_score = 0
     task_count = 0
     for data_info in test_datalist:

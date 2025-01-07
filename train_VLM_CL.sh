@@ -1,8 +1,8 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="debug"
+NOTE="sft_bs4_saveoptim_lr2e-5_sc0_4tasks_5rounds_fixitr100_llama3_1B_lora"
 MODE="sft"
-MODEL_ARCH="gemma_vl" # llava gemma_vl
+MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
 # fed args
@@ -15,8 +15,8 @@ NUM_ITER=100
 MEMORY_SIZE=100000
 IS_STREAMONLY=True
 
-LORA_ENABLE=False
-IA3_ENABLE=True
+LORA_ENABLE=True
+IA3_ENABLE=False
 
 USE_TASK_ID=False
 USE_PROMPT=False
@@ -34,9 +34,9 @@ POOL_SIZE=4
 PROMPT_TOP_K=1
 EMA_RATIO=0.9
 
-BATCHSIZE=1
+BATCHSIZE=4
 
-LR=3e-3
+LR=2e-5
 MM_PROJECTOR_LR=$LR #3e-4
 FINAL_LR=$LR #3e-4
 MM_FINAL_LR=$LR #3e-4
@@ -51,23 +51,29 @@ if [ "$MODEL_ARCH" == "llava" ]; then
     MODEL_TYPE="llama"
     BITS=16
 
-elif [ "$MODEL_ARCH" == "gemma_vl" ]; then
-    MODEL_NAME="Intel/llava-gemma-2b"
-    VERSION="gemma"
-    MODEL_TYPE="gemma-2"
+elif [ "$MODEL_ARCH" == "llama3_1b" ]; then
+    MODEL_NAME="thkim0305/llama3.2_1B_vl"
+    VERSION="llama3"
+    MODEL_TYPE="llama3"
+    BITS=16
+elif [ "$MODEL_ARCH" == "llama3_3b" ]; then
+    MODEL_NAME="thkim0305/llama3.2_3B_vl"
+    VERSION="llama3"
+    MODEL_TYPE="llama3"
     BITS=16
 else
     echo "Undefined setting"
     exit 1
 fi
+
 # --master_port 29500
 # --num_gpus=4
 
 LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr6e-3_alldown_freq5_grad32cossimmeansoftmax_t0.2_mean_sc0_4tasks_5rounds_fixitr100/round15_task_vector_local_weights.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29509 \
-    --include localhost:0 \
+deepspeed --master_port 29503 \
+    --include localhost:3 \
     train_VLM_CL.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
@@ -82,7 +88,7 @@ deepspeed --master_port 29509 \
     --gradient_checkpointing True \
     --num_train_epochs 1 \
     --num_iter $NUM_ITER \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 1 \
     --bits $BITS \
     --bf16 True \
     --tf32 True \
@@ -118,7 +124,7 @@ deepspeed --master_port 29509 \
     --use_task_vector $USE_TASK_VECTOR \
     --use_fisher $USE_FISHER \
     --fedours False \
-    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
+    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type

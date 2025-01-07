@@ -62,7 +62,7 @@ class Conversation:
                 else:
                     ret += role + ":"
         elif self.sep_style == SeparatorStyle.MPT:
-            ret = self.system + self.sep
+            ret = self.system #+ self.sep
             for role, message in messages:
                 if message:
                     if type(message) is tuple:
@@ -379,6 +379,16 @@ conv_gemma = Conversation(
     sep="<end_of_turn>",
 )
 
+conv_llama3 = Conversation(
+    system="<|begin_of_text|>", #<|start_header_id|>system<|end_header_id|>\n\n<|eot_id|>
+    roles=("<|start_header_id|>user<|end_header_id|>\n\n", "<|start_header_id|>assistant<|end_header_id|>\n\n"),
+    version="llama3",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="<|eot_id|>",
+)
+
 default_conversation = conv_vicuna_v1
 conv_templates = {
     "default": conv_vicuna_v0,
@@ -400,6 +410,8 @@ conv_templates = {
     "gemma": conv_gemma,
 
     "mpt": conv_mpt,
+    
+    "llama3": conv_llama3,
 }
 
 

@@ -244,7 +244,7 @@ def main():
             
             extra_state_dict_dict['client_id'] = client_id
             extra_state_dict_dict['curr_round'] = curr_round
-            extra_state_dict_dict['test_datlist'] = test_datalist
+            extra_state_dict_dict['test_datalist'] = test_datalist
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
             
@@ -362,6 +362,7 @@ def main():
             
             data_module = make_supervised_data_module(client_data=datalist, # sub_dataset
                                                 tokenizer=tokenizer,
+                                                processor=processor,
                                                 data_args=copy.deepcopy(data_args))
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
@@ -458,10 +459,10 @@ def main():
             load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict)
     logger.info("total done\n")
 
-def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer,
+def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
                                 data_args) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args)
+    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,

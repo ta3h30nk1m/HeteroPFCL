@@ -68,8 +68,8 @@ def fedavg_load_state_dict(model, global_state_dict, local_state_dict_list, clie
             model.load_state_dict(model_to_load, strict=False)  
 
 def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
-    training_args.max_seq_length=training_args.model_max_length
-    training_args.packing = False
+    training_args.max_seq_length = training_args.model_max_length
+    training_args.packing=False
     trainer = LLaVATrainerFEDAVG(model=model,
         tokenizer=tokenizer,
         args=training_args,
@@ -533,12 +533,12 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        if step % 5 == 0:
-                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                            state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+                        # if step % 5 == 0:
+                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
+                        #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
                             
-                            if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                                torch.save(state_dict, output_dir)
+                        #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
+                        #         torch.save(state_dict, output_dir)
 
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
@@ -567,7 +567,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                 self.control.should_training_stop = True
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
-            self._maybe_log_save_evaluate(tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval)
+            self._maybe_log_save_evaluate(tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time)
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
                 if is_torch_xla_available():
@@ -645,6 +645,48 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
             self._save_optimizer_and_scheduler(output_dir)
         ##############################################################################################################
         return TrainOutput(self.state.global_step, train_loss, metrics)
+
+    def create_optimizer(self):
+        """
+        Setup the optimizer.
+
+        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
+        """
+        if is_sagemaker_mp_enabled():
+            return super().create_optimizer()
+
+        opt_model = self.model
+
+        if self.optimizer is None:
+            # decay_parameters = [name for name in decay_parameters if "bias" not in name]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad)
+                    ],
+                    "weight_decay": self.args.weight_decay,
+                },
+            ]
+
+            optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+
+            self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+            if optimizer_cls.__name__ == "Adam8bit":
+                import bitsandbytes
+
+                manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+
+                skipped = 0
+                for module in opt_model.modules():
+                    if isinstance(module, nn.Embedding):
+                        skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
+                        logger.info(f"skipped {module}: {skipped/2**20}M params")
+                        manager.register_module_override(module, "weight", {"optim_bits": 32})
+                        logger.debug(f"bitsandbytes: will optimize {module} in fp32")
+                logger.info(f"skipped: {skipped/2**20}M params")
+
+        return self.optimizer
     
     def _load_optimizer_and_scheduler(self, checkpoint):
         """If optimizer and scheduler states exist, load them."""

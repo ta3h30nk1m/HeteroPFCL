@@ -7,18 +7,7 @@ class ModelArguments:
     model_name_or_path: Optional[str] = field(default=None) #"liuhaotian/llava-v1.5-7b"
     model_type: Optional[str] = field(default=None)
     version: Optional[str] = field(default="v1")
-    freeze_backbone: bool = field(default=True)
-    tune_mm_mlp_adapter: bool = field(default=False)
-    vision_tower: Optional[str] = field(default=None)
-    mm_vision_select_layer: Optional[int] = field(default=-2)   # default to the last layer
-    pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
-    mm_projector_type: Optional[str] = field(default='mlp2x_gelu')
-    mm_use_im_start_end: bool = field(default=False)
-    mm_use_im_patch_token: bool = field(default=False)
-    mm_patch_merge_type: Optional[str] = field(default='flat')
-    mm_vision_select_feature: Optional[str] = field(default="patch")
     max_new_tokens: Optional[int] = field(default=512)
-
 
 @dataclass
 class DataArguments:
@@ -34,19 +23,6 @@ class DataArguments:
 
 @dataclass
 class TrainingConfig(transformers.TrainingArguments):
-    # sft args
-    dataset_text_field: str = "text"
-    packing: bool = False
-    learning_rate: float = 2.0e-5
-    max_seq_length: Optional[int] = None
-    dataset_num_proc: Optional[int] = None
-    dataset_batch_size: int = 1000
-    model_init_kwargs: Optional[dict[str, Any]] = None
-    dataset_kwargs: Optional[dict[str, Any]] = None
-    eval_packing: Optional[bool] = None
-    num_of_sequences: int = 1024
-    chars_per_token: float = 3.6
-    use_liger: bool = False
     
     is_eval: bool = False
     is_prompt: bool = False
@@ -67,12 +43,6 @@ class TrainingConfig(transformers.TrainingArguments):
     note: str = field(default=None)
     eval_period: int = field(default=100)
     online_iter: float = field(default=1.0)
-    use_kornia: bool = True
-    transform_on_gpu: bool = True
-    transform_on_worker: bool = False
-    topk: int = field(default=1)
-    f_period: int = field(default=None)
-    transforms: str= field(default='randaug')
 
     # federated learning
     num_clients: int = 5

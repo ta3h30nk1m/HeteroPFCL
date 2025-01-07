@@ -10,7 +10,6 @@ from federated_methods.fedsim import fedsim_set_state_dict, fedsim_create_traine
 from federated_methods.ditto import ditto_create_trainer, ditto_set_state_dict
 from federated_methods.apfl import apfl_create_trainer
 from federated_methods.task_id import task_id_create_trainer
-# from federated_methods.optimal_transport import OT_create_trainer
 from federated_methods.lae import LAE_create_trainer
 from federated_methods.ditto_lae import ditto_lae_set_state_dict, ditto_lae_create_trainer
 from federated_methods.ours_generator_ema_distill import OURS_set_state_dict, OURS_aggregate_state_dict, OURS_GEN_ema_distill_create_trainer, OURS_GEN_load_state_dict

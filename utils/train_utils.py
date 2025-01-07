@@ -2,14 +2,12 @@ import torch
 import os
 import logging
 import transformers
-from models.llava.language_model.llava_llama import LlavaLlamaForCausalLM
-from models.llava.language_model.llava_mpt import LlavaMptForCausalLM
-from transformers import AutoModelForCausalLM, AutoTokenizer, CLIPTextModel, CLIPProcessor, CLIPModel
 import models.llava.conversation as conversation_lib_llava
 from peft.tuners.lora import LoraLayer
 
 from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration
 
+from models.llava.llava_multi import LlavaMultiForConditionalGeneration
 import copy
 ACCESS_TOKEN = "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"
 
@@ -19,59 +17,13 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 
     # load tokenizer
     # for llava
-    if model_args.model_type == "mpt":
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right"
-        )
-    elif model_args.model_type == 'llama': 
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=False,
-        )
-    
-    # for bunny
-    elif (
-        model_args.model_type == 'phi-1.5' or model_args.model_type == 'phi-2'
-            or model_args.model_type == 'qwen1.5-1.8b' or model_args.model_type == 'minicpm'):
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=True,
-        )
-    elif model_args.model_type == 'llama3-8b':
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=True,
-            token=ACCESS_TOKEN
-        )
-    elif model_args.model_type == 'stablelm-2':
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=True,
-            trust_remote_code=True
-        )
-    elif model_args.model_type == 'gemma-2':
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            token=ACCESS_TOKEN
-        )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        model_max_length=training_args.model_max_length,
+        padding_side="right",
+        use_fast=False,
+    )
 
     if tokenizer.unk_token is not None and tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.unk_token
@@ -81,17 +33,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
     if training_args.is_eval:
         tokenizer.padding_side = "left"
-        tokenizer.pad_token = tokenizer.eos_token
     
     processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
-    model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
-        model_args.model_name_or_path,
-        torch_dtype=torch.bfloat16, 
-        low_cpu_mem_usage=True,
-        use_flash_attention_2=True
-    )
     
-    model.language_model.config._attn_implementation='flash_attention_2'
+    if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
+        model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
+            model_args.model_name_or_path,
+            torch_dtype=torch.bfloat16, 
+            low_cpu_mem_usage=True,
+            use_flash_attention_2=True
+        )
+    else:
+        model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
+            model_args.model_name_or_path,
+            torch_dtype=torch.bfloat16, 
+            low_cpu_mem_usage=True,
+            use_flash_attention_2=True
+        )
 
     model.config.use_cache = False
     model.vision_tower.requires_grad_(False)
@@ -122,16 +80,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if training_args.lora_enable:
         from peft import LoraConfig, get_peft_model
         
-        target_modules = ['k_proj', 'v_proj']
+        # target_modules = ['k_proj', 'v_proj']
         
         lora_config = LoraConfig(
             r=training_args.lora_r,
             lora_alpha=training_args.lora_alpha,
-            target_modules=target_modules,#find_all_linear_names(model),
+            target_modules=find_all_linear_names(model),
             lora_dropout=training_args.lora_dropout,
             bias=training_args.lora_bias,
             task_type="CAUSAL_LM",
-            exclude_modules=r".*vision_tower.*",
+            exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
         )
         
         if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours'] or training_args.mode =='feddat':
@@ -165,46 +123,6 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['EMPTYIA3'] = EmptyIA3Model
             ia3_config.peft_type = 'EMPTYIA3'
         
-        elif training_args.mode in ['LAE', 'LAE_FedAvg', 'LAE_FedPer']:
-            from models.lae_ia3.lae_ia3_model import LAEIA3Model
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['LAEIA3'] = LAEIA3Model
-            ia3_config.peft_type = 'LAEIA3'
-        
-        elif training_args.mode in ['LAE_FedDAT', 'LAE_Ditto']:
-            from models.lae_ia3_dual.dual_lae_ia3_model import DualLAEIA3Model
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['DUALLAEIA3'] = DualLAEIA3Model
-            ia3_config.peft_type = 'DUALLAEIA3'
-        
-        elif training_args.mode in ['EvoPrompt']:
-            from models.evo_ia3.evoia3model import EVOIA3Model
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['EVOIA3'] = EVOIA3Model
-            ia3_config.peft_type = 'EVOIA3'
-            ia3_config.generator_output_size = 1024
-            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
-        elif training_args.mode in ['EvoPrompt_T']:
-            from models.evo_ia3.evoia3model import EVOIA3Model
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['EVOIA3'] = EVOIA3Model
-            ia3_config.peft_type = 'EVOIA3'
-            ia3_config.generator_output_size = 768
-            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
-
-        elif training_args.mode in ['ours_generator']:
-            from models.ours_ia3.ours_ia3_model import DualEVOIA3Model
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['OURSGEN'] = DualEVOIA3Model
-            ia3_config.peft_type = 'OURSGEN'
-            ia3_config.generator_output_size = training_args.generator_output_size
-            ia3_config.generator_hidden_feature = training_args.generator_hidden_feature
-        elif training_args.mode in ['ours_generator2', 'ours_generator3', 'ours_generator4']:
-            from models.ours_ia3_2.ours_ia3_model2 import DualEVOIA3Model2
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['OURSGEN2'] = DualEVOIA3Model2
-            ia3_config.peft_type = 'OURSGEN2'
-        
         model = get_peft_model(model, ia3_config)
         model = model.to(device=training_args.device, dtype=compute_dtype)
 
@@ -220,11 +138,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 
     # freeze some layers
     # FIXME
-    
-    model.config.mm_use_im_start_end = data_args.mm_use_im_start_end = model_args.mm_use_im_start_end
     model.config.mm_projector_lr = training_args.mm_projector_lr
-    training_args.use_im_start_end = model_args.mm_use_im_start_end
-    model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
+    
+    if hasattr(model.config, "image_token_index"):
+        tokenizer.image_token_index = model.config.image_token_index
     
     total_count = 0
     for n, p in model.named_parameters():

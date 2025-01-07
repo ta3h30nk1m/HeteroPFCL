@@ -10,7 +10,7 @@ from torch import nn
 from utils.train_utils import load_deepspeed
 from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
-import sys, os, time, shutil
+import sys, os, time, shutil, datetime
 import math
 from typing import Optional, Dict, Union, Any
 from transformers.integrations.tpu import tpu_spmd_dataloader
@@ -58,6 +58,7 @@ if is_accelerate_available():
 
 logger = logging.get_logger(__name__)
 
+from eval_VLM_CL import anytime_evaluation
 
 def fedavg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     model_to_load = global_state_dict
@@ -76,6 +77,8 @@ def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_st
         client_id = extra_state_dict_dict['client_id'],
         curr_round = extra_state_dict_dict['curr_round'],
         test_datalist=extra_state_dict_dict['test_datalist'],
+        processor=extra_state_dict_dict['processor'],
+        data_args=extra_state_dict_dict['data_args'],
         **data_module,
         )
     return trainer
@@ -85,11 +88,14 @@ def fedavg_aggregate_state_dict(global_state_dict, local_state_dict_list, select
         global_state_dict[key] = sum([local_state_dict_list[client][key] / num_selection for client in selected_ids])
 
 class LLaVATrainerFEDAVG(LLaVATrainer):
-    def __init__(self, client_id, curr_round, test_datalist, **kwargs):
+    def __init__(self, client_id, curr_round, test_datalist, processor, data_args, **kwargs):
         super(LLaVATrainerFEDAVG, self).__init__(**kwargs)
         self.client_id = client_id
         self.curr_round = curr_round
         self.test_datalist=test_datalist
+        self.processor=processor
+        self.data_args = data_args
+        self.anytime_eval_results = [] # anytime_eval_results
     
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -539,6 +545,15 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             
                         #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
                         #         torch.save(state_dict, output_dir)
+                        
+                        # anytime eval
+                        if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:
+                            eval_batch_size=8 # FIXME
+                            eval_start_time = time.time()
+                            args.eval_iter = (step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps
+                            anytime_eval_result = anytime_evaluation(model, self.tokenizer, self.processor, self.test_datalist, eval_batch_size, self.curr_round, self.client_id, args, 512, self.data_args, logger)
+                            print(f'eval elapse time {datetime.timedelta(seconds=int(time.time() - eval_start_time))}')
+                            breakpoint()
 
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time

@@ -245,6 +245,8 @@ def main():
             extra_state_dict_dict['client_id'] = client_id
             extra_state_dict_dict['curr_round'] = curr_round
             extra_state_dict_dict['test_datalist'] = test_datalist
+            extra_state_dict_dict['processor'] = processor
+            extra_state_dict_dict['data_args'] = copy.deepcopy(data_args)
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
             
@@ -483,7 +485,6 @@ def get_datalists(args, scenario_num):
         client_id = client_data['client_id']
         train_datalist = []
         test_datalist = []
-        eval_cnt = 0
         for task_id, data in enumerate(client_data['datasets']):
             with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
                 datalist = json.load(fp)
@@ -499,9 +500,9 @@ def get_datalists(args, scenario_num):
                 datalist = json.load(fp)
             test_datalist.append({
                 "data_name": f"{data['dataset']}-{data['subset_id']}",
+                "type": data['type'],
                 "data": datalist,
-                "eval_cnt": eval_cnt})
-            eval_cnt += len(datalist)
+                "train_start_round": rounds_per_task*task_id})
             
             train_datalists[client_id] = train_datalist
         test_datalists[client_id] = test_datalist

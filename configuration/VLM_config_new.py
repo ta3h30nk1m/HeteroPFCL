@@ -43,6 +43,9 @@ class TrainingConfig(transformers.TrainingArguments):
     note: str = field(default=None)
     eval_period: int = field(default=100)
     online_iter: float = field(default=1.0)
+    
+    anytime_eval: bool = False
+    anytime_eval_freq: int = 10
 
     # federated learning
     num_clients: int = 5

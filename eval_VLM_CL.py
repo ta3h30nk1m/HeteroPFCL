@@ -58,7 +58,7 @@ class CustomStoppingCriteria(StoppingCriteria):
                     should_stop = True
         return should_stop
 
-def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, training_args, logger, client_id=None, batch_size=2):
+def evaluate(dataset, dataname, round, model, tokenizer, device, max_new_tokens, training_args, logger, client_id=None, batch_size=2):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=0, drop_last=False, collate_fn=DataCollatorForGenerationDataset(tokenizer))
     # dataloader = DataLoader(dataset, batch_size=1, shuffle=False, pin_memory=True, num_workers=4, drop_last=False)
     
@@ -102,7 +102,7 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
                     temperature=training_args.eval_temp,#args.temperature,
                     top_p=None,#args.top_p,
                     num_beams=1,#args.num_beams,
-                    max_new_tokens=model_args.max_new_tokens,#args.max_new_tokens,
+                    max_new_tokens=max_new_tokens,#args.max_new_tokens,
                     use_cache=True,
                     pad_token_id=tokenizer.eos_token_id,
                     stopping_criteria = stopping_criteria,
@@ -151,7 +151,7 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, model_args, tra
     
     return scores
 
-def evaluate_choices(dataset, dataname, round, model, tokenizer, device, model_args, training_args, logger, client_id=None, batch_size=2):
+def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new_tokens, training_args, logger, client_id=None, batch_size=2):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=0, drop_last=False, collate_fn=DataCollatorForGenerationDataset(tokenizer))
 
     conv = conversation_lib_llava.default_conversation
@@ -189,7 +189,7 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, model_a
                     temperature=training_args.eval_temp,#args.temperature,
                     top_p=None,#args.top_p,
                     num_beams=1,#args.num_beams,
-                    max_new_tokens=model_args.max_new_tokens,#args.max_new_tokens,
+                    max_new_tokens=max_new_tokens,#args.max_new_tokens,
                     use_cache=True,
                     pad_token_id=tokenizer.eos_token_id,
                     stopping_criteria = stopping_criteria,
@@ -394,11 +394,11 @@ def main():
             print(data_info['data_name'])
             dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             if data_info['type'] == 'open-ended':
-                evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
             elif data_info['type'] == 'multi-choice':
-                evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
             else:
-                evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
         return
     
     for client_id in range(training_args.num_clients):
@@ -443,11 +443,11 @@ def main():
                     continue
                     
                 if data_info['type'] == 'open-ended':
-                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, client_id, batch_size)
+                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
                 elif data_info['type'] == 'multi-choice':
-                    evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, client_id, batch_size)
+                    evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
                 else:
-                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, client_id, batch_size)
+                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
@@ -461,11 +461,11 @@ def main():
             # #         evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None)
             # #     else:
                 if data_info['type'] == 'open-ended':
-                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
                 elif data_info['type'] == 'multi-choice':
-                    evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                    evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
                 else:
-                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None, batch_size)
+                    evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
                 server_eval_key.append(data_info['data_name'])
     
     logger.info(f"elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
@@ -510,31 +510,33 @@ def get_datalists(args, scenario_num):
 
     return train_datalists, test_datalists
 
-def anytime_evaluation(model, tokenizer, test_datalist, eval_batchsize, curr_round, client_id, training_args, model_args, data_args, logger):
+def anytime_evaluation(model, tokenizer, processor, test_datalist, eval_batchsize, curr_round, client_id, training_args, max_new_tokens, data_args, logger):
     torch.cuda.empty_cache()
     final_score = 0
     task_count = 0
     for data_info in test_datalist:
         # if train_datalists[client_id][training_args.round_to_eval-1]['train_cnt'] > data_info['eval_cnt']:
-        dataset = GenerationDataset(data_info['data'], tokenizer, data_args)
-        if data_info['type'] == 'open-ended':
-            result = evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, model_args, training_args, logger, client_id, eval_batchsize)
-        elif data_info['type'] == 'multi-choice':
-            result = evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, model_args, training_args, logger, client_id, eval_batchsize)
-        else:
-            result = evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, model_args, training_args, logger, client_id, eval_batchsize)
-        
-        if data_info['type'] == 'open-ended':
-            if data_info['metric'] == 'F1':
-                score = 2*(result['precision']*result['recall']) / (result['precision'] + result['recall'])
-            elif data_info['metric'] == 'RougeL':
-                score = result['ROUGE_L'][0]
-        elif data_info['type'] == 'multi-choice':
-            score = result['accuracy']
-        
-        final_score += score
-        task_count += 1
-    
+        if curr_round >= data_info['train_start_round']:
+            print(f"eval {data_info['data_name']}")
+            dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
+            if data_info['type'] == 'open-ended':
+                result = evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, max_new_tokens, training_args, logger, client_id, eval_batchsize)
+            elif data_info['type'] == 'multi-choice':
+                result = evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, max_new_tokens, training_args, logger, client_id, eval_batchsize)
+            else:
+                result = evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, model.device, max_new_tokens, training_args, logger, client_id, eval_batchsize)
+            
+            if data_info['type'] == 'open-ended':
+                if data_info['metric'] == 'F1':
+                    score = 2*(result['precision']*result['recall']) / (result['precision'] + result['recall'])
+                elif data_info['metric'] == 'RougeL':
+                    score = result['ROUGE_L'][0]
+            elif data_info['type'] == 'multi-choice':
+                score = result['accuracy']
+            
+            final_score += score
+            task_count += 1
+    torch.cuda.empty_cache()
     return final_score / task_count
         
 if __name__ == "__main__":

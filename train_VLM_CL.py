@@ -1,6 +1,7 @@
 import logging.config
 import os
 import random
+import gc
 
 import numpy as np
 import torch
@@ -20,7 +21,6 @@ import datetime
 import torch.nn.functional as F
 
 from models.coda_prompt import CodaPrompt
-from collections import OrderedDict
 
 def main():
     parser = transformers.HfArgumentParser(
@@ -56,8 +56,6 @@ def main():
     logger.addHandler(fileHandler)
     if training_args.local_rank == 0 or training_args.local_rank == -1: 
         logger.info(training_args)
-        
-    
 
     # Fix the random seeds
     torch.manual_seed(training_args.seed)
@@ -66,15 +64,6 @@ def main():
     np.random.seed(training_args.seed)
     random.seed(training_args.seed)
     
-    # random gradient sampling index
-    # do it before fixing seed
-    # grad_subsample_size = 32
-    # grad_subsample_idx = random.sample(list(range(11008)), grad_subsample_size)
-    # print(grad_subsample_idx)
-    grad_subsample_idx=None
-    
-
-    model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
@@ -90,80 +79,65 @@ def main():
         training_args.gradient_checkpointing_kwargs = {'use_reentrant':False}
     
     
-    if training_args.load_checkpoint is not None and not training_args.fedours:
-        logger.info(f'load {training_args.load_checkpoint}')
-        server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
+    model_ids = {}
+    models = {}
+    global_state_dict_list = []
+    local_state_dict_list = []
+    old_local_state_dict_list = []
+    for client_id in range(len(train_datalists)):
+        train_datalist = train_datalists[client_id]
+        model_id = train_datalist[0]['model_id']
         
-        with torch.no_grad():
-            model.load_state_dict(server_state_dict, strict=False)
-        
-        if ('fedours' in training_args.load_checkpoint or 'ours_generator' in training_args.load_checkpoint or 'ditto' in training_args.load_checkpoint or 'fedsim' in training_args.load_checkpoint or 'feddat' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
-            local_state_dict = {}
-            for name in server_state_dict.keys():
-                if 'lora1' in name:
-                    target_key = name.replace('lora_1', 'lora')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l')
-                elif 'ia3_generator_1' in name:
-                    target_key = name.replace('ia3_generator_1', 'ia3_generator')
-                elif 'lang_prompt_dap_key_embeddings_1' in name:
-                    target_key = name.replace('lang_prompt_dap_key_embeddings_1', 'lang_prompt_dap_key_embeddings')
-                elif 'lang_prompt_downsample_1' in name:
-                    target_key = name.replace('lang_prompt_downsample_1', 'lang_prompt_downsample')
-                elif 'lang_prompt_norm_1' in name:
-                    target_key = name.replace('lang_prompt_norm_1', 'lang_prompt_norm')
-                elif 'lang_prompt_ia3_pool_1' in name:
-                    target_key = name.replace('lang_prompt_ia3_pool_1', 'lang_prompt_ia3_pool')
-                local_state_dict[target_key] = server_state_dict[name]
+        if model_id in model_ids.keys():
+            local_state_dict_list.append(copy.deepcopy(model_ids[model_id]))
+            old_local_state_dict_list.append(copy.deepcopy(model_ids[model_id]))
+            global_state_dict = copy.deepcopy(model_ids[model_id])
+            if training_args.mode == 'fedours':
+                keys_to_del = []
+                for k in global_state_dict.keys():
+                    if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
+                    or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
+                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
+                    or 'w_gate' in k or 'w_noise' in k:
+                        keys_to_del.append(k)
+                for k in keys_to_del:
+                    del global_state_dict[k]
+            global_state_dict_list.append(global_state_dict)
+        else:
+            new_model_args = copy.deepcopy(model_args)
+            new_model_args.model_name_or_path = model_id
+            model, tokenizer, processor, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
             
-            server_state_dict = local_state_dict
-        
-        with torch.no_grad():
-            model.load_state_dict(server_state_dict, strict=False)
-            
-        if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-            local_state_dict = {}
-            for name in server_state_dict.keys():
-                if 'lora1' in name:
-                    target_key = name.replace('lora_1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                elif 'ia3_generator_1' in name:
-                    target_key = name.replace('ia3_generator_1', 'ia3_generator_2')
-                elif 'lang_prompt_dap_key_embeddings_1' in name:
-                    target_key = name.replace('lang_prompt_dap_key_embeddings_1', 'lang_prompt_dap_key_embeddings_2')
-                elif 'lang_prompt_downsample_1' in name:
-                    target_key = name.replace('lang_prompt_downsample_1', 'lang_prompt_downsample_2')
-                elif 'lang_prompt_norm_1' in name:
-                    target_key = name.replace('lang_prompt_norm_1', 'lang_prompt_norm_2')
-                elif 'lang_prompt_ia3_pool_1' in name:
-                    target_key = name.replace('lang_prompt_ia3_pool_1', 'lang_prompt_ia3_pool_2')
-                local_state_dict[target_key] = server_state_dict[name]
-            
-            model.load_state_dict(local_state_dict, strict=False)
-    
-    global_state_dict = get_peft_state_maybe_zero_3(
-                model.named_parameters(), training_args.lora_bias
+            global_state_dict = get_peft_state_maybe_zero_3(
+                        model.named_parameters(), training_args.lora_bias
+                    )
+            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                model.named_parameters()
             )
-    non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-        model.named_parameters()
-    )
-    global_state_dict.update(non_lora_state_dict)
-    
-    if training_args.fedours: #training_args.mode == 'fedours' and 
-        logger.info(f'load task vector {training_args.load_checkpoint}')
-        tv_weights = torch.load(training_args.load_checkpoint, map_location='cpu')
-        prev_task_vectors = tv_weights['task_vectors']
-        prev_local_state_dict_list = tv_weights['local_state_dict_list']
-        
-        current_task_vectors = get_task_vectors(model, tokenizer, train_datalists, training_args, data_args, global_state_dict, make_supervised_data_module,grad_subsample_idx)
-    else:
-        current_task_vectors = None
-    
-    local_state_dict_list = [copy.deepcopy(global_state_dict) for i in range(training_args.num_clients)]
-    old_local_state_dict_list = [copy.deepcopy(local_state_dict_list[i]) for i in range(len(local_state_dict_list))]
+            global_state_dict.update(non_lora_state_dict)
+            
+            local_state_dict_list.append(copy.deepcopy(global_state_dict))
+            old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
+            new_global_state_dict=copy.deepcopy(global_state_dict)
+            if training_args.mode == 'fedours':
+                keys_to_del = []
+                for k in new_global_state_dict.keys():
+                    if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
+                    or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
+                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
+                    or 'w_gate' in k or 'w_noise' in k:
+                        keys_to_del.append(k)
+                for k in keys_to_del:
+                    del new_global_state_dict[k]
+            global_state_dict_list.append(new_global_state_dict)
+            
+            model_ids[model_id] = global_state_dict
+            
+            models[model_id] = model
+            
+    del model_ids
     local_state_dict_keys = local_state_dict_list[0].keys()
-    extra_state_dict_dict = set_state_dict(model, global_state_dict, local_state_dict_list, training_args)
+    extra_state_dict_dict = {}
 
     training_loss = [[] for i in range(training_args.num_clients)]
     
@@ -193,12 +167,12 @@ def main():
             path = os.path.join(training_args.state_dir, f"round{curr_round}_task_vector_local_weights.pth")
             tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': old_local_state_dict_list}
             torch.save(tv_weight, path)
-            # cosine sim matrix
-            # task_vector = F.normalize(torch.stack(task_vectors, dim=0), dim=-1)
-            # sim = torch.matmul(task_vector,
-            #                 torch.transpose(task_vector, 1, 0))
-            # sim = torch.transpose(sim, 1, 0)
-            # sim = (sim+1)/2 # normalize -1~1 to 0~1
+            
+            # NEW: SVD to match the gradient size
+            if training_args.is_hetero_model:
+                breakpoint()
+                U, S, Vh = torch.linalg.svd(task_vectors, full_matrices=False)
+            
             
             # vectorize cosine sim and then average them
             sims = []
@@ -230,8 +204,6 @@ def main():
             training_args.warmup_ratio = 0
             training_args.warmup_steps = 0
         for idx in range(num_selection):
-            model.config.use_cache = False
-            torch.cuda.empty_cache()
             client_id = selected_ids[idx]
             
             ##### simulate online memory insertion & get_batch ####
@@ -242,97 +214,24 @@ def main():
             
             test_datalist = test_datalists[client_id]
             
+            model_id = train_datalists[client_id][curr_round]['model_id']
+            new_model_args = copy.deepcopy(model_args)
+            new_model_args.model_name_or_path = model_id
+            new_data_args = copy.deepcopy(data_args)
+            new_data_args.model_name_for_dataarg = model_id
+            # model,_,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
+            model = models[model_id]
+            
             extra_state_dict_dict['client_id'] = client_id
             extra_state_dict_dict['curr_round'] = curr_round
             extra_state_dict_dict['test_datalist'] = test_datalist
             extra_state_dict_dict['processor'] = processor
-            extra_state_dict_dict['data_args'] = copy.deepcopy(data_args)
+            extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
             
-            load_state_dict(model, global_state_dict, old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
+            load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
-            
-            if training_args.fedours:
-                # task_vector = F.normalize(torch.stack(prev_task_vectors + [current_task_vectors[client_id]], dim=0), dim=-1)
-                # sim = torch.matmul(task_vector,
-                #                 torch.transpose(task_vector, 1, 0))
-                # sim = torch.transpose(sim, 1, 0)
-                
-                sims = []
-                for grad_idx in range(prev_task_vectors[0].shape[-1]):
-                    task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in prev_task_vectors] + [current_task_vectors[client_id][:,grad_idx]], dim=0), dim=-1)
-                    sim = torch.matmul(task_vector,
-                                    torch.transpose(task_vector, 1, 0))
-                    sim = torch.transpose(sim, 1, 0)
-                    sims.append(sim)
-                
-                sim = torch.stack(sims, dim=0).mean(dim=0)
-                
-                print(sim)
-                new_global_state_dict = {}
-            
-                weights = sim[-1][:-1].clone()
-                
-                weights = (weights/0.2).softmax(dim=0)
-                
-                sim_sum = weights.sum()
-                
-                for name in global_state_dict.keys():
-                    new_param = 0
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                        elif 'ia3_generator_1' in name:
-                            target_key = name.replace('ia3_generator_1', 'ia3_generator_2')
-                        elif 'lang_prompt_dap_key_embeddings_1' in name:
-                            target_key = name.replace('lang_prompt_dap_key_embeddings_1', 'lang_prompt_dap_key_embeddings_2')
-                        elif 'lang_prompt_downsample_1' in name:
-                            target_key = name.replace('lang_prompt_downsample_1', 'lang_prompt_downsample_2')
-                        elif 'lang_prompt_norm_1' in name:
-                            target_key = name.replace('lang_prompt_norm_1', 'lang_prompt_norm_2')
-                        elif 'lang_prompt_ia3_pool_1' in name:
-                            target_key = name.replace('lang_prompt_ia3_pool_1', 'lang_prompt_ia3_pool_2')
-                    else:
-                        if 'lora' in name:
-                            target_key = name.replace('lora', 'lora2')
-                        elif 'ia3_l' in name:
-                            target_key = name.replace('ia3_l', 'ia3_l_2')
-                        elif 'ia3_generator' in name:
-                            target_key = name.replace('ia3_generator', 'ia3_generator_2')
-                        elif 'lang_prompt_dap_key_embeddings' in name:
-                            target_key = name.replace('lang_prompt_dap_key_embeddings', 'lang_prompt_dap_key_embeddings_2')
-                        elif 'lang_prompt_downsample' in name:
-                            target_key = name.replace('lang_prompt_downsample', 'lang_prompt_downsample_2')
-                        elif 'lang_prompt_norm' in name:
-                            target_key = name.replace('lang_prompt_norm', 'lang_prompt_norm_2')
-                        elif 'lang_prompt_ia3_pool' in name:
-                            target_key = name.replace('lang_prompt_ia3_pool', 'lang_prompt_ia3_pool_2')
-                    for id in range(len(prev_local_state_dict_list)):
-                        new_param += weights[id]*prev_local_state_dict_list[id][target_key] / sim_sum
-                    
-                    new_global_state_dict[name] = new_param
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']: 
-                        new_global_state_dict[target_key] = new_param
-                
-                if 'zero3' in training_args.deepspeed:
-                    load_deepspeed(new_global_state_dict, model, strict=False)
-                else:
-                    model.load_state_dict(new_global_state_dict, strict=False) 
-                
-            
-            if 'CodaPrompt' in training_args.mode and task_id is not None and task_id != last_task_id[client_id]:
-                for n, m in model.named_modules():
-                    if isinstance(m, CodaPrompt):
-                        m.process_task_count(task_id)
-                last_task_id[client_id] = task_id
-                
-                # update global_state_dict
-                for name, param in model.named_parameters():
-                    if name in global_state_dict.keys():
-                        global_state_dict[name].copy_(param.detach().cpu())
             
             iteration = 0
             datalist = []
@@ -365,7 +264,7 @@ def main():
             data_module = make_supervised_data_module(client_data=datalist, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
-                                                data_args=copy.deepcopy(data_args))
+                                                data_args=copy.deepcopy(new_data_args))
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 logger.info(f'Round {curr_round} | train client {client_id} | num samples {len(sub_dataset)}')
@@ -377,8 +276,6 @@ def main():
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
             
-            if grad_subsample_idx is not None:
-                extra_state_dict_dict['grad_subsample_idx'] = grad_subsample_idx
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
             results = trainer.train()
@@ -424,15 +321,20 @@ def main():
                 local_state_dict_list[client_id] = copy.deepcopy(local_state_dict)
             
             trainer.deepspeed.empty_partition_cache()
+            trainer.accelerator.free_memory()
             del trainer
+            model = model.cpu()
+            gc.collect()
+            torch.cuda.empty_cache()
             logger.info(f"done Round {curr_round} client {client_id} | elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
-
+            
         
-        aggregate_state_dict(global_state_dict, local_state_dict_list, selected_ids, num_selection, training_args, **extra_state_dict_dict)
+        aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **extra_state_dict_dict)
         
         # Save server model
-        if (training_args.local_rank == 0 or training_args.local_rank == -1): 
-            torch.save(global_state_dict, os.path.join(training_args.state_dir, f"server_model_round{curr_round}.pth"))
+        if training_args.mode != 'fedours':
+            if (training_args.local_rank == 0 or training_args.local_rank == -1): 
+                torch.save(global_state_dict_list[0], os.path.join(training_args.state_dir, f"server_model_round{curr_round}.pth"))
             
     if training_args.use_task_vector:
         path = os.path.join(training_args.state_dir, f"round{curr_round+1}_task_vector_local_weights.pth")
@@ -495,7 +397,8 @@ def get_datalists(args, scenario_num):
                 train_datalist.append(
                     {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
                      'num_iter': num_iter,
-                     'task_id': task_id})
+                     'task_id': task_id,
+                     'model_id': client_data['model_id']})
             with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}-small.json") as fp:
                 datalist = json.load(fp)
             test_datalist.append({

@@ -1,7 +1,7 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="sft_bs4_saveoptim_lr2e-5_sc0_4tasks_5rounds_fixitr100_llama3_1B_lora"
-MODE="sft"
+NOTE="fedours_bs4_saveoptim_lr2e-5_sc0_4tasks_5rounds_fixitr100_t0.2_memonly"
+MODE="fedours"
 MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
@@ -12,8 +12,13 @@ NUM_TASKS=4
 NUM_CLIENTS=10
 MODEL_MAX_LEN=20000
 NUM_ITER=100
+
+###
+ANYTIME_EVAL=False
+ANYTIME_EVAL_FREQ=1
+##
 MEMORY_SIZE=100000
-IS_STREAMONLY=True
+IS_STREAMONLY=False
 
 LORA_ENABLE=True
 IA3_ENABLE=False
@@ -72,8 +77,8 @@ fi
 LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr6e-3_alldown_freq5_grad32cossimmeansoftmax_t0.2_mean_sc0_4tasks_5rounds_fixitr100/round15_task_vector_local_weights.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29503 \
-    --include localhost:3 \
+deepspeed --master_port 29507 \
+    --include localhost:7 \
     train_VLM_CL.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
@@ -108,6 +113,8 @@ deepspeed --master_port 29503 \
     --note $NOTE \
     --memory_size $MEMORY_SIZE \
     --is_streamonly $IS_STREAMONLY \
+    --anytime_eval $ANYTIME_EVAL \
+    --anytime_eval_freq $ANYTIME_EVAL_FREQ \
     --prompt_num 1 \
     --lora_enable $LORA_ENABLE \
     --ia3_enable $IA3_ENABLE \

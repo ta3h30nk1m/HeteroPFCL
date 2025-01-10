@@ -293,8 +293,8 @@ class DataCollatorForSupervisedDataset(object):
             use_cache=False,
         )
 
-        if 'image' in instances[0]:
-            images = [instance['image'] for instance in instances]
+        if 'pixel_values' in instances[0]:
+            images = [instance['pixel_values'] for instance in instances]
             if all(x is not None and x.shape == images[0].shape for x in images):
                 images = torch.stack(images).to(torch.bfloat16)#.to(device=self.device)
                 # b, n, c, h, w = images.shape

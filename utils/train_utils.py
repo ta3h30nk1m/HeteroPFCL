@@ -39,24 +39,20 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
         model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
             model_args.model_name_or_path,
-            torch_dtype=torch.bfloat16, 
-            low_cpu_mem_usage=True,
+            torch_dtype=compute_dtype,
             use_flash_attention_2=True
         )
     else:
         model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
             model_args.model_name_or_path,
-            torch_dtype=torch.bfloat16, 
-            low_cpu_mem_usage=True,
+            torch_dtype=compute_dtype,
             use_flash_attention_2=True
         )
-
+        
     model.config.use_cache = False
     model.vision_tower.requires_grad_(False)
-
-    # FIXME
-    if training_args.bits >= 16:
-        model = model.to(training_args.device)
+    
+    # model = model.to(training_args.device)
     
     if training_args.bits in [4, 8]:
         from peft import prepare_model_for_kbit_training
@@ -70,17 +66,15 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             def make_inputs_require_grad(module, input, output):
                 output.requires_grad_(True)
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
-    
+
     if training_args.bits == 16:
-            if training_args.bf16:
-                model.to(torch.bfloat16)
-            if training_args.fp16:
-                model.to(torch.float16)
+        if training_args.bf16:
+            model.to(torch.bfloat16)
+        if training_args.fp16:
+            model.to(torch.float16)
     
     if training_args.lora_enable:
         from peft import LoraConfig, get_peft_model
-        
-        # target_modules = ['k_proj', 'v_proj']
         
         lora_config = LoraConfig(
             r=training_args.lora_r,
@@ -124,7 +118,6 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             ia3_config.peft_type = 'EMPTYIA3'
         
         model = get_peft_model(model, ia3_config)
-        model = model.to(device=training_args.device, dtype=compute_dtype)
 
     if model_args.version in conversation_lib_llava.conv_templates:
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates[model_args.version]
@@ -146,9 +139,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     total_count = 0
     for n, p in model.named_parameters():
         if p.requires_grad:
-            print(n, p.shape)
+    #         print(n, p.shape)
             total_count += p.numel()
-    print(total_count)
+    print(f"trainable param num: {total_count}")
     return model, tokenizer, processor, data_args
 
 def find_all_linear_names(model):

@@ -96,6 +96,7 @@ class TrainingConfig(transformers.TrainingArguments):
         metadata={"help": "How many bits to use."}
     )
 
+    is_hetero_model: bool = False
 
     # lora config
     lora_enable: bool = True

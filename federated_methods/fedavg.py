@@ -83,9 +83,14 @@ def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_st
         )
     return trainer
 
-def fedavg_aggregate_state_dict(global_state_dict, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    assert training_args.is_hetero_model is not True
+    
+    global_state_dict = global_state_dict_list[0]
     for key in global_state_dict.keys():
         global_state_dict[key] = sum([local_state_dict_list[client][key] / num_selection for client in selected_ids])
+    for i in range(len(global_state_dict_list)):
+        global_state_dict_list[i] = global_state_dict
 
 class LLaVATrainerFEDAVG(LLaVATrainer):
     def __init__(self, client_id, curr_round, test_datalist, processor, data_args, **kwargs):
@@ -573,6 +578,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                     if is_torch_xla_available():
                         xm.mark_step()
                     break
+            
             if step < 0:
                 logger.warning(
                     "There seems to be not a single sample in your epoch_iterator, stopping training at step"

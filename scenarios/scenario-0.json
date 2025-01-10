@@ -6,7 +6,8 @@
             {"dataset": "Fashion200K","subset_id": 2, "type":"multi-choice"},
             {"dataset": "Fashion200K","subset_id": 3, "type":"multi-choice"},
             {"dataset": "FashionIQ","subset_id": 0, "type":"multi-choice"}
-        ] 
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 1,
@@ -15,7 +16,8 @@
             {"dataset": "HRVQA","subset_id": 5, "type":"multi-choice"},
             {"dataset": "HRVQA","subset_id": 7, "type":"multi-choice"},
             {"dataset": "HRVQA","subset_id": 9, "type":"multi-choice"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 2,
@@ -24,7 +26,8 @@
             {"dataset": "CIRR","subset_id": 1,"type":"multi-choice"},
             {"dataset": "HQ_Edit","subset_id": 0,"type":"multi-choice"},
             {"dataset": "PatternCom","subset_id": 0,"type":"multi-choice"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 3,
@@ -33,7 +36,8 @@
             {"dataset": "TQA","subset_id": 0, "type":"multi-choice"},
             {"dataset": "AQUA","subset_id": 0, "type":"open-ended", "metric":"F1"},
             {"dataset": "dvqa","subset_id": 0, "type":"multi-choice"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 4,
@@ -42,7 +46,8 @@
             {"dataset": "Bongard-OpenWorld","subset_id": 1, "type":"multi-choice"},
             {"dataset": "Bongard-HOI","subset_id": 0, "type":"multi-choice"},
             {"dataset": "Bongard-HOI","subset_id": 1, "type":"multi-choice"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 5,
@@ -51,7 +56,8 @@
             {"dataset": "iconqa","subset_id": 1, "type":"multi-choice"},
             {"dataset": "iconqa","subset_id": 2, "type":"open-ended", "metric":"F1"},
             {"dataset": "iconqa","subset_id": 3, "type":"open-ended", "metric":"F1"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 6,
@@ -60,7 +66,8 @@
             {"dataset": "Co-Instruct-DB","subset_id": 1, "type":"multi-choice"},
             {"dataset": "Co-Instruct-DB","subset_id": 2, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Co-Instruct-DB","subset_id": 3, "type":"open-ended", "metric":"RougeL"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 7,
@@ -69,7 +76,8 @@
             {"dataset": "Birds-to-Words","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "IEdit","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "CLEVR-Change","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 8,
@@ -78,7 +86,8 @@
             {"dataset": "FlintstonesSV","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "VIST","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "AESOP","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 9,
@@ -87,6 +96,7 @@
             {"dataset": "VISION","subset_id": 1, "type":"multi-choice"},
             {"dataset": "VizWiz","subset_id": 0, "type":"multi-choice"},
             {"dataset": "MIT-States","subset_id": 0, "type":"multi-choice"}
-        ]
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
     }
 ]

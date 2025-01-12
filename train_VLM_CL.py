@@ -108,6 +108,39 @@ def main():
             new_model_args.model_name_or_path = model_id
             model, tokenizer, processor, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
             
+            if training_args.load_checkpoint is not None and not training_args.fedours:
+                logger.info(f'load {training_args.load_checkpoint}')
+                server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
+                
+                with torch.no_grad():
+                    model.load_state_dict(server_state_dict, strict=False)
+                
+                if ('fedours' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
+                    local_state_dict = {}
+                    for name in server_state_dict.keys():
+                        if 'lora1' in name:
+                            target_key = name.replace('lora1', 'lora')
+                        elif 'ia3_l_1' in name:
+                            target_key = name.replace('ia3_l_1', 'ia3_l')
+                        local_state_dict[target_key] = server_state_dict[name]
+                    
+                    server_state_dict = local_state_dict
+                
+                with torch.no_grad():
+                    model.load_state_dict(server_state_dict, strict=False)
+                    
+                if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
+                    local_state_dict = {}
+                    for name in server_state_dict.keys():
+                        if 'lora1' in name:
+                            target_key = name.replace('lora1', 'lora2')
+                        elif 'ia3_l_1' in name:
+                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                        local_state_dict[target_key] = server_state_dict[name]
+                    
+                    model.load_state_dict(local_state_dict, strict=False)
+            
+            
             global_state_dict = get_peft_state_maybe_zero_3(
                         model.named_parameters(), training_args.lora_bias
                     )
@@ -138,6 +171,16 @@ def main():
     del model_ids
     local_state_dict_keys = local_state_dict_list[0].keys()
     extra_state_dict_dict = {}
+    
+    if training_args.fedours:
+        logger.info(f'load task vector {training_args.load_checkpoint}')
+        tv_weights = torch.load(training_args.load_checkpoint, map_location='cpu')
+        prev_task_vectors = tv_weights['task_vectors']
+        prev_local_state_dict_list = tv_weights['local_state_dict_list']
+        
+        current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module)
+    else:
+        current_task_vectors = None
 
     training_loss = [[] for i in range(training_args.num_clients)]
     
@@ -232,6 +275,50 @@ def main():
             
             load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
+            
+            if training_args.fedours:
+                sims = []
+                for grad_idx in range(prev_task_vectors[0].shape[-1]):
+                    task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in prev_task_vectors] + [current_task_vectors[client_id][:,grad_idx]], dim=0), dim=-1)
+                    sim = torch.matmul(task_vector,
+                                    torch.transpose(task_vector, 1, 0))
+                    sim = torch.transpose(sim, 1, 0)
+                    sims.append(sim)
+                
+                sim = torch.stack(sims, dim=0).mean(dim=0)
+                
+                print(sim)
+                new_global_state_dict = {}
+            
+                weights = sim[-1][:-1].clone()
+                
+                weights = (weights/0.2).softmax(dim=0)
+                
+                sim_sum = weights.sum()
+                
+                for name in global_state_dict.keys():
+                    new_param = 0
+                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
+                        if 'lora1' in name:
+                            target_key = name.replace('lora1', 'lora2')
+                        elif 'ia3_l_1' in name:
+                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    else:
+                        if 'lora' in name:
+                            target_key = name.replace('lora', 'lora2')
+                        elif 'ia3_l' in name:
+                            target_key = name.replace('ia3_l', 'ia3_l_2')
+                    for id in range(len(prev_local_state_dict_list)):
+                        new_param += weights[id]*prev_local_state_dict_list[id][target_key] / sim_sum
+                    
+                    new_global_state_dict[name] = new_param
+                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']: 
+                        new_global_state_dict[target_key] = new_param
+                
+                if 'zero3' in training_args.deepspeed:
+                    load_deepspeed(new_global_state_dict, model, strict=False)
+                else:
+                    model.load_state_dict(new_global_state_dict, strict=False) 
             
             iteration = 0
             datalist = []
@@ -399,7 +486,7 @@ def get_datalists(args, scenario_num):
                      'num_iter': num_iter,
                      'task_id': task_id,
                      'model_id': client_data['model_id']})
-            with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}-small.json") as fp:
+            with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
                 datalist = json.load(fp)
             test_datalist.append({
                 "data_name": f"{data['dataset']}-{data['subset_id']}",

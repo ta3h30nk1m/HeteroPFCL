@@ -9,26 +9,18 @@ import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
 from utils.train_utils import get_VLMmodel
-
-# from utils.method_manager_VLM import select_method
-# from torch.utils.tensorboard import SummaryWriter
-
-from torch import multiprocessing
 import copy
-import torch.distributed as dist
+
 import json
 from transformers import BitsAndBytesConfig
 
 from utils.data_loader_VLM import GenerationDataset, DataCollatorForGenerationDataset
 from torch.utils.data import DataLoader
-from utils.eval_metrics import NLPEvaluator, matching_token_num#, can_infer
+from utils.eval_metrics import NLPEvaluator, matching_token_num
 from tqdm import tqdm
 
 from models.llava.mm_utils import KeywordsStoppingCriteria
 from models.llava import conversation as conversation_lib_llava
-# from models.bunny import conversation as conversation_lib_bunny
-from models.duallora.dualloralayer import DualLoraLayer
-from models.dual_ia3.dual_ia3_layer import DualIA3Layer
 
 import warnings
 import time
@@ -373,7 +365,7 @@ def main():
     np.random.seed(training_args.seed)
     random.seed(training_args.seed)
 
-    model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
+    # model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
@@ -420,8 +412,18 @@ def main():
         
         test_datalist = test_datalists[client_id]
         for data_info in test_datalist:
+            new_model_args = copy.deepcopy(model_args)
+            new_model_args.model_name_or_path = data_info['model_id']
+            new_data_args = copy.deepcopy(data_args)
+            new_data_args.model_name_for_dataarg = data_info['model_id']
+            model, tokenizer, processor, data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
             # if train_datalists[client_id][training_args.round_to_eval-1]['train_cnt'] > data_info['eval_cnt']:
             if not training_args.zeroshot:
+                # new_client_state_dict = {}
+                # for k, v in client_state_dict.items():
+                #     new_k = k.replace('base_model.model.model', 'base_model.model.language_model.model')
+                #     new_client_state_dict[new_k] = v
+                # model.load_state_dict(new_client_state_dict, strict=False)
                 model.load_state_dict(client_state_dict, strict=False)
                 
                 if ('ours_generator' in training_args.mode or 'fedours' in training_args.mode) and training_args.use_task_vector:
@@ -429,11 +431,11 @@ def main():
                     personal_global_state_dict = torch.load(f'./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth', map_location='cpu')
                     model.load_state_dict(personal_global_state_dict, strict=False)
             # model.load_state_dict(server_state_dict, strict=False)
-            if training_args.mode in ['apfl', 'ditto']:
+            if training_args.mode in ['fedours']:
                 # for name, module in model.named_modules():
                 #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                 #         module.set_state('lora2')
-                model.set_state('lora2')
+                model.set_state('gate')
                 # model.base_model.model.model.mm_projector = model.base_model.model.model.local_mm_projector
             dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             if not training_args.eval_server:
@@ -451,11 +453,11 @@ def main():
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
-                if training_args.mode in ['apfl', 'ditto']:
+                if training_args.mode in ['fedours']:
                     # for name, module in model.named_modules():
                     #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                     #         module.set_state('lora1')
-                    model.set_state('lora1')
+                    model.set_state('gate')
                     # model.base_model.model.model.mm_projector = model.base_model.model.model.global_mm_projector
             # #     if data_info['data_name'] in CHOICE_DATA: 
             # #         evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args, training_args, logger, None)
@@ -467,6 +469,9 @@ def main():
                 else:
                     evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
                 server_eval_key.append(data_info['data_name'])
+            
+            model = model.cpu()
+            del model
     
     logger.info(f"elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
 def get_datalists(args, scenario_num):
@@ -501,6 +506,7 @@ def get_datalists(args, scenario_num):
             test_datalist.append({
                 "data_name": f"{data['dataset']}-{data['subset_id']}",
                 "type": data['type'] if 'type' in data else 'open-ended',
+                "model_id": client_data['model_id'],
                 "data": datalist,
                 "eval_cnt": eval_cnt})
             eval_cnt += len(datalist)

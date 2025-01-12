@@ -171,16 +171,6 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                elif 'ia3_generator_1' in name:
-                    target_key = name.replace('ia3_generator_1', 'ia3_generator_2')
-                elif 'lang_prompt_dap_key_embeddings_1' in name:
-                    target_key = name.replace('lang_prompt_dap_key_embeddings_1', 'lang_prompt_dap_key_embeddings_2')
-                elif 'lang_prompt_downsample_1' in name:
-                    target_key = name.replace('lang_prompt_downsample_1', 'lang_prompt_downsample_2')
-                elif 'lang_prompt_norm_1' in name:
-                    target_key = name.replace('lang_prompt_norm_1', 'lang_prompt_norm_2')
-                elif 'lang_prompt_ia3_pool_1' in name:
-                    target_key = name.replace('lang_prompt_ia3_pool_1', 'lang_prompt_ia3_pool_2')
                 
                 for id in range(training_args.num_clients):
                     if id == client_id:
@@ -891,7 +881,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
 
-        self.fisher_old = ((self.fisher_cur/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur/self.fisher_cnt)
+        self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
         self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
         
         self.model.activate_all()

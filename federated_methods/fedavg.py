@@ -540,16 +540,16 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # wsd
                         if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
                             self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-                    
+
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        # if step % 5 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+                        if step % 25 == 0:
+                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
+                            state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
                             
-                        #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                        #         torch.save(state_dict, output_dir)
+                            if (self.args.local_rank == 0 or self.args.local_rank == -1):
+                                torch.save(state_dict, output_dir)
                         
                         # anytime eval
                         if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:

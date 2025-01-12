@@ -52,7 +52,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     model.config.use_cache = False
     model.vision_tower.requires_grad_(False)
     
-    # model = model.to(training_args.device)
+    model = model.to(training_args.device)
     
     if training_args.bits in [4, 8]:
         from peft import prepare_model_for_kbit_training
@@ -285,7 +285,7 @@ def load_deepspeed(state_dict, module: nn.Module, prefix="", strict=True):
 
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer
-def get_task_vectors(model, tokenizer, train_datalists, training_args, data_args, global_state_dict, make_supervised_data_module, grad_subsample_idx):
+def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module):
     random.seed(training_args.seed)
     client_task_vectors = []
     for client_id in range(len(train_datalists)):
@@ -295,13 +295,16 @@ def get_task_vectors(model, tokenizer, train_datalists, training_args, data_args
         
         data_module = make_supervised_data_module(client_data=sub_datalist, # sub_dataset
                                                 tokenizer=tokenizer,
+                                                processor=processor,
                                                 data_args=copy.deepcopy(data_args))
     
         extra_state_dict_dict = {}
         extra_state_dict_dict['client_id']=0
         extra_state_dict_dict['curr_round']=0
         extra_state_dict_dict['fisher_freq'] = 1
-        extra_state_dict_dict['grad_subsample_idx']= grad_subsample_idx
+        extra_state_dict_dict['test_datalist'] = []
+        extra_state_dict_dict['processor'] = processor
+        extra_state_dict_dict['data_args'] = data_args
         copy_training_args = copy.deepcopy(training_args)
         copy_training_args.per_gpu_train_batch_size = 4
         copy_training_args.gradient_accumulation_steps = 1
@@ -317,7 +320,7 @@ def get_task_vectors(model, tokenizer, train_datalists, training_args, data_args
         del trainer
         
         with torch.no_grad():
-            model.load_state_dict(global_state_dict, strict=False)
+            model.load_state_dict(global_state_dict_list[client_id], strict=False)
     
     extra_state_dict_dict['fisher_freq']=5
     return client_task_vectors

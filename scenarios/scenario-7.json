@@ -1,0 +1,30 @@
+[
+    {
+        "client_id": 0,
+        "datasets":[
+            {"dataset": "RecipeQA_ImageCoherence","subset_id": 0,"type":"multi-choice"}
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
+    },
+    {
+        "client_id": 1,
+        "datasets":[
+            {"dataset": "MagicBrush","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
+    },
+    {
+        "client_id": 2,
+        "datasets":[
+            {"dataset": "MagicBrush","subset_id": 1, "type":"multi-choice"}
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
+    },
+    {
+        "client_id": 3,
+        "datasets":[
+            {"dataset": "RecipeQA_TextCloze","subset_id": 0, "type":"multi-choice"}
+        ],
+        "model_id": "thkim0305/llama3.2_1B_vl"
+    }
+]

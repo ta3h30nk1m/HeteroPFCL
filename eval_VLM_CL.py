@@ -440,7 +440,8 @@ def main():
             dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             if not training_args.eval_server:
                 # if training_args.mode not in ['fedsim', 'feddat']:
-                if os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"):
+                if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
+                    or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
                     print('output file already exist')
                     continue
                     

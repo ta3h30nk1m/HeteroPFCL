@@ -283,6 +283,12 @@ def load_deepspeed(state_dict, module: nn.Module, prefix="", strict=True):
         if child is not None:
             load_deepspeed(state_dict, child, prefix + name + ".")
 
+import numpy as np
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0) # only difference
+
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer
 def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module):

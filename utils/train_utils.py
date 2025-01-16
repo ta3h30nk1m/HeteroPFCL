@@ -140,6 +140,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     for n, p in model.named_parameters():
         if p.requires_grad:
     #         print(n, p.shape)
+            p.data = p.data.to(compute_dtype) 
             total_count += p.numel()
     print(f"trainable param num: {total_count}")
     return model, tokenizer, processor, data_args
@@ -288,6 +289,64 @@ def softmax(x):
     """Compute softmax values for each sets of scores in x."""
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum(axis=0) # only difference
+
+def configure_online_datastream(sub_dataset, num_iterations, training_args, client_id, memory, memory_count, memory_size, total_batchsize):
+    iteration = 0
+    datalist = []
+    iter_ratio = num_iterations / len(sub_dataset)
+    T = 0.125
+    count_decay_ratio = 0.99
+    
+    if not training_args.is_streamonly:
+        # memory-only
+        # for i, sample in enumerate(sub_dataset):
+        #     if len(memory[client_id]) == memory_size:
+        #         memory[client_id].pop(random.randrange(memory_size))
+        #     memory[client_id].append(sample)
+        #     iteration += iter_ratio
+        #     if iteration >= 1:
+        #         for _ in range(int(iteration)):
+        #             batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
+        #             mul = (total_batchsize//len(batch)) + 1
+        #             batch = (batch*mul)[:total_batchsize]
+        #             datalist.extend(batch[:])
+        #             iteration -= 1
+        
+        # memory only: priority-based sampling
+        for i, sample in enumerate(sub_dataset):
+            if len(memory[client_id]) == memory_size:
+                pop_index = random.randrange(memory_size)
+                memory[client_id].pop(pop_index)
+                memory_count[client_id] = np.delete(memory_count[client_id], pop_index, 0)
+            
+            memory[client_id].append(sample)
+            memory_count[client_id] = np.append(memory_count[client_id], 0)
+            iteration += iter_ratio
+            if iteration >= 1:
+                for _ in range(int(iteration)):
+                    # if len(memory[client_id]) > total_batchsize:
+                        # count_decay_ratio = total_batchsize / (len(memory[client_id])*k_coeff)
+                    memory_count[client_id] *= count_decay_ratio
+                    sample_score = memory_count[client_id]
+                    weight = softmax(-sample_score/T)
+                    sample_idx = np.random.choice(len(memory[client_id]), min(len(memory[client_id]), total_batchsize), p=weight, replace=False)
+                    batch = [memory[client_id][idx] for idx in sample_idx]
+                    mul = (total_batchsize//len(batch)) + 1
+                    batch = (batch*mul)[:total_batchsize]
+                    datalist.extend(batch[:])
+                    iteration -= 1
+                    for idx in sample_idx:
+                        memory_count[client_id][idx] += 1
+        if len(datalist) < num_iterations*total_batchsize:
+            batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
+            mul = (total_batchsize//len(batch)) + 1
+            batch = (batch*mul)[:total_batchsize]
+            datalist.extend(batch[:])
+    else:
+        # stream-only
+        datalist = sub_dataset[:num_iterations*total_batchsize]
+    
+    return datalist
 
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer

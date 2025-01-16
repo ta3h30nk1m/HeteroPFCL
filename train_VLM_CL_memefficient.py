@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream
 
 from federated_methods.method_manager import select_method
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
@@ -81,6 +81,7 @@ def main():
     
     
     model_ids = {}
+    model_list = {}
     models = {}
     global_state_dict_list = []
     local_state_dict_list = []
@@ -99,10 +100,10 @@ def main():
         global_state_dict_list.append(global_state_dict_filename)
         local_state_dict_list.append(local_state_dict_filename)
         old_local_state_dict_list.append(old_local_state_dict_filename)
-        if model_id in model_ids.keys():
-            torch.save(model_ids[model_id], local_state_dict_filename)
-            torch.save(model_ids[model_id], old_local_state_dict_filename)
-            global_state_dict = copy.deepcopy(model_ids[model_id])
+        if model_id in model_list.keys():
+            torch.save(model_list[model_id], local_state_dict_filename)
+            torch.save(model_list[model_id], old_local_state_dict_filename)
+            global_state_dict = copy.deepcopy(model_list[model_id])
             if training_args.mode == 'fedours':
                 keys_to_del = []
                 for k in global_state_dict.keys():
@@ -114,6 +115,8 @@ def main():
                 for k in keys_to_del:
                     del global_state_dict[k]
             torch.save(global_state_dict, global_state_dict_filename)
+            
+            model_ids[model_id].append(client_id)
         else:
             new_model_args = copy.deepcopy(model_args)
             new_model_args.model_name_or_path = model_id
@@ -175,11 +178,13 @@ def main():
                     del new_global_state_dict[k]
             torch.save(new_global_state_dict, global_state_dict_filename)
             
-            model_ids[model_id] = global_state_dict
+            model_list[model_id] = global_state_dict
             
             models[model_id] = model
+            
+            model_ids[model_id] = [client_id]
     
-    del model_ids, global_state_dict, new_global_state_dict
+    del model_list, global_state_dict, new_global_state_dict
     extra_state_dict_dict = {}
     
     if training_args.fedours:
@@ -199,6 +204,7 @@ def main():
     frac_clients = 1
     
     memory = [[] for id in range(training_args.num_clients)]
+    memory_count = [np.array([]) for id in range(training_args.num_clients)]
     memory_size = training_args.memory_size
     total_batchsize = training_args.per_gpu_train_batch_size*training_args.world_size*training_args.gradient_accumulation_steps
     init_lr = training_args.learning_rate
@@ -333,34 +339,7 @@ def main():
                 else:
                     model.load_state_dict(new_global_state_dict, strict=False) 
             
-            iteration = 0
-            datalist = []
-            iter_ratio = num_iterations / len(sub_dataset)
-            
-            if not training_args.is_streamonly:
-                # memory-only
-                for i, sample in enumerate(sub_dataset):
-                    if len(memory[client_id]) == memory_size:
-                        memory[client_id].pop(random.randrange(memory_size))
-                    memory[client_id].append(sample)
-                    iteration += iter_ratio
-                    if iteration >= 1:
-                        for _ in range(int(iteration)):
-                            batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
-                            mul = (total_batchsize//len(batch)) + 1
-                            batch = (batch*mul)[:total_batchsize]
-                            datalist.extend(batch[:])
-                            iteration -= 1
-                
-                if len(datalist) < num_iterations*total_batchsize:
-                    batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
-                    mul = (total_batchsize//len(batch)) + 1
-                    batch = (batch*mul)[:total_batchsize]
-                    datalist.extend(batch[:])
-            else:
-                # stream-only
-                datalist = sub_dataset[:num_iterations*total_batchsize]
-            
+            datalist = configure_online_datastream(sub_dataset, num_iterations, training_args, client_id, memory, memory_count, memory_size, total_batchsize)           
             data_module = make_supervised_data_module(client_data=datalist, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,

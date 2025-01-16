@@ -68,6 +68,14 @@ def fedavg_load_state_dict(model, global_state_dict, local_state_dict_list, clie
         else:
             model.load_state_dict(model_to_load, strict=False)  
 
+def fedavg_memefficient_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    model_to_load = torch.load(global_state_dict)
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(model_to_load, model, strict=False)
+        else:
+            model.load_state_dict(model_to_load, strict=False)  
+
 def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
@@ -91,6 +99,32 @@ def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         global_state_dict[key] = sum([local_state_dict_list[client][key] / num_selection for client in selected_ids])
     for i in range(len(global_state_dict_list)):
         global_state_dict_list[i] = global_state_dict
+
+def fedavg_memefficient_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    assert training_args.is_hetero_model is not True
+    
+    global_state_dict = torch.load(global_state_dict_list[0])
+    for key in global_state_dict.keys():
+        global_state_dict[key] = torch.zeros_like(global_state_dict[key])
+    for client in selected_ids:
+        local_state_dict = torch.load(local_state_dict_list[client])
+        for key in global_state_dict.keys():
+            global_state_dict[key] += local_state_dict[key] / num_selection
+    
+    for i in range(len(global_state_dict_list)):
+        torch.save(global_state_dict, global_state_dict_list[i])
+    
+
+def fedavg_heterosimple_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    # only aggregate the local models with the same architecture
+    model_ids = kwargs['model_ids']
+    
+    for model_id, homo_client_ids in model_ids.items():
+        global_state_dict = global_state_dict_list[homo_client_ids[0]]
+        for key in global_state_dict.keys():
+            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(homo_client_ids) for client in homo_client_ids])
+        for i in homo_client_ids:
+            global_state_dict_list[i] = global_state_dict
 
 class LLaVATrainerFEDAVG(LLaVATrainer):
     def __init__(self, client_id, curr_round, test_datalist, processor, data_args, **kwargs):
@@ -544,12 +578,12 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        if step % 25 == 0:
-                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                            state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+                        # if step % 25 == 0:
+                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
+                        #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
                             
-                            if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                                torch.save(state_dict, output_dir)
+                        #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
+                        #         torch.save(state_dict, output_dir)
                         
                         # anytime eval
                         if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:

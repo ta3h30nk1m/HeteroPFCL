@@ -119,6 +119,27 @@ def OURS_aggregate_state_dict(global_state_dict_list, local_state_dict_list, sel
     for i in range(len(global_state_dict_list)):
         global_state_dict_list[i] = global_state_dict
 
+@torch.no_grad()
+def OURS_memefficient_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    if training_args.is_hetero_model:
+        return
+    global_state_dict = torch.load(global_state_dict_list[0])
+    for key in global_state_dict.keys():
+        global_state_dict[key] = torch.zeros_like(global_state_dict[key])
+    
+    for client in selected_ids:
+        local_state_dict = torch.load(local_state_dict_list[client])
+        for key in global_state_dict.keys():
+            # simple averaging
+            if 'lora1' in key:
+                target_key = key.replace('lora1', 'lora2')
+            elif 'ia3_l_1' in key:
+                target_key = key.replace('ia3_l_1', 'ia3_l_2')
+            global_state_dict[key] += local_state_dict[target_key] / num_selection
+
+    for i in range(len(global_state_dict_list)):
+        torch.save(global_state_dict, global_state_dict_list[i])
+
 def fedours_ema_distill_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
     ema_ratio = training_args.ema_ratio
@@ -186,6 +207,54 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
             #     torch.save(new_global_state_dict, output_dir)
         else:
             new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False) 
+
+def fedours_memefficient_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+    # first load loca model and then load global model
+    local_state_dict = torch.load(local_state_dict_list[client_id])
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict, strict=False)  
+            
+        # gradient based similarity wegithed averaging (exclude own)
+        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
+            # similarity matrix
+            sim = extra_state_dict_dict['task_similarity']
+            new_global_state_dict = {}
+            
+            weights = sim[client_id].clone()
+            
+            weights[client_id] = -1e9
+            weights = (weights/0.2).softmax(dim=0)
+            
+            sim_sum = weights.sum() - weights[client_id]
+            
+            # # weights[client_id] = sim_sum
+            # # sim_sum += sim_sum
+            model_to_load = torch.load(global_state_dict)
+            for name in model_to_load.keys():
+                new_global_state_dict[name] = torch.zeros_like(model_to_load[name])
+            for id in range(training_args.num_clients):
+                if id == client_id:
+                    continue
+                local_state_dict = torch.load(local_state_dict_list[id])
+                for name in model_to_load.keys():
+                    if 'lora1' in name:
+                        target_key = name.replace('lora1', 'lora2')
+                    elif 'ia3_l_1' in name:
+                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    
+                    new_global_state_dict[name] += weights[id]*local_state_dict[target_key] / sim_sum
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        else:
+            new_global_state_dict = model_to_load
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(new_global_state_dict, model, strict=False)
         else:

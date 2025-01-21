@@ -91,6 +91,17 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
+        elif training_args.mode in ['fedpq']:
+            from models.pqlora.pqloramodel import PQLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
+            lora_config.peft_type = 'PQLORA'
+        
+        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq']:
+            from models.dual_pqlora.dual_pqloramodel import Dual_PQLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel
+            lora_config.peft_type = 'DUALPQLORA'
         
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
@@ -131,6 +142,19 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 
     # freeze some layers
     # FIXME
+    if training_args.mode == 'fedduallastpq':
+        from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
+        for layer in model.base_model.language_model.model.layers[:-1]:
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
+    elif training_args.mode == 'fedlastpq':
+        from models.pqlora.pqloralayer import PQLoraLayer
+        for layer in model.base_model.language_model.model.layers[:-1]:
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
+    
     model.config.mm_projector_lr = training_args.mm_projector_lr
     
     if hasattr(model.config, "image_token_index"):

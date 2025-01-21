@@ -7,6 +7,7 @@ from transformers.utils import logging
 
 from models.dual_ia3.dual_ia3_layer import DualIA3Layer
 from models.duallora.dualloralayer import DualLoraLayer
+from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
 logger = logging.get_logger(__name__)
 
 class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
@@ -27,22 +28,22 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
         self.active_state = state
         
         for name, module in self.named_modules():
-            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
+            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, PQLoraLayer):
                 module.set_state(state)
 
     def activate_all(self):
         for name, module in self.named_modules():
-            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
+            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, PQLoraLayer):
                 module.activate_all()
 
     def activate_lora1(self):
         for name, module in self.named_modules():
-            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
+            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, PQLoraLayer):
                 module.activate_lora1()
     
     def activate_lora2(self):
         for name, module in self.named_modules():
-            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
+            if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, PQLoraLayer):
                 module.activate_lora2()
         
     def forward(

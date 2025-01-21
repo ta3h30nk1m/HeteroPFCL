@@ -185,7 +185,7 @@ def main():
             model_ids[model_id] = [client_id]
     
     del model_list, global_state_dict, new_global_state_dict
-    extra_state_dict_dict = {}
+    extra_state_dict_dict = {'model_ids':model_ids}
     
     if training_args.fedours:
         logger.info(f'load task vector {training_args.load_checkpoint}')

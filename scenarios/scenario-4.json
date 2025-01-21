@@ -7,7 +7,7 @@
             {"dataset": "Fashion200K","subset_id": 3, "type":"multi-choice"},
             {"dataset": "FashionIQ","subset_id": 0, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 1,
@@ -27,7 +27,7 @@
             {"dataset": "HQ_Edit","subset_id": 0,"type":"multi-choice"},
             {"dataset": "PatternCom","subset_id": 0,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 3,
@@ -77,7 +77,7 @@
             {"dataset": "IEdit","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "CLEVR-Change","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 8,
@@ -97,6 +97,6 @@
             {"dataset": "VizWiz","subset_id": 0, "type":"multi-choice"},
             {"dataset": "MIT-States","subset_id": 0, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     }
 ]

@@ -718,12 +718,19 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
             optimizer_grouped_parameters = [
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad)
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n))
                     ],
                     "weight_decay": self.args.weight_decay,
                 },
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n))
+                    ],
+                    "lr": self.args.mm_projector_lr,
+                    "weight_decay": self.args.weight_decay,
+                },
             ]
-
+            
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
 
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)

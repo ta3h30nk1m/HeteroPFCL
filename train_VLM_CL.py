@@ -93,16 +93,24 @@ def main():
             local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             global_state_dict = copy.deepcopy(model_list[model_id])
+            keys_to_del = []
             if training_args.mode == 'fedours':
-                keys_to_del = []
                 for k in global_state_dict.keys():
                     if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
                     or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
                     or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
                     or 'w_gate' in k or 'w_noise' in k:
                         keys_to_del.append(k)
-                for k in keys_to_del:
-                    del global_state_dict[k]
+            elif training_args.mode == 'fedpq':
+                for k in global_state_dict.keys():
+                    if 'lora_P' not in k and 'lora_Q' not in k:
+                        keys_to_del.append(k)
+            elif training_args.mode == 'feddualpq':
+                for k in global_state_dict.keys():
+                    if 'lora1_P' not in k and 'lora1_Q' not in k:
+                        keys_to_del.append(k)
+            for k in keys_to_del:
+                del global_state_dict[k]
             global_state_dict_list.append(global_state_dict)
             
             model_ids[model_id].append(client_id)
@@ -155,16 +163,46 @@ def main():
             local_state_dict_list.append(copy.deepcopy(global_state_dict))
             old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
             new_global_state_dict=copy.deepcopy(global_state_dict)
+            keys_to_del = []
             if training_args.mode == 'fedours':
-                keys_to_del = []
                 for k in new_global_state_dict.keys():
                     if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
                     or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
-                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
+                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
                     or 'w_gate' in k or 'w_noise' in k:
                         keys_to_del.append(k)
-                for k in keys_to_del:
-                    del new_global_state_dict[k]
+            elif training_args.mode == 'fedpq':
+                for k in new_global_state_dict.keys():
+                    if 'lora_P' not in k and 'lora_Q' not in k:
+                        keys_to_del.append(k)
+            elif training_args.mode == 'fedlastpq':
+                layer_num = []
+                for k in new_global_state_dict.keys():
+                    if 'layers.' in k:
+                        layer_num.append(int(k.split('.')[5]))
+                layer_num = sorted(list(set(layer_num)))
+                
+                layers_to_del = layer_num[:-1]
+                for k in global_state_dict.keys():
+                    if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+                        keys_to_del.append(k)
+            elif training_args.mode == 'feddualpq':
+                for k in new_global_state_dict.keys():
+                    if 'lora1_P' not in k and 'lora1_Q' not in k:
+                        keys_to_del.append(k)
+            elif training_args.mode == 'fedduallastpq':
+                layer_num = []
+                for k in new_global_state_dict.keys():
+                    if 'layers.' in k:
+                        layer_num.append(int(k.split('.')[5]))
+                layer_num = sorted(list(set(layer_num)))
+                
+                layers_to_del = layer_num[:-1]
+                for k in global_state_dict.keys():
+                    if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+                        keys_to_del.append(k)
+            for k in keys_to_del:
+                del new_global_state_dict[k]
             global_state_dict_list.append(new_global_state_dict)
             
             model_list[model_id] = global_state_dict

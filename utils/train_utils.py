@@ -97,7 +97,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
             lora_config.peft_type = 'PQLORA'
         
-        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq']:
+        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq', 'fedlastpq']:
             from models.dual_pqlora.dual_pqloramodel import Dual_PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel
@@ -163,7 +163,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     total_count = 0
     for n, p in model.named_parameters():
         if p.requires_grad:
-    #         print(n, p.shape)
+            # print(n, p.shape)
             p.data = p.data.to(compute_dtype) 
             total_count += p.numel()
     print(f"trainable param num: {total_count}")

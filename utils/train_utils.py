@@ -311,6 +311,11 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
         #             batch = (batch*mul)[:total_batchsize]
         #             datalist.extend(batch[:])
         #             iteration -= 1
+        # if len(datalist) < num_iterations*total_batchsize:
+            # batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
+            # mul = (total_batchsize//len(batch)) + 1
+            # batch = (batch*mul)[:total_batchsize]
+            # datalist.extend(batch[:])
         
         # memory only: priority-based sampling
         for i, sample in enumerate(sub_dataset):
@@ -338,10 +343,16 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
                     for idx in sample_idx:
                         memory_count[client_id][idx] += 1
         if len(datalist) < num_iterations*total_batchsize:
-            batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
+            memory_count[client_id] *= count_decay_ratio
+            sample_score = memory_count[client_id]
+            weight = softmax(-sample_score/T)
+            sample_idx = np.random.choice(len(memory[client_id]), min(len(memory[client_id]), total_batchsize), p=weight, replace=False)
+            batch = [memory[client_id][idx] for idx in sample_idx]
             mul = (total_batchsize//len(batch)) + 1
             batch = (batch*mul)[:total_batchsize]
             datalist.extend(batch[:])
+            for idx in sample_idx:
+                memory_count[client_id][idx] += 1
     else:
         # stream-only
         datalist = sub_dataset[:num_iterations*total_batchsize]

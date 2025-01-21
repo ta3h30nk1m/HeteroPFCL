@@ -383,6 +383,47 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
     
     return datalist
 
+def get_keys_to_del(training_args, new_global_state_dict):
+    keys_to_del = []
+    if training_args.mode == 'fedours':
+        for k in new_global_state_dict.keys():
+            if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
+            or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
+            or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
+            or 'w_gate' in k or 'w_noise' in k:
+                keys_to_del.append(k)
+    elif training_args.mode == 'fedpq':
+        for k in new_global_state_dict.keys():
+            if 'lora_P' not in k and 'lora_Q' not in k:
+                keys_to_del.append(k)
+    elif training_args.mode == 'fedlastpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        layers_to_del = layer_num[:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+                keys_to_del.append(k)
+    elif training_args.mode == 'feddualpq':
+        for k in new_global_state_dict.keys():
+            if 'lora1_P' not in k and 'lora1_Q' not in k:
+                keys_to_del.append(k)
+    elif training_args.mode == 'fedduallastpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        layers_to_del = layer_num[:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+                keys_to_del.append(k)
+    return keys_to_del
+
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer
 def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module):

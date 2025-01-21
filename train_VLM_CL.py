@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del
 
 from federated_methods.method_manager import select_method
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
@@ -93,22 +93,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             global_state_dict = copy.deepcopy(model_list[model_id])
-            keys_to_del = []
-            if training_args.mode == 'fedours':
-                for k in global_state_dict.keys():
-                    if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
-                    or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
-                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
-                    or 'w_gate' in k or 'w_noise' in k:
-                        keys_to_del.append(k)
-            elif training_args.mode == 'fedpq':
-                for k in global_state_dict.keys():
-                    if 'lora_P' not in k and 'lora_Q' not in k:
-                        keys_to_del.append(k)
-            elif training_args.mode == 'feddualpq':
-                for k in global_state_dict.keys():
-                    if 'lora1_P' not in k and 'lora1_Q' not in k:
-                        keys_to_del.append(k)
+            keys_to_del = get_keys_to_del(training_args, global_state_dict)
             for k in keys_to_del:
                 del global_state_dict[k]
             global_state_dict_list.append(global_state_dict)
@@ -163,44 +148,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(global_state_dict))
             old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
             new_global_state_dict=copy.deepcopy(global_state_dict)
-            keys_to_del = []
-            if training_args.mode == 'fedours':
-                for k in new_global_state_dict.keys():
-                    if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
-                    or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
-                    or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
-                    or 'w_gate' in k or 'w_noise' in k:
-                        keys_to_del.append(k)
-            elif training_args.mode == 'fedpq':
-                for k in new_global_state_dict.keys():
-                    if 'lora_P' not in k and 'lora_Q' not in k:
-                        keys_to_del.append(k)
-            elif training_args.mode == 'fedlastpq':
-                layer_num = []
-                for k in new_global_state_dict.keys():
-                    if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
-                layer_num = sorted(list(set(layer_num)))
-                
-                layers_to_del = layer_num[:-1]
-                for k in global_state_dict.keys():
-                    if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
-                        keys_to_del.append(k)
-            elif training_args.mode == 'feddualpq':
-                for k in new_global_state_dict.keys():
-                    if 'lora1_P' not in k and 'lora1_Q' not in k:
-                        keys_to_del.append(k)
-            elif training_args.mode == 'fedduallastpq':
-                layer_num = []
-                for k in new_global_state_dict.keys():
-                    if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
-                layer_num = sorted(list(set(layer_num)))
-                
-                layers_to_del = layer_num[:-1]
-                for k in global_state_dict.keys():
-                    if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
-                        keys_to_del.append(k)
+            keys_to_del = get_keys_to_del(training_args, new_global_state_dict)
             for k in keys_to_del:
                 del new_global_state_dict[k]
             global_state_dict_list.append(new_global_state_dict)
@@ -254,23 +202,23 @@ def main():
             tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': old_local_state_dict_list}
             torch.save(tv_weight, path)
             
-            # NEW: SVD to match the gradient size
-            if training_args.is_hetero_model:
-                breakpoint()
-                U, S, Vh = torch.linalg.svd(task_vectors, full_matrices=False)
+            # # NEW: SVD to match the gradient size
+            # if training_args.is_hetero_model:
+            #     breakpoint()
+            #     U, S, Vh = torch.linalg.svd(task_vectors, full_matrices=False)
             
             
-            # vectorize cosine sim and then average them
-            sims = []
-            for grad_idx in range(task_vectors[0].shape[-1]):
-                task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
-                sim = torch.matmul(task_vector,
-                                torch.transpose(task_vector, 1, 0))
-                sim = torch.transpose(sim, 1, 0)
-                sims.append(sim)
+            # # vectorize cosine sim and then average them
+            # sims = []
+            # for grad_idx in range(task_vectors[0].shape[-1]):
+            #     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
+            #     sim = torch.matmul(task_vector,
+            #                     torch.transpose(task_vector, 1, 0))
+            #     sim = torch.transpose(sim, 1, 0)
+            #     sims.append(sim)
             
-            sim = torch.stack(sims, dim=0).mean(dim=0)
-            
+            # sim = torch.stack(sims, dim=0).mean(dim=0)
+            sim = torch.ones(10,10)
             
             extra_state_dict_dict['task_similarity'] = sim
             print("task similarity matrix:")

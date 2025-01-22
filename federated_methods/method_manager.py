@@ -18,7 +18,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode == 'fedours':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict  
-    elif mode =='fedpq' or mode =='fedlastpq':
+    elif mode =='fedpq':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedpq_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode == 'fedlastpq':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedlastpq_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict

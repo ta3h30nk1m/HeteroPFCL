@@ -91,13 +91,13 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
-        elif training_args.mode in ['fedpq']:
+        elif training_args.mode in ['fedpq', 'fedlastpq']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
             lora_config.peft_type = 'PQLORA'
         
-        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq', 'fedlastpq']:
+        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq']:
             from models.dual_pqlora.dual_pqloramodel import Dual_PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel

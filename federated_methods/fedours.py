@@ -310,6 +310,14 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             #     model.module.set_state('lora2')
         loss, outputs = super(LLaVATrainerOURS, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
+        
+        # reg loss
+        reg_loss = 0
+        for name, param in model.module.named_parameters():
+            if 'lora2_P' in name:
+                reg_loss += torch.std_mean(param,dim=0)[0]**2
+        loss += 0.5*reg_loss
+        
         # l1 loss
         # l1_loss = 0
         # for layer_num in range(len(outputs['local_ia3_layer'])):
@@ -318,25 +326,6 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
 
         # loss_kl_1 = kl_loss(outputs['logits'], outputs_target.clone().detach())
         # loss_kl_1 = ((outputs['logits'] - outputs_target.detach())**2).mean()
-        
-        # if self.curr_round > 0:
-        #     # loss += self.mu*kl_loss(outputs['logits'], outputs_target.detach())
-        #     loss += self.mu * ((outputs['logits'] - outputs_target.detach())**2).mean()
-        # if self.curr_round > 0:
-        #     shift_logits = outputs['logits'][..., :-1, :].contiguous()
-        #     loss += self.mu*kl_loss(shift_logits[model.module.labels[..., 1:] != -100], outputs_target.detach())
-        # accumulate task vector
-        # layer_num = 30 # 0~31 or multiple
-        # task_vector = outputs['ia3_layer'][layer_num].detach().mean(dim=0) -1
-        # # task_vector = torch.cat(outputs['ia3_layer'][-3:], dim=0).detach().mean(dim=0) - 1
-        
-        # if self.task_vector is None:
-        #     self.task_vector = task_vector
-        # else:
-        #     self.task_vector = self.prompt_ema_ratio * self.task_vector + (1-self.prompt_ema_ratio) * task_vector
-        
-        # pretrained weight fisher info
-        
 
         return (loss, outputs) if return_outputs else loss
     
@@ -974,13 +963,13 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             optimizer_grouped_parameters = [
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n))
                     ],
                     "weight_decay": self.args.weight_decay,
                 },
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
                     "weight_decay": self.args.weight_decay,

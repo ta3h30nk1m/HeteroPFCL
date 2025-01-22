@@ -312,11 +312,11 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         
         
         # reg loss
-        reg_loss = 0
-        for name, param in model.module.named_parameters():
-            if 'lora2_P' in name:
-                reg_loss += torch.std_mean(param,dim=0)[0]**2
-        loss += 0.5*reg_loss
+        # reg_loss = 0
+        # for name, param in model.module.named_parameters():
+        #     if 'lora2_P' in name:
+        #         reg_loss += torch.std_mean(param,dim=0)[0]**2
+        # loss += 0.5*reg_loss
         
         # l1 loss
         # l1_loss = 0

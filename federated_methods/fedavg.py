@@ -92,7 +92,9 @@ def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_st
     return trainer
 
 def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
-    assert training_args.is_hetero_model is not True
+    # assert training_args.is_hetero_model is not True
+    if training_args.is_hetero_model:
+        return
     
     global_state_dict = global_state_dict_list[0]
     for key in global_state_dict.keys():

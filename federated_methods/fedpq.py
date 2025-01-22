@@ -14,6 +14,44 @@ def fedpq_load_state_dict(model, global_state_dict, local_state_dict_list, clien
         else:
             model.load_state_dict(global_state_dict, strict=False) 
             
+
+def fedlastpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    # first load loca model and then load global model
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
+        
+        new_global_state_dict = {}
+        for name in global_state_dict.keys():
+            new_param = 0
+            target_key = name
+            
+            for id in range(training_args.num_clients):
+                # if layer number is different
+                layer_num = []
+                for k in local_state_dict_list[id].keys():
+                    if 'layers.' in k:
+                        layer_num.append(int(k.split('.')[5]))
+                layer_num = sorted(list(set(layer_num)))
+                splited = target_key.split('.')
+                if int(splited[5]) != layer_num[-1]: # last layer
+                    splited[5] = str(layer_num[-1])
+                    target_key = '.'.join(splited)
+                new_param += local_state_dict_list[id][target_key] / training_args.num_clients
+                
+            new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        # else:
+        #     new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False)           
+
 def feddualpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
     with torch.no_grad():

@@ -102,6 +102,17 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel
             lora_config.peft_type = 'DUALPQLORA'
+            
+        elif training_args.mode in ['fedpqfreeze', 'fedpqfreeze_sft']:
+            from models.pqlora_freeze.pqlorafreezemodel import PQLoraFreezeModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['PQLORAFREEZE'] = PQLoraFreezeModel
+            lora_config.peft_type = 'PQLORAFREEZE'
+        elif training_args.mode in ['fedpqfreeze2', 'fedpqfreeze2_sft']:
+            from models.pqlora_freeze2.pqlorafreezemodel import PQLoraFreezeModel2
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['PQLORAFREEZE2'] = PQLoraFreezeModel2
+            lora_config.peft_type = 'PQLORAFREEZE2'
         
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
@@ -203,9 +214,9 @@ def get_decay_parameter_names(model):
 # Borrowed from peft.utils.get_peft_model_state_dict
 def get_peft_state_maybe_zero_3(named_params, bias):
     if bias == "none":
-        to_return = {k: t for k, t in named_params if "lora_" in k}
+        to_return = {k: t for k, t in named_params if "lora" in k}
     elif bias == "all":
-        to_return = {k: t for k, t in named_params if "lora_" in k or "bias" in k}
+        to_return = {k: t for k, t in named_params if "lora" in k or "bias" in k}
     elif bias == "lora_only":
         to_return = {}
         maybe_lora_bias = {}
@@ -227,7 +238,7 @@ def get_peft_state_maybe_zero_3(named_params, bias):
 
 
 def get_peft_state_non_lora_maybe_zero_3(named_params, require_grad_only=True):
-    to_return = {k: t for k, t in named_params if "lora_" not in k}
+    to_return = {k: t for k, t in named_params if "lora" not in k}
     if require_grad_only:
         to_return = {k: t for k, t in to_return.items() if t.requires_grad}
     to_return = {k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()}
@@ -395,6 +406,10 @@ def get_keys_to_del(training_args, new_global_state_dict):
     elif training_args.mode == 'fedpq':
         for k in new_global_state_dict.keys():
             if 'lora_P' not in k and 'lora_Q' not in k:
+                keys_to_del.append(k)
+    elif training_args.mode == 'fedpqfreeze' or training_args.mode =='fedpqfreeze2' or training_args.mode =='fedpqfreeze_sft' or training_args.mode == 'fedpqfreeze2_sft':
+        for k in new_global_state_dict.keys():
+            if 'loraT_P' not in k and 'loraT_Q' not in k:
                 keys_to_del.append(k)
     elif training_args.mode == 'fedlastpq':
         layer_num = []

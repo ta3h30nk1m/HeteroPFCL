@@ -963,13 +963,15 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             optimizer_grouped_parameters = [
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
                     ],
                     "weight_decay": self.args.weight_decay,
                 },
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
                     "weight_decay": self.args.weight_decay,

@@ -91,13 +91,13 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
-        elif training_args.mode in ['fedpq', 'fedlastpq']:
+        elif training_args.mode in ['fedpq', 'fedlastpq', 'fedFLpq']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
             lora_config.peft_type = 'PQLORA'
         
-        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'fedduallastfirstpq']:
+        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'feddualFLpq']:
             from models.dual_pqlora.dual_pqloramodel import Dual_PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel
@@ -422,6 +422,17 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
+    elif training_args.mode == 'fedFLpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        layers_to_del = layer_num[1:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+                keys_to_del.append(k)
     elif training_args.mode == 'feddualpq':
         for k in new_global_state_dict.keys():
             if 'lora1_P' not in k and 'lora1_Q' not in k:
@@ -434,6 +445,17 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = sorted(list(set(layer_num)))
         
         layers_to_del = layer_num[:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+                keys_to_del.append(k)
+    elif training_args.mode == 'feddualFLpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)

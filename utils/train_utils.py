@@ -1,4 +1,6 @@
 import torch
+from torch import nn
+import math
 import os
 import logging
 import transformers
@@ -196,6 +198,75 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 if isinstance(m, PQLoraLayer):
                     m.use_pq = False
     
+    elif training_args.mode == 'fedlastpqfreeze':
+        from models.pqlora.pqloralayer import PQLoraLayer
+        last_layer = len(model.base_model.language_model.model.layers) - 1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx == last_layer:
+                for n, p in layer.named_parameters():
+                    if 'lora_A' in n:
+                        p.requires_grad = False
+                    elif 'lora_B' in n:
+                        p.requires_grad = False
+                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                    elif 'lora_P' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraLayer):
+                        m.use_pq = False
+    elif training_args.mode == 'fedFLpqfreeze':
+        from models.pqlora.pqloralayer import PQLoraLayer
+        last_layer = len(model.base_model.language_model.model.layers) - 1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx == last_layer or idx == 0: # last or first layer
+                for n, p in layer.named_parameters():
+                    if 'lora_A' in n:
+                        p.requires_grad = False
+                    elif 'lora_B' in n:
+                        p.requires_grad = False
+                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                    elif 'lora_P' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraLayer):
+                        m.use_pq = False
+    elif training_args.mode == 'fedduallastpqfreeze':
+        from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
+        last_layer = len(model.base_model.language_model.model.layers) - 1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx == last_layer:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n or 'lora2_B' in n:
+                        p.requires_grad = False
+                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                    elif 'lora1_P' in n or 'lora2_P' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraLayer):
+                        m.use_pq = False
+        
+    elif training_args.mode == 'feddualFLpqfreeze':
+        from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
+        last_layer = len(model.base_model.language_model.model.layers) - 1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx == last_layer or idx == 0: # last or first layer
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n or 'lora2_B' in n:
+                        p.requires_grad = False
+                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                    elif 'lora1_P' in n or 'lora2_P' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraLayer):
+                        m.use_pq = False
     
     model.config.mm_projector_lr = training_args.mm_projector_lr
     
@@ -442,7 +513,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'loraT_P' not in k and 'loraT_Q' not in k:
                 keys_to_del.append(k)
-    elif training_args.mode == 'fedlastpq':
+    elif training_args.mode == 'fedlastpq' or training_args.mode == 'fedlastpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
@@ -453,7 +524,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
-    elif training_args.mode == 'fedFLpq':
+    elif training_args.mode == 'fedFLpq' or training_args.mode == 'fedFLpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
@@ -481,7 +552,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'lora1_P' not in k and 'lora1_Q' not in k:
                 keys_to_del.append(k)
-    elif training_args.mode == 'fedduallastpq':
+    elif training_args.mode == 'fedduallastpq' or training_args.mode == 'fedduallastpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
@@ -492,7 +563,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
-    elif training_args.mode == 'feddualFLpq':
+    elif training_args.mode == 'feddualFLpq' or training_args.mode == 'feddualFLpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:

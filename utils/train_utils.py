@@ -91,13 +91,13 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
-        elif training_args.mode in ['fedpq', 'fedlastpq', 'fedFLpq']:
+        elif training_args.mode in ['fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
             lora_config.peft_type = 'PQLORA'
         
-        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'feddualFLpq']:
+        elif training_args.mode in ['feddualpq', 'fedduallastpq', 'feddualFLpq', 'feddualFMLpq', 'fedduallastpqfreeze', 'feddualFLpqfreeze']:
             from models.dual_pqlora.dual_pqloramodel import Dual_PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQLORA'] = Dual_PQLoraModel
@@ -159,12 +159,43 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             for n, m in layer.named_modules():
                 if isinstance(m, PQLoraLayer):
                     m.use_pq = False
+    elif training_args.mode == 'feddualFLpq':
+        from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
+        for layer in model.base_model.language_model.model.layers[1:-1]:
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
+    elif training_args.mode == 'feddualFMLpq':
+        from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
+        mid_layer = int(len(model.base_model.language_model.model.layers)/2)-1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers[1:-1]):
+            if idx+1 == mid_layer: # +1 to compensate for the starting point of the enumerate, which is 2nd layer
+                continue
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
     elif training_args.mode == 'fedlastpq':
         from models.pqlora.pqloralayer import PQLoraLayer
         for layer in model.base_model.language_model.model.layers[:-1]:
             for n, m in layer.named_modules():
                 if isinstance(m, PQLoraLayer):
                     m.use_pq = False
+    elif training_args.mode == 'fedFLpq':
+        from models.pqlora.pqloralayer import PQLoraLayer
+        for layer in model.base_model.language_model.model.layers[1:-1]:
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
+    elif training_args.mode == 'fedFMLpq':
+        from models.pqlora.pqloralayer import PQLoraLayer
+        mid_layer = int(len(model.base_model.language_model.model.layers)/2)-1
+        for idx, layer in enumerate(model.base_model.language_model.model.layers[1:-1]):
+            if idx+1 == mid_layer:
+                continue
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraLayer):
+                    m.use_pq = False
+    
     
     model.config.mm_projector_lr = training_args.mm_projector_lr
     
@@ -433,6 +464,19 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
+    elif training_args.mode == 'fedFMLpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        mid_layer = int(len(layer_num)/2) - 1
+        del layer_num[mid_layer]
+        layers_to_del = layer_num[1:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+                keys_to_del.append(k)
     elif training_args.mode == 'feddualpq':
         for k in new_global_state_dict.keys():
             if 'lora1_P' not in k and 'lora1_Q' not in k:
@@ -454,6 +498,20 @@ def get_keys_to_del(training_args, new_global_state_dict):
             if 'layers.' in k:
                 layer_num.append(int(k.split('.')[5]))
         layer_num = sorted(list(set(layer_num)))
+        
+        layers_to_del = layer_num[1:-1]
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+                keys_to_del.append(k)
+    elif training_args.mode == 'feddualFMLpq':
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        mid_layer = int(len(layer_num)/2) - 1
+        del layer_num[mid_layer]
         
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():

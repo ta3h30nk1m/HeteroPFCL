@@ -93,7 +93,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
-        elif training_args.mode in ['fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze']:
+        elif training_args.mode in ['fedpq_sft', 'fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
@@ -505,7 +505,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
             or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
             or 'w_gate' in k or 'w_noise' in k:
                 keys_to_del.append(k)
-    elif training_args.mode == 'fedpq':
+    elif training_args.mode == 'fedpq' or training_args.mode == 'fedpq_sft':
         for k in new_global_state_dict.keys():
             if 'lora_P' not in k and 'lora_Q' not in k:
                 keys_to_del.append(k)

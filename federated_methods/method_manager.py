@@ -5,7 +5,10 @@ from federated_methods.sft import sft_load_state_dict
 from federated_methods.task_id import task_id_create_trainer
 from federated_methods.fedours import fedours_ema_distill_create_trainer, fedours_load_state_dict, OURS_set_state_dict, OURS_aggregate_state_dict, OURS_memefficient_aggregate_state_dict, fedours_memefficient_load_state_dict
 
-from federated_methods.fedpq import feddualpq_load_state_dict, fedpq_load_state_dict, fedduallastpq_load_state_dict, fedlastpq_load_state_dict, fedFLpq_load_state_dict, feddualFLpq_load_state_dict, fedFMLpq_load_state_dict, feddualFMLpq_load_state_dict
+from federated_methods.fedpq import (feddualpq_load_state_dict, fedpq_load_state_dict, fedduallastpq_load_state_dict, 
+                                     fedlastpq_load_state_dict, fedFLpq_load_state_dict, feddualFLpq_load_state_dict, 
+                                     fedFMLpq_load_state_dict, feddualFMLpq_load_state_dict, feddualMultipq_load_state_dict,
+                                     feddualMultipq2_load_state_dict)
 
 def dummy_function(*args):
     return {}
@@ -36,7 +39,12 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualFLpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='feddualFMLpq':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualFMLpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-        
+    elif mode =='feddualMultipqfreeze':
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    elif mode =='feddualMultipqfreeze2':
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq2_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    
+    
     elif mode =='fedavg_memefficient':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_memefficient_load_state_dict, fedavg_create_trainer, fedavg_memefficient_aggregate_state_dict
     elif mode == 'fedours_memefficient':

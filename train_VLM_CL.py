@@ -192,6 +192,11 @@ def main():
     fisher_olds = [None for _ in range(training_args.num_clients)]
     task_vectors = [None for _ in range(training_args.num_clients)]
     
+    original_weights = {}
+    for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
+        if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
+            original_weights[n] = p.clone().detach().cpu().flatten()
+    
     lr_step = (init_lr - final_lr)/total_rounds
     mm_lr_step = (mm_init_lr - mm_final_lr)/total_rounds
     for curr_round in range(total_rounds):
@@ -202,23 +207,29 @@ def main():
             tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': old_local_state_dict_list}
             torch.save(tv_weight, path)
             
-            # # NEW: SVD to match the gradient size
-            # if training_args.is_hetero_model:
-            #     breakpoint()
-            #     U, S, Vh = torch.linalg.svd(task_vectors, full_matrices=False)
-            
-            
-            # # vectorize cosine sim and then average them
-            # sims = []
-            # for grad_idx in range(task_vectors[0].shape[-1]):
-            #     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
-            #     sim = torch.matmul(task_vector,
-            #                     torch.transpose(task_vector, 1, 0))
-            #     sim = torch.transpose(sim, 1, 0)
-            #     sims.append(sim)
-            
-            # sim = torch.stack(sims, dim=0).mean(dim=0)
-            sim = torch.ones(10,10)
+            # task vector layerwise cosine sim
+            if 'tv' in training_args.mode:
+                sims = []
+                for layer_name in task_vectors[0].keys():
+                    task_vector = F.normalize(torch.stack([task_vectors[i][layer_name] for i in range(len(task_vectors))], dim=0), dim=-1)
+                    sim = torch.matmul(task_vector,
+                                    torch.transpose(task_vector, 1, 0))
+                    if sim.sum() != 0:
+                        sim = torch.transpose(sim, 1, 0)
+                        sims.append(sim)
+                sim = torch.stack(sims, dim=0).mean(dim=0)
+            else:
+                # vectorize cosine sim and then average them
+                sims = []
+                for grad_idx in range(task_vectors[0].shape[-1]):
+                    task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
+                    sim = torch.matmul(task_vector,
+                                    torch.transpose(task_vector, 1, 0))
+                    sim = torch.transpose(sim, 1, 0)
+                    sims.append(sim)
+                
+                sim = torch.stack(sims, dim=0).mean(dim=0)
+            # sim = torch.ones(10,10)
             
             extra_state_dict_dict['task_similarity'] = sim
             print("task similarity matrix:")
@@ -335,7 +346,14 @@ def main():
                 fisher_olds[client_id] = trainer.fisher_old
             
             if training_args.use_task_vector:
-                task_vectors[client_id] = trainer.task_vector #- original_weights
+                if 'tv' in training_args.mode:
+                    new_task_vectors={}
+                    for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
+                        if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
+                            new_task_vectors[n] = p.clone().detach().cpu().flatten() - original_weights[n]
+                    task_vectors[client_id] = new_task_vectors
+                else:
+                    task_vectors[client_id] = trainer.task_vector
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")

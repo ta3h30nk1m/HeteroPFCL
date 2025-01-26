@@ -282,7 +282,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         self.mu = 0.1
         
         self.prompt_ema_ratio = 0.99
-        self.task_vector=task_vector.cuda() if task_vector is not None else None
+        self.task_vector=task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
         self.fisher_old = fisher_old #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
         self.fisher_cur = 0
         self.fisher_cnt = 0
@@ -416,7 +416,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         # OURS:
         self.model.set_state('gate')
         self.model.activate_lora2()
-        self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+        # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
         # ##############################################################################################################
         
         delay_optimizer_creation = is_sagemaker_mp_enabled() or self.is_fsdp_xla_enabled or self.is_fsdp_enabled
@@ -765,19 +765,15 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         # compute fisher online
                         # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
                         # if step % self.fisher_freq == 0:
-                        if ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
+                        if 'tv' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
                             for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 p.requires_grad = True
-                            # for layer in self.model.base_model.model.model.layers:
-                            #     for p in layer.mlp.down_proj.base_layer.parameters():
-                            #         p.requires_grad = True
                             
                             with self.model.disable_adapter():
                                 inputs = self._prepare_inputs(inputs)
 
                                 output = self.model(**inputs)#.loss
                                 output.loss.backward()
-                                
                                 grads = []
                                 for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                     grads.append(p.grad)
@@ -939,8 +935,9 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
 
-        self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
-        self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
+        if 'tv' not in args.mode:
+            self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
+            self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
         
         self.model.activate_all()
 

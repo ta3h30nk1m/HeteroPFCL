@@ -363,16 +363,20 @@ def main():
             
             # save local model
             output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_model_round{curr_round+1}.pth")
-            if training_args.lora_enable:
-                state_dict = get_peft_state_maybe_zero_3(
-                    model.named_parameters(), training_args.lora_bias
-                )
-                non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-                    model.named_parameters()
-                )
-                state_dict.update(non_lora_state_dict)
-            else:
-                state_dict = {k: t.detach().cpu().clone() for k, t in model.named_parameters() if t.requires_grad}
+
+            state_dict = get_peft_state_maybe_zero_3(
+                model.named_parameters(), training_args.lora_bias
+            )
+            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                model.named_parameters()
+            )
+            state_dict.update(non_lora_state_dict)
+            
+            if 'full' in training_args.mode:
+                print("Determinant of P")
+                for k in state_dict.keys():
+                    if 'lora_P' or 'lora1_P' or 'lora2_P' in k:
+                        print(k, torch.det(state_dict[k]))
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             

@@ -117,7 +117,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFreezeLORA'] = Dual_PQLorafreezeModel
             lora_config.peft_type = 'DUALPQFreezeLORA'
             
-        elif training_args.mode in ['fedduallastpqfullfreeze', 'feddualMultipqfullfreeze','fedduallastpqfullfreeze_tv', 'feddualMultipqfullfreeze_tv',]:
+        elif training_args.mode in ['fedduallastpqfullfreeze', 'feddualMultipqfullfreeze','fedduallastpqfullfreeze_tv', 'feddualMultipqfullfreeze_tv',
+                                    'feddualpqfullfreeze','feddualpqfullfreeze_tv']:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeLORA'] = Dual_PQLorafreezeModel
@@ -437,6 +438,20 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeLayer):
                         m.use_pq = False
+    elif training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv':
+        from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            for n, p in layer.named_parameters():
+                if 'lora1_A' in n or 'lora2_A' in n:
+                    p.requires_grad = False
+                elif 'lora1_B' in n or 'lora2_B' in n:
+                    p.requires_grad = False
+                    nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                elif 'lora1_P' in n or 'lora2_P' in n:
+                    nn.init.zeros_(p)
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraFullFreezeLayer):
+                    m.freeze_AB = True
 
     model.config.mm_projector_lr = training_args.mm_projector_lr
     
@@ -737,7 +752,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
-    elif training_args.mode == 'feddualpq':
+    elif training_args.mode == 'feddualpq' or training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv':
         for k in new_global_state_dict.keys():
             if 'lora1_P' not in k and 'lora1_Q' not in k:
                 keys_to_del.append(k)

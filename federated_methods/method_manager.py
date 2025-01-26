@@ -34,7 +34,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedFLpq_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode == 'fedFMLpq':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedFMLpq_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
-    elif mode =='feddualpq':
+    elif mode =='feddualpq' or mode == 'feddualpqfullfreeze' or mode == 'feddualpqfullfreeze_tv':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedduallastpq' or mode == 'fedduallastpqfreeze' or mode == 'fedduallastpqfullfreeze' or mode == 'fedduallastpqfullfreeze_tv':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedduallastpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict

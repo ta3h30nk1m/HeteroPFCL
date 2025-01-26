@@ -375,8 +375,9 @@ def main():
             if 'full' in training_args.mode:
                 print("Determinant of P")
                 for k in state_dict.keys():
-                    if 'lora_P' or 'lora1_P' or 'lora2_P' in k:
-                        print(k, torch.det(state_dict[k]))
+                    if 'lora_P' in k or 'lora1_P' in k or 'lora2_P' in k:
+                        square_matrix = state_dict[k].to(torch.float32)
+                        print(k, torch.det(square_matrix))
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             

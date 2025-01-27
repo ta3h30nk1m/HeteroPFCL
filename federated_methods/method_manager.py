@@ -48,9 +48,9 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq2_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     
     elif mode =='fedMultipqfullfreeze':
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedMultipqfullfreeze_tv' or 'fedMultipqfullfreeze_ours':
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_tv_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_tv_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
     
     
     elif mode =='fedavg_memefficient':

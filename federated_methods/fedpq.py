@@ -276,6 +276,7 @@ def fedMultipq_tv_load_state_dict(model, global_state_dict, local_state_dict_lis
                 if 'layers.' in k:
                     cur_layer_num.append(int(k.split('.')[5]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
+            new_global_state_dict = {}
             for name in global_state_dict.keys():
                 new_param = 0
                 for id in range(training_args.num_clients):

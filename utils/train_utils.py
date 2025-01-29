@@ -258,7 +258,15 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
-    
+        
+        if model_args.model_name_or_path == 'thkim0305/llama3.2_1B_vl':
+            state_dict = torch.load('llava_1b_orthnormal_init_FT_AB.pth', map_location='cpu')
+            model.load_state_dict(state_dict, strict=False)
+            print('load 1B')
+        elif model_args.model_name_or_path == 'thkim0305/llama3.2_3B_vl':
+            state_dict = torch.load('llava_3b_orthnormal_init.pth', map_location='cpu')
+            model.load_state_dict(state_dict, strict=False)
+            print('load 3B')
     elif training_args.mode == 'fedMultipqfullfreeze_ABinit':
         from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4

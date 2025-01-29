@@ -11,3 +11,7 @@ pip install peft bitsandbytes pandas kornia opencv-python timm torch_optimizer e
 pip install -U scikit-learn
 ```
 
+```bash
+gdrive files download 1aHRzTuAjthxQoV3k0myevHzBCsLekclY
+gdrive files download 16_tCIWdUNPS7VCNcFux4tgLBR_2O9tcn
+```

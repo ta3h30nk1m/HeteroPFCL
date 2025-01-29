@@ -134,7 +134,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORAFREEZE2'] = PQLoraFreezeModel2
             lora_config.peft_type = 'PQLORAFREEZE2'
-        
+            
+        elif training_args.mode == 'fedMultipqfullfreeze_ABinit':
+            from models.pqlora_full_init.pqloramodel_full_init import PQLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
+            lora_config.peft_type = 'PQLORAINIT'
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
     
@@ -253,6 +258,30 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
+    
+    elif training_args.mode == 'fedMultipqfullfreeze_ABinit':
+        from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
+        last_layer = len(model.base_model.language_model.model.layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if 'lora_A.default' in n or 'lora_B.default' in n:
+                        m.apply(orthonormal_kaiming_uniform_init)
+                for n, p in layer.named_parameters():
+                    if 'lora_A' in n:
+                        p.requires_grad = True
+                    elif 'lora_B' in n:
+                        p.requires_grad = False
+                    elif 'lora_P' in n or 'lora_Q' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullInitLayer):
+                        m.use_pq = False
+                for n, p in layer.named_parameters():
+                    p.requires_grad = False
+                        
     elif training_args.mode == 'fedlastpqfreeze':
         from models.pqlora.pqloralayer import PQLoraLayer
         last_layer = len(model.base_model.language_model.model.layers) - 1
@@ -831,6 +860,33 @@ def get_keys_to_del(training_args, new_global_state_dict):
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     return keys_to_del
+
+def orthonormal_kaiming_uniform_init(m):
+    if isinstance(m, nn.Linear):
+        # Get the current shape of the weight matrix
+        rows, cols = m.weight.size()
+
+        # Initialize the weight matrix with Kaiming Uniform
+        a = nn.init.kaiming_uniform_(torch.empty(rows, cols).cuda(), a=math.sqrt(5))
+
+        # Ensure the matrix is contiguous
+        a = a.contiguous()
+
+        # Perform Singular Value Decomposition
+        u, _, v = torch.svd(a, some=False)
+        
+        u = u.contiguous()
+        v = v.contiguous()
+
+        # Use U or V from SVD based on the shape of the weight matrix
+        if rows > cols:
+            m.weight.data = u[:, :cols].to(torch.bfloat16)
+        else:
+            m.weight.data = v[:rows, :].to(torch.bfloat16)
+
+        # Optional: Initialize biases to zero
+        if m.bias is not None:
+            m.bias.data.zero_()
 
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer

@@ -36,6 +36,9 @@ class TrainingConfig(transformers.TrainingArguments):
     
     num_iter:int = field(default=100)
 
+    # CCA config
+    gamma:float = field(default=0.05)
+
     # cl config
     mode: str = field(default="er")
     # dataset: str = field(default="cifar10")

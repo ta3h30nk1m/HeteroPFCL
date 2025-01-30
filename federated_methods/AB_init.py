@@ -76,6 +76,12 @@ class LLaVATrainerABInit(LLaVATrainer):
     def __init__(self, model2, train_A,**kwargs):
         super(LLaVATrainerABInit, self).__init__(**kwargs)
         self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
+
+        # print("#######################")
+        # for name, param in self.model2.named_parameters():
+        #     print(name)
+        # print("#######################")
+
         self.train_A = train_A
         self.hooks = []
         self.lora_outputs = []

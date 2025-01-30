@@ -167,7 +167,7 @@ def main():
     # save llava 3b model
     model2 = models["thkim0305/llama3.2_3B_vl"]
     
-    data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
+    data_path = "/home/user/smh/HeteroPFCL/dataset/NLVR2/train/dataset-0.json"
     public_datalist = json.load(open(data_path, "r"))
     
     # Filter out items without the "image" key
@@ -175,7 +175,7 @@ def main():
     
     random.shuffle(public_datalist)
     ##### A init #####
-    public_datalist_ = public_datalist[:10000]
+    public_datalist_ = public_datalist[:1000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -207,7 +207,7 @@ def main():
     torch.cuda.empty_cache()
     
     ##### B init #####
-    public_datalist_ = public_datalist[10000:10100]
+    public_datalist_ = public_datalist[1000:2000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -245,14 +245,20 @@ def main():
     
     breakpoint()
     
-    def matrix_inv_sqrt(A, eps=1e-12):
-        # A is assumed symmetric positive semi-definite.
-        # We use the eigen-decomposition approach here.
-        eigvals, eigvecs = torch.linalg.eigh(A)
-        # Avoid numerical issues by clamping and inverting the sqrt of eigenvalues.
-        inv_sqrt_eigvals = eigvals.clamp_min(eps).pow(-0.5)
-        A_inv_sqrt = eigvecs @ torch.diag(inv_sqrt_eigvals) @ eigvecs.t()
-        return A_inv_sqrt
+    # def matrix_inv_sqrt(A, eps=1e-12):
+    #     # A is assumed symmetric positive semi-definite.
+    #     # We use the eigen-decomposition approach here.
+    #     eigvals, eigvecs = torch.linalg.eigh(A)
+    #     # Avoid numerical issues by clamping and inverting the sqrt of eigenvalues.
+    #     inv_sqrt_eigvals = eigvals.clamp_min(eps).pow(-0.5)
+    #     A_inv_sqrt = eigvecs @ torch.diag(inv_sqrt_eigvals) @ eigvecs.t()
+    #     return A_inv_sqrt
+
+    def matrix_inv_sqrt(S):
+        S_U, S_S, S_Vt = torch.linalg.svd(S)
+        S_neg_sqrt = S_U @ torch.diag(S_S**(-1/2)) @ S_Vt
+        S_sqrt = S_U @ torch.diag(S_S**(1/2)) @ S_Vt
+        return S_neg_sqrt, S_sqrt
     
     for idx, (X1, X3) in enumerate(zip(lora_B_output_1b, lora_B_output_3b)):
         X1 = X1.cuda()
@@ -260,21 +266,23 @@ def main():
         X1_centered = X1 - X1.mean(dim=0, keepdim=True)
         X3_centered = X3 - X3.mean(dim=0, keepdim=True)
         
-        S11 = X1_centered.t() @ X1_centered  # shape: [d1, d1]
-        S33 = X3_centered.t() @ X3_centered  # shape: [d3, d3]
+        S11 = X1_centered.t() @ X1_centered + training_args.gamma*torch.eye(X1.shape[0], device=device) # shape: [d1, d1]
+        S33 = X3_centered.t() @ X3_centered + training_args.gamma*torch.eye(X3.shape[0], device=device) # shape: [d3, d3]
         S13 = X1_centered.t() @ X3_centered  # shape: [d1, d3]
 
-        S11_inv_sqrt = matrix_inv_sqrt(S11.to(torch.float32))
-        S33_inv_sqrt = matrix_inv_sqrt(S33.to(torch.float32))
+        S11_neg_sqrt, S11_sqrt = matrix_inv_sqrt(S11.to(torch.float32))
+        S33_neg_sqrt, S33_sqrt = matrix_inv_sqrt(S33.to(torch.float32))
         
-        M = S11_inv_sqrt @ S13.to(torch.float32) @ S33_inv_sqrt
+        M = S11_neg_sqrt @ S13.to(torch.float32) @ S33_neg_sqrt
         # M will have shape [d1, d3].
         # Perform SVD:  M = U * Sigma * V^T
         U, Sigma, Vt = torch.linalg.svd(M, full_matrices=False)
         
-        P1 = S11_inv_sqrt @ U  # shape: [d1, d1]
-        P3 = S33_inv_sqrt @ Vt.mT  # shape: [d3, d3]
+        P1 = S11_neg_sqrt @ U  # shape: [d1, d1]
+        P3 = S33_neg_sqrt @ Vt.mT  # shape: [d3, d3]
         
+        S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T
+
         for coeff in [1e-9,1e-8,1e-7,1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1.0,10.0,100.0]:
             try:
                 P1_pinv = torch.linalg.pinv(P1 + (torch.eye(P1.shape[0])*coeff).cuda())  # shape [k, d1]
@@ -282,7 +290,8 @@ def main():
             except Exception as e:
                 print(coeff, e)
         with torch.no_grad():
-            state_dict[layer_name_1b[idx]] = (P1_pinv.T @ P3.T @ state_dict2[layer_name_3b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
+            #state_dict[layer_name_1b[idx]] = (P1_pinv.T @ P3.T @ state_dict2[layer_name_3b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
+            state_dict[layer_name_1b[idx]] = (S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T @ state_dict2[layer_name_3b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
     for key in state_dict.keys():
         if 'lora_P' in key:
             state_dict[key] = torch.zeros_like(state_dict[key])

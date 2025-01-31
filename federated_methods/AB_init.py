@@ -76,12 +76,6 @@ class LLaVATrainerABInit(LLaVATrainer):
     def __init__(self, model2, train_A,**kwargs):
         super(LLaVATrainerABInit, self).__init__(**kwargs)
         self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
-
-        # print("#######################")
-        # for name, param in self.model2.named_parameters():
-        #     print(name)
-        # print("#######################")
-
         self.train_A = train_A
         self.hooks = []
         self.lora_outputs = []
@@ -129,7 +123,7 @@ class LLaVATrainerABInit(LLaVATrainer):
             
             for n, p in self.model.named_parameters():
                 if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers:
-                    self.layer_name_1b.append(n)
+                    self.layer_name_3b.append(n)
             
             for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
                 if idx in self.target_layers:
@@ -147,7 +141,7 @@ class LLaVATrainerABInit(LLaVATrainer):
             
             for n, p in self.model2.named_parameters():
                 if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers2:
-                    self.layer_name_3b.append(n)
+                    self.layer_name_1b.append(n)
             for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
                 if idx in self.target_layers2:
                     for n, p in layer.named_parameters():
@@ -170,27 +164,50 @@ class LLaVATrainerABInit(LLaVATrainer):
             with torch.no_grad():
                 _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
             
-            if len(self.lora_B_output_3b) == 0:
+            if len(self.lora_B_output_1b) == 0:
                 for lora_target in self.lora_targets:
-                    self.lora_B_output_3b.append(lora_target.reshape(-1, lora_target.size(-1)).detach().cpu())
+                    self.lora_B_output_1b.append(lora_target.reshape(-1, lora_target.size(-1)).detach().cpu())
             else:
                 for i, lora_target in enumerate(self.lora_targets):
-                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], lora_target.reshape(-1, lora_target.size(-1)).detach().cpu()), dim=0)
+                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], lora_target.reshape(-1, lora_target.size(-1)).detach().cpu()), dim=0)
             
             loss, outputs = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
-            if len(self.lora_B_output_1b) == 0:
+            if len(self.lora_B_output_3b) == 0:
                 for lora_output in self.lora_outputs:
-                    self.lora_B_output_1b.append(lora_output.reshape(-1, lora_output.size(-1)).detach().cpu())
+                    self.lora_B_output_3b.append(lora_output.reshape(-1, lora_output.size(-1)).detach().cpu())
             else:
                 for i, lora_output in enumerate(self.lora_outputs):
-                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], lora_output.reshape(-1, lora_output.size(-1)).detach().cpu()), dim=0)
+                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], lora_output.reshape(-1, lora_output.size(-1)).detach().cpu()), dim=0)
             
         # l2 loss on output
         if self.train_A:
             loss = 0
             for idx, (output, target) in enumerate(zip(self.lora_outputs, self.lora_targets)):
                 loss += torch.mean((output - target)**2)
+            
+            # encourage orthogonality
+            cos_loss = 0
+            layer_cnt = 0
+            for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
+                if idx in self.target_layers:
+                    for n, p in layer.named_parameters():
+                        if 'lora_A' in n:
+                            # Normalize column vectors (L2 normalization)
+                            weight = F.normalize(p, dim=0)  # Normalize along columns
+
+                            # Compute cosine similarity between all pairs of columns
+                            cosine_sim_matrix = torch.matmul(weight.T, weight)  # (r, r) similarity matrix
+
+                            # Extract the upper triangular part, excluding the diagonal
+                            r = weight.shape[1]
+                            mask = torch.ones((r, r), dtype=torch.bool, device=weight.device)
+                            mask.fill_diagonal_(0)  # Exclude diagonal elements
+
+                            # Compute loss as mean squared cosine similarity (to encourage orthogonality)
+                            cos_loss += (cosine_sim_matrix[mask] ** 2).mean()  # Mean squared cosine similarity
+                            layer_cnt += 1
+            loss += 0.5*cos_loss / layer_cnt
         else:
             loss *= 0
             

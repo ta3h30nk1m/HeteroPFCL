@@ -163,11 +163,10 @@ def main():
     extra_state_dict_dict = {'model_ids':model_ids}
     
     ##############################################################################################
-    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl
-    # save llava 3b model
-    model2 = models["thkim0305/llama3.2_3B_vl"]
+    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
+    model2 = models["thkim0305/llama3.2_1B_vl"]
     
-    data_path = "/home/user/smh/HeteroPFCL/dataset/NLVR2/train/dataset-0.json"
+    data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     public_datalist = json.load(open(data_path, "r"))
     
     # Filter out items without the "image" key
@@ -175,20 +174,21 @@ def main():
     
     random.shuffle(public_datalist)
     ##### A init #####
-    public_datalist_ = public_datalist[:1000]
+    public_datalist_ = public_datalist[:10000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(new_data_args))
     
-    model = models["thkim0305/llama3.2_1B_vl"]
+    # train bigger model
+    model = models["thkim0305/llama3.2_3B_vl"]
     from federated_methods.AB_init import ABInit_create_trainer
     trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, train_A = True)
 
     results = trainer.train()
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_1b_orthnormal_init_FT_A.pth")
+    output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_A.pth")
     state_dict = get_peft_state_maybe_zero_3(
         model.named_parameters(), training_args.lora_bias
     )
@@ -207,7 +207,7 @@ def main():
     torch.cuda.empty_cache()
     
     ##### B init #####
-    public_datalist_ = public_datalist[1000:2000]
+    public_datalist_ = public_datalist[10000:10100]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -230,30 +230,13 @@ def main():
     state_dict = get_peft_state_maybe_zero_3(
         model.named_parameters(), training_args.lora_bias
     )
-    non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-        model.named_parameters()
-    )
-    state_dict.update(non_lora_state_dict)
     
     state_dict2 = get_peft_state_maybe_zero_3(
         model2.named_parameters(), training_args.lora_bias
     )
-    non_lora_state_dict2 = get_peft_state_non_lora_maybe_zero_3(
-        model2.named_parameters()
-    )
-    state_dict2.update(non_lora_state_dict2)
     
-    breakpoint()
+    gamma=1e-4
     
-    # def matrix_inv_sqrt(A, eps=1e-12):
-    #     # A is assumed symmetric positive semi-definite.
-    #     # We use the eigen-decomposition approach here.
-    #     eigvals, eigvecs = torch.linalg.eigh(A)
-    #     # Avoid numerical issues by clamping and inverting the sqrt of eigenvalues.
-    #     inv_sqrt_eigvals = eigvals.clamp_min(eps).pow(-0.5)
-    #     A_inv_sqrt = eigvecs @ torch.diag(inv_sqrt_eigvals) @ eigvecs.t()
-    #     return A_inv_sqrt
-
     def matrix_inv_sqrt(S):
         S_U, S_S, S_Vt = torch.linalg.svd(S)
         S_neg_sqrt = S_U @ torch.diag(S_S**(-1/2)) @ S_Vt
@@ -266,32 +249,36 @@ def main():
         X1_centered = X1 - X1.mean(dim=0, keepdim=True)
         X3_centered = X3 - X3.mean(dim=0, keepdim=True)
         
-        S11 = X1_centered.t() @ X1_centered + training_args.gamma*torch.eye(X1.shape[0], device=device) # shape: [d1, d1]
-        S33 = X3_centered.t() @ X3_centered + training_args.gamma*torch.eye(X3.shape[0], device=device) # shape: [d3, d3]
-        S13 = X1_centered.t() @ X3_centered  # shape: [d1, d3]
+        S11 = X1_centered.t() @ X1_centered + gamma*torch.eye(X1.shape[1]).cuda() # shape: [d1, d1]
+        S33 = X3_centered.t() @ X3_centered + gamma*torch.eye(X3.shape[1]).cuda() # shape: [d3, d3]
+        # S13 = X1_centered.t() @ X3_centered  # shape: [d1, d3]
+        S31 = X3_centered.t() @ X1_centered
 
         S11_neg_sqrt, S11_sqrt = matrix_inv_sqrt(S11.to(torch.float32))
         S33_neg_sqrt, S33_sqrt = matrix_inv_sqrt(S33.to(torch.float32))
         
-        M = S11_neg_sqrt @ S13.to(torch.float32) @ S33_neg_sqrt
+        # M = S11_neg_sqrt @ S13.to(torch.float32) @ S33_neg_sqrt
+        M = S33_neg_sqrt @ S31.to(torch.float32) @ S11_neg_sqrt
         # M will have shape [d1, d3].
         # Perform SVD:  M = U * Sigma * V^T
         U, Sigma, Vt = torch.linalg.svd(M, full_matrices=False)
         
-        P1 = S11_neg_sqrt @ U  # shape: [d1, d1]
-        P3 = S33_neg_sqrt @ Vt.mT  # shape: [d3, d3]
+        # print(S33_neg_sqrt.shape, Vt.T.shape, U.T.shape, S11_sqrt.T.shape)
         
-        S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T
-
-        for coeff in [1e-9,1e-8,1e-7,1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1.0,10.0,100.0]:
-            try:
-                P1_pinv = torch.linalg.pinv(P1 + (torch.eye(P1.shape[0])*coeff).cuda())  # shape [k, d1]
-                break
-            except Exception as e:
-                print(coeff, e)
+        # P1 = S11_inv_sqrt @ U  # shape: [d1, d1]
+        # P3 = S33_inv_sqrt @ Vt.mT  # shape: [d3, d3]
+        
+        # for coeff in [1e-9,1e-8,1e-7,1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1.0,10.0,100.0]:
+        #     try:
+        #         P1_pinv = torch.linalg.pinv(P1 + (torch.eye(P1.shape[0])*coeff).cuda())  # shape [k, d1]
+        #         break
+        #     except Exception as e:
+        #         print(coeff, e)
         with torch.no_grad():
-            #state_dict[layer_name_1b[idx]] = (P1_pinv.T @ P3.T @ state_dict2[layer_name_3b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
-            state_dict[layer_name_1b[idx]] = (S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T @ state_dict2[layer_name_3b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
+            # mapping_mat = (S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T).T
+            mapping_mat = (S11_neg_sqrt @ Vt.T @ U.T @ S33_sqrt.T).T
+            state_dict[layer_name_3b[idx]] = (mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
+            
     for key in state_dict.keys():
         if 'lora_P' in key:
             state_dict[key] = torch.zeros_like(state_dict[key])
@@ -300,11 +287,11 @@ def main():
         if 'lora_P' in key:
             state_dict2[key] = torch.zeros_like(state_dict2[key])
     
-    output_dir2 = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init.pth")
+    output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_orthnormal_init.pth")
     
     torch.save(state_dict2, output_dir2)
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_1b_orthnormal_init_FT_AB.pth")
+    output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_AB.pth")
     torch.save(state_dict, output_dir)
     breakpoint()
     ################################################################################################

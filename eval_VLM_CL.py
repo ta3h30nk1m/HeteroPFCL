@@ -411,12 +411,13 @@ def main():
                 continue
         
         test_datalist = test_datalists[client_id]
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = test_datalist[0]['model_id']
+        new_data_args = copy.deepcopy(data_args)
+        new_data_args.model_name_for_dataarg = test_datalist[0]['model_id']
+        model, tokenizer, processor, data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
         for data_info in test_datalist:
-            new_model_args = copy.deepcopy(model_args)
-            new_model_args.model_name_or_path = data_info['model_id']
-            new_data_args = copy.deepcopy(data_args)
-            new_data_args.model_name_for_dataarg = data_info['model_id']
-            model, tokenizer, processor, data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
+            
             # if train_datalists[client_id][training_args.round_to_eval-1]['train_cnt'] > data_info['eval_cnt']:
             if not training_args.zeroshot:
                 # new_client_state_dict = {}
@@ -473,8 +474,8 @@ def main():
                     evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, None, batch_size)
                 server_eval_key.append(data_info['data_name'])
             
-            model = model.cpu()
-            del model
+            # model = model.cpu()
+        del model
     
     logger.info(f"elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
 def get_datalists(args, scenario_num):

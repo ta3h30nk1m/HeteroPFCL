@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # CIL CONFIG
-NOTE="llama3_1b_zeroshot_bs8"
-MODE="llama3"
-MODEL_ARCH="llama3_1b" # llava llama3_1b llama3_3b
+NOTE="sft_bs4_saveoptim_lr2e-5_sc56_4tasks_5rounds_fixitr100_T0125_decay099"
+MODE="sft"
+MODEL_ARCH="llama3_3b" # llava llama3_1b llama3_3b
 
 # fed args
-SCENARIO=0
+SCENARIO=56
 NUM_ROUNDS=5
 NUM_TASKS=4
 NUM_CLIENTS=10
@@ -35,7 +35,7 @@ else
 fi
 
 # ROUND_TO_EVALS=$2
-ROUND_TO_EVALS=(20)
+ROUND_TO_EVALS=(17)
 ITER_TO_EVAL=0
 
 for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
@@ -59,7 +59,7 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --mode $MODE \
         --eval_server False \
         --unseen_task False \
-        --zeroshot True \
+        --zeroshot False \
         --lora_enable True \
         --ia3_enable False \
         --generator_output_size 512 \
@@ -72,7 +72,7 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --is_prompt False \
         --use_task_vector False \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
-        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
+        --output_dir "./nohup" #> ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
 done
 # --eval_period $EVAL_PERIOD
 #--eval_iter $ITER_TO_EVAL \

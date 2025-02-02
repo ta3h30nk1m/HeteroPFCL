@@ -87,6 +87,9 @@ def fedavg_create_trainer(model, tokenizer, training_args, data_module, extra_st
         test_datalist=extra_state_dict_dict['test_datalist'],
         processor=extra_state_dict_dict['processor'],
         data_args=extra_state_dict_dict['data_args'],
+        task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
+        fisher_old=extra_state_dict_dict['fisher_old'] if 'fisher_old' in extra_state_dict_dict else None,
+        fisher_freq=extra_state_dict_dict['fisher_freq'] if 'fisher_freq' in extra_state_dict_dict else 5,
         **data_module,
         )
     return trainer
@@ -129,7 +132,7 @@ def fedavg_heterosimple_aggregate_state_dict(global_state_dict_list, local_state
             global_state_dict_list[i] = global_state_dict
 
 class LLaVATrainerFEDAVG(LLaVATrainer):
-    def __init__(self, client_id, curr_round, test_datalist, processor, data_args, **kwargs):
+    def __init__(self, client_id, curr_round, test_datalist, processor, data_args, task_vector=None, fisher_old=None, fisher_freq=5, **kwargs):
         super(LLaVATrainerFEDAVG, self).__init__(**kwargs)
         self.client_id = client_id
         self.curr_round = curr_round
@@ -137,7 +140,13 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
         self.processor=processor
         self.data_args = data_args
         self.anytime_eval_results = [] # anytime_eval_results
-    
+        
+        self.task_vector=task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
+        self.fisher_old = fisher_old #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
+        self.fisher_cur = 0
+        self.fisher_cnt = 0
+        self.fisher_freq = fisher_freq
+        
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
     ):
@@ -569,6 +578,50 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                                 self.lr_scheduler.step()
 
                         model.zero_grad()
+                        ##############################################################################################################
+                        # compute fisher online
+                        # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
+                        # if step % self.fisher_freq == 0:
+                        if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
+                            for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                p.requires_grad = True
+                            
+                            with self.model.disable_adapter():
+                                inputs = self._prepare_inputs(inputs)
+
+                                output = self.model(**inputs)#.loss
+                                output.loss.backward()
+                                grads = []
+                                for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                    grads.append(p.grad)
+                                    # grads.append(p.grad[:,self.grad_subsample_idx])
+                                # for layer in self.model.base_model.model.model.layers:
+                                #     for p in layer.mlp.down_proj.base_layer.parameters():
+                                #         grads.append(p.grad[:,self.grad_subsample_idx])
+                                
+                                # grads = torch.cat(grads, dim=1)
+                                grads = torch.cat(grads)
+                            self.fisher_cur += (grads).detach()
+                            self.fisher_cnt += 1
+                            
+                            for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                p.requires_grad = False
+                            # for layer in self.model.base_model.model.model.layers:
+                            #     for p in layer.mlp.down_proj.base_layer.parameters():
+                            #         p.requires_grad = False
+                            
+                            if args.mode == 'fedMultipqfullfreeze_ours':
+                                last_layer = len(self.model.base_model.language_model.model.layers) // 4
+                                target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                                for idx, layer in enumerate(model.base_model.language_model.model.layers):
+                                    if idx in target_layers:
+                                        for n, p in layer.named_parameters():
+                                            if 'lora_A' in n or 'lora_B' in n:
+                                                p.requires_grad = False
+                            model.zero_grad()
+                            torch.cuda.empty_cache()
+                        ##############################################################################################################
+                        
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
@@ -701,6 +754,11 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
         ##############################################################################################################
+        
+        if 'ours' in args.mode:
+            self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
+            self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
+        
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
     def create_optimizer(self):

@@ -1,12 +1,12 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="fedours_bs4_saveoptim_lr2e-5_sc0_4tasks_5rounds_fixitr100_t0.2_memonly"
-MODE="fedours"
-MODEL_ARCH="llama3_1b" # llava gemma_vl
+NOTE="sft_bs4_saveoptim_lr2e-5_sc75_4tasks_5rounds_fixitr100_T0125_decay099"
+MODE="sft"
+MODEL_ARCH="llama3_8b" # llava gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=0
+SCENARIO=75
 NUM_ROUNDS=5
 NUM_TASKS=4
 NUM_CLIENTS=10
@@ -42,9 +42,9 @@ EMA_RATIO=0.9
 BATCHSIZE=4
 
 LR=2e-5
-MM_PROJECTOR_LR=$LR #3e-4
+MM_PROJECTOR_LR=2e-5 #3e-4
 FINAL_LR=$LR #3e-4
-MM_FINAL_LR=$LR #3e-4
+MM_FINAL_LR=$MM_PROJECTOR_LR #3e-4
 OPT_NAME="adamw_torch" # adam8bit_bnb adamw_torch
 SCHED_NAME="constant" #cosine
 WARMUP_RATIO=0.1 # SHOULD BE 0.03 / NUM_ROUNDS
@@ -66,6 +66,11 @@ elif [ "$MODEL_ARCH" == "llama3_3b" ]; then
     VERSION="llama3"
     MODEL_TYPE="llama3"
     BITS=16
+elif [ "$MODEL_ARCH" == "llama3_8b" ]; then
+    MODEL_NAME="thkim0305/llama3.1_8B_vl"
+    VERSION="llama3"
+    MODEL_TYPE="llama3"
+    BITS=16
 else
     echo "Undefined setting"
     exit 1
@@ -74,11 +79,12 @@ fi
 # --master_port 29500
 # --num_gpus=4
 
-LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr6e-3_alldown_freq5_grad32cossimmeansoftmax_t0.2_mean_sc0_4tasks_5rounds_fixitr100/round15_task_vector_local_weights.pth"
+# LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr4e-5_sc5_4tasks_5rounds_fixitr100_t0.2_memonly_rank32/round15_task_vector_local_weights.pth"
+LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29507 \
-    --include localhost:7 \
+deepspeed --master_port 29500 \
+    --include localhost:0 \
     train_VLM_CL.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
@@ -131,8 +137,11 @@ deepspeed --master_port 29507 \
     --use_task_vector $USE_TASK_VECTOR \
     --use_fisher $USE_FISHER \
     --fedours False \
+    --is_hetero_model True \
     --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type
 #  --load_checkpoint $LOAD_CHECKPOINT \
+    # --lora_r 32 \
+    # --lora_alpha 64 \

@@ -11,9 +11,10 @@ pip install peft==0.14.0 bitsandbytes pandas kornia opencv-python timm torch_opt
 pip install -U scikit-learn
 ```
 
+- init weight for 1B, 3B
 ```bash
-gdrive files download 1aHRzTuAjthxQoV3k0myevHzBCsLekclY
-gdrive files download 16_tCIWdUNPS7VCNcFux4tgLBR_2O9tcn
+gdrive files download 1b90paEEbwvv608S7KW-XcXKcCcXWAyhS
+gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW
 ```
 
 ## Dataset preprocessing Again

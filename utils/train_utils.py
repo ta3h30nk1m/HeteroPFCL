@@ -281,14 +281,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
-        # if model_args.model_name_or_path == 'thkim0305/llama3.2_1B_vl':
-        #     state_dict = torch.load('llava_1b_orthnormal_init_FT_AB.pth', map_location='cpu')
-        #     model.load_state_dict(state_dict, strict=False)
-        #     print('load 1B')
-        # elif model_args.model_name_or_path == 'thkim0305/llama3.2_3B_vl':
-        #     state_dict = torch.load('llava_3b_orthnormal_init.pth', map_location='cpu')
-        #     model.load_state_dict(state_dict, strict=False)
-        #     print('load 3B')
+        
     elif training_args.mode == 'fedMultipqfullfreeze_ABinit':
         from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4
@@ -516,6 +509,27 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     
     if hasattr(model.config, "image_token_index"):
         tokenizer.image_token_index = model.config.image_token_index
+    
+    if training_args.load_pretrained_lora and training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours']:
+        if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+            state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
+        elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+            state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+        model.load_state_dict(state_dict, strict=False)
+        print('load pretrained lora')
+    elif training_args.load_pretrained_lora and training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv']:
+        if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+            state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
+        elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+            state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            new_k1 = k.replace('lora', 'lora1')
+            new_k2 = k.replace('lora', 'lora2')
+            new_state_dict[new_k1] = v
+            new_state_dict[new_k2] = v
+        model.load_state_dict(new_state_dict, strict=False)
+        print('load pretrained lora')
     
     total_count = 0
     for n, p in model.named_parameters():

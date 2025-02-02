@@ -8,8 +8,7 @@ from federated_methods.fedours import fedours_ema_distill_create_trainer, fedour
 from federated_methods.fedpq import (feddualpq_load_state_dict, fedpq_load_state_dict, fedduallastpq_load_state_dict, 
                                      fedlastpq_load_state_dict, fedFLpq_load_state_dict, feddualFLpq_load_state_dict, 
                                      fedFMLpq_load_state_dict, feddualFMLpq_load_state_dict, feddualMultipq_load_state_dict,
-                                     feddualMultipq2_load_state_dict, fedMultipq_load_state_dict,
-                                     fedlastpq_tv_load_state_dict, fedMultipq_tv_load_state_dict,
+                                     fedMultipq_load_state_dict, fedlastpq_tv_load_state_dict, fedMultipq_tv_load_state_dict,
                                      feddualMulti2pq_load_state_dict, fedMulti2pq_load_state_dict, fedMulti2pq_tv_load_state_dict)
 
 def dummy_function(*args):

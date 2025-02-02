@@ -340,7 +340,8 @@ def fedMulti2pq_load_state_dict(model, global_state_dict, local_state_dict_list,
                         layer_num.append(int(k.split('.')[5]))
                 layer_num = len(set(layer_num)) // 4
                 
-                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                target_layers = [layer_num*1 -2, layer_num*1 -1, layer_num*2 -2, layer_num*2 -1,
+                                 layer_num*3 -2, layer_num*3 -1, layer_num*4 -2, layer_num*4 -1]
                 if cur_layer_num[-1] != target_layers[-1]: # if different size
                     if int(splited[5]) == cur_layer_num[0]: # mid layer
                         splited[5] = str(target_layers[0])

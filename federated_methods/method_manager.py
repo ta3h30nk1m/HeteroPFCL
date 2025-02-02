@@ -45,13 +45,12 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
 
     elif mode =='fedMultipqfullfreeze':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
-    elif mode =='fedMultipqfullfreeze_tv' or 'fedMultipqfullfreeze_ours':
+    elif mode =='fedMultipqfullfreeze_tv' or mode =='fedMultipqfullfreeze_ours':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_tv_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedMulti2pqfullfreeze':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMulti2pq_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
-    elif mode =='fedMulti2pqfullfreeze_tv' or 'fedMulti2pqfullfreeze_ours':
+    elif mode =='fedMulti2pqfullfreeze_tv' or mode =='fedMulti2pqfullfreeze_ours':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMulti2pq_tv_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
-    
     
     elif mode =='fedavg_memefficient':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_memefficient_load_state_dict, fedavg_create_trainer, fedavg_memefficient_aggregate_state_dict

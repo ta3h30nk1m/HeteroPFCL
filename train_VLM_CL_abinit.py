@@ -166,15 +166,68 @@ def main():
     # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
     model2 = models["thkim0305/llama3.2_1B_vl"]
     
-    data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
+    data_path = "/home/mila/s/sparsha.mishra/scratch/LLaVA/llava_ft/llava_v1_5_mix665k.json"
+    #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     public_datalist = json.load(open(data_path, "r"))
     
     # Filter out items without the "image" key
     public_datalist = [item for item in public_datalist if "image" in item]
     
     random.shuffle(public_datalist)
+
+    ##### A_PCA init #####
+    public_datalist_ = public_datalist[:5000]
+    
+    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                data_args=copy.deepcopy(new_data_args))
+    
+    # train bigger model
+    model = models["thkim0305/llama3.2_3B_vl"]
+    from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
+    trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, train_A = True)
+
+    results = trainer.train()
+
+    lora_A_input_1bs = trainer.lora_A_output_1b
+    lora_A_input_3bs = trainer.lora_A_output_3b
+    
+    layer_name_1b = trainer.layer_name_1b
+    layer_name_3b = trainer.layer_name_3b
+    
+    state_dict = get_peft_state_maybe_zero_3(
+        model.named_parameters(), training_args.lora_bias
+    )
+    
+    state_dict2 = get_peft_state_maybe_zero_3(
+        model2.named_parameters(), training_args.lora_bias
+    )
+
+    for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
+        print("lora_A_input_1b.shape", lora_A_input_1b.shape)
+        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b)
+        V_1b[:, :training_args.lora_r]
+
+        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b)
+        V_3b[:, :training_args.lora_r]
+
+        with torch.no_grad():
+            #(mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
+            state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16)
+            state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16)
+
+    breakpoint()
+    
+    trainer.deepspeed.empty_partition_cache()
+    trainer.accelerator.free_memory()
+    del trainer
+    model = model.cpu()
+    gc.collect()
+    torch.cuda.empty_cache()
+
     ##### A init #####
-    public_datalist_ = public_datalist[:10000]
+    public_datalist_ = public_datalist[5000:10000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,

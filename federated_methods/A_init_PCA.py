@@ -90,8 +90,10 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
         self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
 
-        self.lora_A_output_1b = []
-        self.lora_A_output_3b = []
+        self.lora_A_input_1b = []
+        self.lora_A_input_3b = []
+        self.layer_name_1b = []
+        self.layer_name_3b = []
 
         for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
             if idx in self.target_layers:
@@ -119,26 +121,26 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         self.lora_inputs2 = []
 
         with torch.no_grad():
-            _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+            _, _ = super(LLaVATrainer_A_PCA_Init, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
         if len(self.lora_A_input_1b) == 0:
             for lora_input2 in self.lora_inputs2:
-                self.lora_A_input_1b.append(lora_input2.reshape(-1, lora_input2.size(-1)).detach().cpu())
+                # breakpoint()
+                self.lora_A_input_1b.append(lora_input2[0].reshape(-1, lora_input2[0].size(-1)).detach().cpu())
         else:
             for i, lora_input2 in enumerate(self.lora_inputs2):
-                self.lora_A_input_1b[i] = torch.cat((self.lora_A_input_1b[i], lora_input2.reshape(-1, lora_input2.size(-1)).detach().cpu()), dim=0)
+                self.lora_A_input_1b[i] = torch.cat((self.lora_A_input_1b[i], lora_input2[0].reshape(-1, lora_input2[0].size(-1)).detach().cpu()), dim=0)
         
-        with torch.no_grad():
-            _, _ = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+        loss, outputs = super(LLaVATrainer_A_PCA_Init, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
         if len(self.lora_A_input_3b) == 0:
             for lora_input in self.lora_inputs:
-                self.lora_A_input_3b.append(lora_input.reshape(-1, lora_input.size(-1)).detach().cpu())
+                self.lora_A_input_3b.append(lora_input[0].reshape(-1, lora_input[0].size(-1)).detach().cpu())
         else:
             for i, lora_input in enumerate(self.lora_inputs):
-                self.lora_A_input_3b[i] = torch.cat((self.lora_A_input_3b[i], lora_input.reshape(-1, lora_input.size(-1)).detach().cpu()), dim=0)
+                self.lora_A_input_3b[i] = torch.cat((self.lora_A_input_3b[i], lora_input[0].reshape(-1, lora_input[0].size(-1)).detach().cpu()), dim=0)
         
-        loss = 0    
+        loss *= 0
         return (loss, outputs) if return_outputs else loss
     
     def _inner_training_loop(

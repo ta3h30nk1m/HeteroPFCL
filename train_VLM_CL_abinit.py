@@ -166,7 +166,7 @@ def main():
     # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
     model2 = models["thkim0305/llama3.2_1B_vl"]
     
-    data_path = "/home/mila/s/sparsha.mishra/scratch/LLaVA/llava_ft/llava_v1_5_mix665k.json"
+    data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     public_datalist = json.load(open(data_path, "r"))
     

@@ -213,6 +213,47 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
         else:
             model.load_state_dict(new_global_state_dict, strict=False) 
 
+def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+    # first load loca model and then load global model
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
+            
+        # gradient based similarity wegithed averaging (exclude own)
+        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
+            # similarity matrix
+            sim = extra_state_dict_dict['task_similarity']
+            new_global_state_dict = {}
+            
+            weights = sim[client_id].clone()
+            weights = (weights).softmax(dim=0)
+            
+            sim_sum = weights.sum() - weights[client_id]
+            
+            # # weights[client_id] = sim_sum
+            # # sim_sum += sim_sum
+            
+            for name in global_state_dict.keys():
+                new_param = 0
+                target_key = name
+                
+                for id in range(training_args.num_clients):
+                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    
+                new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        else:
+            new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False) 
+
+
 def fedours_memefficient_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
     # first load loca model and then load global model
     local_state_dict = torch.load(local_state_dict_list[client_id])

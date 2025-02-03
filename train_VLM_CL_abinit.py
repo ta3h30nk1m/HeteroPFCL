@@ -176,7 +176,7 @@ def main():
     random.shuffle(public_datalist)
 
     ##### A_PCA init #####
-    public_datalist_ = public_datalist[:5000]
+    public_datalist_ = public_datalist[:200]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -190,8 +190,8 @@ def main():
 
     results = trainer.train()
 
-    lora_A_input_1bs = trainer.lora_A_output_1b
-    lora_A_input_3bs = trainer.lora_A_output_3b
+    lora_A_input_1bs = trainer.lora_A_input_1b
+    lora_A_input_3bs = trainer.lora_A_input_3b
     
     layer_name_1b = trainer.layer_name_1b
     layer_name_3b = trainer.layer_name_3b
@@ -206,19 +206,15 @@ def main():
 
     for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
         print("lora_A_input_1b.shape", lora_A_input_1b.shape)
-        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b)
-        V_1b[:, :training_args.lora_r]
-
-        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b)
-        V_3b[:, :training_args.lora_r]
+        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float())
+        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float())
 
         with torch.no_grad():
+            # breakpoint()
             #(mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
             state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16)
             state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16)
-
     breakpoint()
-    
     trainer.deepspeed.empty_partition_cache()
     trainer.accelerator.free_memory()
     del trainer
@@ -227,7 +223,7 @@ def main():
     torch.cuda.empty_cache()
 
     ##### A init #####
-    public_datalist_ = public_datalist[5000:10000]
+    public_datalist_ = public_datalist[200:1000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,

@@ -158,6 +158,7 @@ def fedours_ema_distill_create_trainer(model, tokenizer, training_args, data_mod
         task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
         fisher_old=extra_state_dict_dict['fisher_old'] if 'fisher_old' in extra_state_dict_dict else None,
         fisher_freq=extra_state_dict_dict['fisher_freq'] if 'fisher_freq' in extra_state_dict_dict else 5,
+        model2=extra_state_dict_dict['model2'] if 'model2' in extra_state_dict_dict else None,
         **data_module,
         )
     return trainer
@@ -274,7 +275,7 @@ def kl_loss(output, target, temp=2):
     return l_kl
 
 class LLaVATrainerOURS(LLaVATrainerFEDAVG):
-    def __init__(self, task_id, ema_ratio=0.996, task_vector=None, fisher_old=None, fisher_freq=5, **kwargs):
+    def __init__(self, task_id, ema_ratio=0.996, task_vector=None, fisher_old=None, fisher_freq=5, model2=None,**kwargs):
         super(LLaVATrainerOURS, self).__init__(**kwargs)
         self.task_id = task_id
         self.ema_ratio = ema_ratio
@@ -287,6 +288,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         self.fisher_cur = 0
         self.fisher_cnt = 0
         self.fisher_freq = fisher_freq
+        self.model2 = model2.cuda() if model2 is not None else None
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # if self.curr_round > 0:
@@ -766,16 +768,16 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
                         # if step % self.fisher_freq == 0:
                         if 'tv' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
-                            for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 p.requires_grad = True
                             
-                            with self.model.disable_adapter():
+                            with self.model2.disable_adapter():
                                 inputs = self._prepare_inputs(inputs)
 
-                                output = self.model(**inputs)#.loss
+                                output = self.model2(**inputs)#.loss
                                 output.loss.backward()
                                 grads = []
-                                for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                     grads.append(p.grad)
                                     # grads.append(p.grad[:,self.grad_subsample_idx])
                                 # for layer in self.model.base_model.model.model.layers:
@@ -787,12 +789,12 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                             self.fisher_cur += (grads).detach()
                             self.fisher_cnt += 1
                             
-                            for p in self.model.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 p.requires_grad = False
                             # for layer in self.model.base_model.model.model.layers:
                             #     for p in layer.mlp.down_proj.base_layer.parameters():
                             #         p.requires_grad = False
-                            
+                            self.model2.zero_grad()
                             model.zero_grad()
                             torch.cuda.empty_cache()
                         ##############################################################################################################

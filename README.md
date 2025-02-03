@@ -11,9 +11,16 @@ pip install peft==0.14.0 bitsandbytes pandas kornia opencv-python timm torch_opt
 pip install -U scikit-learn
 ```
 
+- init weight for 1B, 3B
+    - blockwise (4 layers)
 ```bash
-gdrive files download 1aHRzTuAjthxQoV3k0myevHzBCsLekclY
-gdrive files download 16_tCIWdUNPS7VCNcFux4tgLBR_2O9tcn
+gdrive files download 1b90paEEbwvv608S7KW-XcXKcCcXWAyhS
+gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW
+```
+    - blockwise2 (8 layers)
+```bash
+gdrive files downlaod 1daRFCws40l7dKstM6b_takNBF0xShZm7
+gdrive files download 1xqGdFk49_3J7Y2Wtyn9eSKv9FL8lqSDe
 ```
 
 ## Dataset preprocessing Again

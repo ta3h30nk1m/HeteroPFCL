@@ -158,7 +158,12 @@ def main():
             models[model_id] = model
             
             model_ids[model_id] = [client_id]
-            
+    
+    if 'thkim0305/llama3.2_1B_vl' not in models.keys():
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
+        model, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['thkim0305/llama3.2_1B_vl'] = model
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids}
     
@@ -337,6 +342,7 @@ def main():
                 
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
+                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 

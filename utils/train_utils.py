@@ -244,6 +244,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
     
+    elif training_args.mode == 'sft_only_B_train':
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            for n, p in layer.named_parameters():
+                if 'lora_A' in n:
+                    p.requires_grad = False
+
     elif training_args.mode == 'fedMultipqfullfreeze' or training_args.mode == 'fedMultipqfullfreeze_sft' or training_args.mode == 'fedMultipqfullfreeze_tv' or training_args.mode == 'fedMultipqfullfreeze_ours':
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4
@@ -262,6 +268,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
+                        
     elif training_args.mode == 'fedMulti2pqfullfreeze' or training_args.mode == 'fedMulti2pqfullfreeze_sft' or training_args.mode == 'fedMulti2pqfullfreeze_tv' or training_args.mode == 'fedMulti2pqfullfreeze_ours':
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4

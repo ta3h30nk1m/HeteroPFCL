@@ -585,6 +585,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
                         # if step % self.fisher_freq == 0:
                         if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
+                            torch.cuda.empty_cache()
                             for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 p.requires_grad = True
                             
@@ -615,6 +616,15 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             if args.mode == 'fedMultipqfullfreeze_ours':
                                 last_layer = len(self.model2.base_model.language_model.model.layers) // 4
                                 target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
+                                    if idx in target_layers:
+                                        for n, p in layer.named_parameters():
+                                            if 'lora_A' in n or 'lora_B' in n:
+                                                p.requires_grad = False
+                            elif args.mode == 'fedMulti2pqfullfreeze_ours':
+                                last_layer = len(self.model2.base_model.language_model.model.layers) // 4
+                                target_layers = [last_layer*1 -2,last_layer*1 -1,last_layer*2 -2,last_layer*2 -1,
+                                                 last_layer*3 -2,last_layer*3 -1,last_layer*4 -2,last_layer*4 -1]
                                 for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
                                     if idx in target_layers:
                                         for n, p in layer.named_parameters():

@@ -176,7 +176,7 @@ def main():
     random.shuffle(public_datalist)
 
     ##### A_PCA init #####
-    public_datalist_ = public_datalist[:200]
+    public_datalist_ = public_datalist[:2000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -214,7 +214,15 @@ def main():
             #(mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
             state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16)
             state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16)
-    breakpoint()
+    # breakpoint()
+
+
+    output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")
+    torch.save(state_dict2, output_dir2)
+    
+    output_dir = os.path.join(training_args.state_dir, f"llava_3b_PCA_orthnormal_init.pth")
+    torch.save(state_dict, output_dir)
+
     trainer.deepspeed.empty_partition_cache()
     trainer.accelerator.free_memory()
     del trainer
@@ -223,7 +231,10 @@ def main():
     torch.cuda.empty_cache()
 
     ##### A init #####
-    public_datalist_ = public_datalist[200:1000]
+    model.load_state_dict(state_dict, strict=False) 
+    model2.load_state_dict(state_dict2, strict=False) 
+
+    public_datalist_ = public_datalist[2000:7000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -256,7 +267,7 @@ def main():
     torch.cuda.empty_cache()
     
     ##### B init #####
-    public_datalist_ = public_datalist[10000:10100]
+    public_datalist_ = public_datalist[7000:7100]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -283,7 +294,8 @@ def main():
     state_dict2 = get_peft_state_maybe_zero_3(
         model2.named_parameters(), training_args.lora_bias
     )
-    
+
+
     gamma=1e-4
     
     def matrix_inv_sqrt(S):

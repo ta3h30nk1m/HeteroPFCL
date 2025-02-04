@@ -22,6 +22,16 @@ gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW
 gdrive files downlaod 1daRFCws40l7dKstM6b_takNBF0xShZm7
 gdrive files download 1xqGdFk49_3J7Y2Wtyn9eSKv9FL8lqSDe
 ```
+    - blockwise (4 layers) - PCA
+```bash
+gdrive files download 1YxdZKJosR53oyi_kMiMb8Fu9WldIyUT5
+gdrive files download 1iQYOO5VNRTA282JZCsNlSWLF4x4n6R5c
+```
+    - blockwise2 (8 layers) - PCA
+```bash
+gdrive files downlaod 1OTDkcu1hf_U09LM6ddyySFfJrAIZssfw
+gdrive files download 1u53165H0il1leqA4dyo2k7MFNjd1u3_w
+```
 
 ## Dataset preprocessing Again
 

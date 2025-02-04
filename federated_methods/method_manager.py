@@ -24,7 +24,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode == 'fedsim_ours' or mode == 'fedsim_tv':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedsim_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
-    elif mode == 'fedours' or mode == 'fedours_tv':
+    elif mode == 'fedours' or mode == 'fedours_tv' or mode == 'fedours_excludemean':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict  
     elif mode =='fedpq' or mode == 'fedpqfreeze' or mode == 'fedpqfreeze2':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedpq_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
@@ -42,9 +42,11 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualFLpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='feddualFMLpq':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualFMLpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode =='feddualMultipqfreeze' or mode =='feddualMultipqfullfreeze' or mode == 'feddualMultipqfullfreeze_tv' or mode =='feddualMultipqfullfreezeA' or mode == 'feddualMultipqfullfreezeA_tv':
+    elif mode =='feddualMultipqfreeze' or mode =='feddualMultipqfullfreeze' or mode == 'feddualMultipqfullfreeze_tv' or mode == 'feddualMultipqfullfreeze_excludemean' \
+        or mode =='feddualMultipqfullfreezeA' or mode == 'feddualMultipqfullfreezeA_tv' or mode == 'feddualMultipqfullfreezeA_excludemean':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode =='feddualMulti2pqfullfreeze' or mode == 'feddualMulti2pqfullfreeze_tv' or mode =='feddualMulti2pqfullfreezeA' or mode == 'feddualMulti2pqfullfreezeA_tv':
+    elif mode =='feddualMulti2pqfullfreeze' or mode == 'feddualMulti2pqfullfreeze_tv' or mode == 'feddualMulti2pqfullfreeze_excludemean'\
+        or mode =='feddualMulti2pqfullfreezeA' or mode == 'feddualMulti2pqfullfreezeA_tv' or mode == 'feddualMulti2pqfullfreezeA_excludemean':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
 
     elif mode =='fedMultipqfullfreeze':

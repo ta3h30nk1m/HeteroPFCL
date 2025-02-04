@@ -808,7 +808,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         # compute fisher online
                         # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
                         # if step % self.fisher_freq == 0:
-                        if 'tv' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
+                        if 'tv' not in args.mode and 'excludemean' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
                             for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 p.requires_grad = True
                             
@@ -978,7 +978,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
 
-        if 'tv' not in args.mode:
+        if 'tv' not in args.mode and 'excludemean' not in args.mode:
             self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
             self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
         

@@ -227,6 +227,8 @@ def main():
                         sim = torch.transpose(sim, 1, 0)
                         sims.append(sim)
                 sim = torch.stack(sims, dim=0).mean(dim=0)
+            elif 'excludemean' in training_args.mode:
+                sim = torch.ones(training_args.num_clients, training_args.num_clients)
             else:
                 # vectorize cosine sim and then average them
                 sims = []
@@ -367,6 +369,8 @@ def main():
                             if 'lora' in n:
                                 new_task_vectors[n] = p.clone().detach().cpu().flatten() - original_weights[n]
                     task_vectors[client_id] = new_task_vectors
+                elif 'excludemean' in training_args.mode:
+                    task_vectors[client_id] = torch.ones(1)
                 else:
                     task_vectors[client_id] = trainer.task_vector
             
@@ -430,20 +434,20 @@ def main():
         # sim = torch.transpose(sim, 1, 0)
         # sim = (sim+1)/2
         
-        sims = []
-        for grad_idx in range(task_vectors[0].shape[-1]):
-            task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
-            sim = torch.matmul(task_vector,
-                            torch.transpose(task_vector, 1, 0))
-            sim = torch.transpose(sim, 1, 0)
-            sims.append(sim)
+        # sims = []
+        # for grad_idx in range(task_vectors[0].shape[-1]):
+        #     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
+        #     sim = torch.matmul(task_vector,
+        #                     torch.transpose(task_vector, 1, 0))
+        #     sim = torch.transpose(sim, 1, 0)
+        #     sims.append(sim)
         
-        sim = torch.stack(sims, dim=0).mean(dim=0)
+        # sim = torch.stack(sims, dim=0).mean(dim=0)
         
-        extra_state_dict_dict['task_similarity'] = sim
-        extra_state_dict_dict['curr_round'] += 1
-        for client_id in range(training_args.num_clients):
-            load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict)
+        # extra_state_dict_dict['task_similarity'] = sim
+        # extra_state_dict_dict['curr_round'] += 1
+        # for client_id in range(training_args.num_clients):
+        #     load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict)
     logger.info("total done\n")
 
 def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,

@@ -434,7 +434,7 @@ def main():
                     personal_global_state_dict = torch.load(f'./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth', map_location='cpu')
                     model.load_state_dict(personal_global_state_dict, strict=False)
             # model.load_state_dict(server_state_dict, strict=False)
-            if training_args.mode in ['fedours'] or 'dual' in training_args.mode:
+            if training_args.mode in ['fedours', 'fedours_tv'] or 'dual' in training_args.mode:
                 # for name, module in model.named_modules():
                 #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                 #         module.set_state('lora2')
@@ -457,7 +457,7 @@ def main():
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
-                if training_args.mode in ['fedours'] or 'dual' in training_args.mode:
+                if training_args.mode in ['fedours', 'fedours_tv'] or 'dual' in training_args.mode:
                     # for name, module in model.named_modules():
                     #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                     #         module.set_state('lora1')

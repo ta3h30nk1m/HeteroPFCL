@@ -176,7 +176,7 @@ def main():
     random.shuffle(public_datalist)
 
     ##### A_PCA init #####
-    public_datalist_ = public_datalist[:2000]
+    public_datalist_ = public_datalist[:200]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -205,16 +205,14 @@ def main():
     )
 
     for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
-        print("lora_A_input_1b.shape", lora_A_input_1b.shape)
-        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float())
-        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float())
+        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=training_args.lora_r)
+        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=training_args.lora_r)
 
         with torch.no_grad():
-            # breakpoint()
-            #(mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
-            state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16)
-            state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16)
-    # breakpoint()
+            print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :training_args.lora_r]", V_3b[:, :training_args.lora_r].shape)
+            print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :training_args.lora_r]", V_1b[:, :training_args.lora_r].shape)
+            state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16).T
+            state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16).T
 
 
     output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")
@@ -266,6 +264,7 @@ def main():
     gc.collect()
     torch.cuda.empty_cache()
     
+
     ##### B init #####
     public_datalist_ = public_datalist[7000:7100]
     

@@ -416,6 +416,33 @@ def main():
         new_data_args = copy.deepcopy(data_args)
         new_data_args.model_name_for_dataarg = test_datalist[0]['model_id']
         model, tokenizer, processor, data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
+        
+        if training_args.eval_all:
+            if not training_args.zeroshot:
+                model.load_state_dict(client_state_dict, strict=False)
+                model = model.to(torch.bfloat16)
+            if training_args.mode in ['fedours', 'fedours_tv'] or 'dual' in training_args.mode:
+                model.set_state('gate')
+            
+            for client_id_ in range(training_args.num_clients):
+                test_datalist_ = test_datalists[client_id_]
+                for data_info in test_datalist_:
+                    dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
+                    if not training_args.eval_server:
+                        # if training_args.mode not in ['fedsim', 'feddat']:
+                        if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
+                            or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
+                            print('output file already exist')
+                            continue
+                            
+                        if data_info['type'] == 'open-ended':
+                            evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
+                        elif data_info['type'] == 'multi-choice':
+                            evaluate_choices(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
+                        else:
+                            evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
+            continue
+        
         for data_info in test_datalist:
             
             # if train_datalists[client_id][training_args.round_to_eval-1]['train_cnt'] > data_info['eval_cnt']:

@@ -5,8 +5,8 @@ from collections import defaultdict
 import os
 import numpy as np
 
-mode = 'sft'
-Method='sft_bs4_saveoptim_lr2e-5_sc80_4tasks_5rounds_fixitr100_T0125_decay099'
+mode = 'fedsim_tv'
+Method='fedsim_tv_bs4_saveoptim_lr2e-5_sc80_4tasks_5rounds_fixitr100_T0125_decay099'
 
 num_rounds = [20]
 is_client = True
@@ -46,12 +46,12 @@ for num_round in num_rounds:
     # Prepare data for CSV
     csv_datas = []
     for i, (result) in enumerate(results):
-        csv_data = [Method, num_round]
+        csv_data = [Method, num_round, i]
         csv_data.extend(result[:])
         csv_datas.append(csv_data)
 
     # Prepare header
-    header = ['method', 'num_round']
+    header = ['method', 'num_round', 'client']
     header.extend([f'client {i}' for i in range(10)])
 
     # Write to CSV

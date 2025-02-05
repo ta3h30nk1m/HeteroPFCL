@@ -184,6 +184,9 @@ original_data = json.load(open('dataset/FlintstonesSV/test/dataset-0.json','r'))
 sampled_data = random.sample(original_data, 1000)
 with open('dataset/FlintstonesSV/test/dataset-30.json','w') as fp:
     json.dump(sampled_data, fp, indent=4)
+
+shutil.copyfile('dataset/IEdit/train/dataset-0.json', 'dataset/IEdit/train/dataset-30.json')
+shutil.copyfile('dataset/IEdit/test/dataset-0.json', 'dataset/IEdit/test/dataset-30.json')
 # client 9 #######################################################################################
 original_data = json.load(open('dataset/PororoSV/train/dataset-0.json','r'))
 sampled_data = random.sample(original_data, 4000)

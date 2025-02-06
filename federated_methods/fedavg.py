@@ -178,11 +178,11 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
         self.fisher_cur = 0
         self.fisher_cnt = 0
         self.fisher_freq = fisher_freq
+        self.hooks = []
         if model2 is not None:
             self.model2 = model2.cuda()
             self.input_penultimate = []
             self.hidden_states_before_norm = []
-            self.hooks = []
             def hook_fn(module, input, output):
                 self.input_penultimate.append(input)
             def hook_fn2(module, input, output):

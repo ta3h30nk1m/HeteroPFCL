@@ -131,4 +131,5 @@ class TrainingConfig(transformers.TrainingArguments):
     load_checkpoint:str = None
     fedours:bool = False
     
-    load_pretrained_lora:bool = False
+    load_pretrained_random:bool = False
+    load_pretrained_pca:bool = False

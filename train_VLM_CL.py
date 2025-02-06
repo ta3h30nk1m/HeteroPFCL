@@ -373,6 +373,8 @@ def main():
                     task_vectors[client_id] = torch.ones(1)
                 else:
                     task_vectors[client_id] = trainer.task_vector
+                    
+                    models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")

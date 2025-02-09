@@ -51,174 +51,174 @@ if not os.path.exists(image_folder):
     os.makedirs(image_folder)
 
 # # task1: True False
-# instruction_ = "For a given image and phrase, your task is to determine whether the image correctly illusrates the figurative meaning of the phrase. You must choose your answer from the Choice List."
+instruction_ = "For a given image and phrase, your task is to determine whether the image correctly illusrates the figurative meaning of the phrase. You must choose your answer from the Choice List."
 
-# train_true_datalist = []
-# train_false_datalist = []
-# test_true_datalist = []
-# test_false_datalist = []
+train_true_datalist = []
+train_false_datalist = []
+test_true_datalist = []
+test_false_datalist = []
 
-# for data in idioms:
-#     # source: image url
-#     # img file name = uuid
-#     filename = data['uuid'] + '.jpeg'
-#     filepath = os.path.join(image_folder, filename)
-#     if not os.path.exists(filepath):
-#         print(f'file {filepath} not exist')
-#         continue
-#     phrase = data['phrase']
-#     question =f"\n<image>\nThe image represents the idiom \"{phrase}\", which has figurative meaning of {data['definition']}."
-#     # label: category == Figurative or Figurative+Literal
-#     answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
-#     json_data = {
-#         'id': data['uuid'],
-#         'image':[filepath],
-#         "conversations": [
-#             {
-#                 "from": "human",
-#                 "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
-#             },
-#             { 
-#                 "from": "gpt",
-#                 "value": "True" if answer else "False"
-#             }
-#         ]
-#     }
+for data in idioms:
+    # source: image url
+    # img file name = uuid
+    filename = data['uuid'] + '.jpeg'
+    filepath = os.path.join(image_folder, filename)
+    if not os.path.exists(filepath):
+        print(f'file {filepath} not exist')
+        continue
+    phrase = data['phrase']
+    question =f"\n<image>\nThe image represents the idiom \"{phrase}\", which has figurative meaning of {data['definition']}."
+    # label: category == Figurative or Figurative+Literal
+    answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
+    json_data = {
+        'id': data['uuid'],
+        'image':[filepath],
+        "conversations": [
+            {
+                "from": "human",
+                "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
+            },
+            { 
+                "from": "gpt",
+                "value": "True" if answer else "False"
+            }
+        ]
+    }
     
-#     if phrase in idioms_phrases_train:
-#         if answer:
-#             train_true_datalist.append(json_data)
-#         else:
-#             train_false_datalist.append(json_data)
-#     elif phrase in idioms_phrases_test:
-#         if answer:
-#             test_true_datalist.append(json_data)
-#         else:
-#             test_false_datalist.append(json_data)
-#     else:
-#         if random.random() > 0.5:
-#             if answer:
-#                 train_true_datalist.append(json_data)
-#             else:
-#                 train_false_datalist.append(json_data)
-#         else:
-#             if answer:
-#                 test_true_datalist.append(json_data)
-#             else:
-#                 test_false_datalist.append(json_data)
+    if phrase in idioms_phrases_train:
+        if answer:
+            train_true_datalist.append(json_data)
+        else:
+            train_false_datalist.append(json_data)
+    elif phrase in idioms_phrases_test:
+        if answer:
+            test_true_datalist.append(json_data)
+        else:
+            test_false_datalist.append(json_data)
+    else:
+        if random.random() > 0.5:
+            if answer:
+                train_true_datalist.append(json_data)
+            else:
+                train_false_datalist.append(json_data)
+        else:
+            if answer:
+                test_true_datalist.append(json_data)
+            else:
+                test_false_datalist.append(json_data)
 
-# for data in metaphors:
-#     # source: image url
-#     # img file name = uuid
-#     filename = data['uuid'] + '.jpeg'
-#     filepath = os.path.join(image_folder, filename)
-#     if not os.path.exists(filepath):
-#         print(f'file {filename} not exist')
-#         continue
-#     phrase = data['phrase']
-#     question =f"\n<image>\nThe image represents the metaphor \"{phrase}\"."
-#     # label: category == Figurative or Figurative+Literal
-#     answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
+for data in metaphors:
+    # source: image url
+    # img file name = uuid
+    filename = data['uuid'] + '.jpeg'
+    filepath = os.path.join(image_folder, filename)
+    if not os.path.exists(filepath):
+        print(f'file {filename} not exist')
+        continue
+    phrase = data['phrase']
+    question =f"\n<image>\nThe image represents the metaphor \"{phrase}\"."
+    # label: category == Figurative or Figurative+Literal
+    answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
 
-#     json_data = {
-#         'id': data['uuid'],
-#         'image':[filepath],
-#         "conversations": [
-#             {
-#                 "from": "human",
-#                 "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
-#             },
-#             { 
-#                 "from": "gpt",
-#                 "value": "True" if answer else "False"
-#             }
-#         ]
-#     }
+    json_data = {
+        'id': data['uuid'],
+        'image':[filepath],
+        "conversations": [
+            {
+                "from": "human",
+                "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
+            },
+            { 
+                "from": "gpt",
+                "value": "True" if answer else "False"
+            }
+        ]
+    }
     
-#     if phrase in metaphors_phrases_train:
-#         if answer:
-#             train_true_datalist.append(json_data)
-#         else:
-#             train_false_datalist.append(json_data)
-#     elif phrase in metaphors_phrases_test:
-#         if answer:
-#             test_true_datalist.append(json_data)
-#         else:
-#             test_false_datalist.append(json_data)
-#     else:
-#         if random.random() > 0.5:
-#             if answer:
-#                 train_true_datalist.append(json_data)
-#             else:
-#                 train_false_datalist.append(json_data)
-#         else:
-#             if answer:
-#                 test_true_datalist.append(json_data)
-#             else:
-#                 test_false_datalist.append(json_data)
+    if phrase in metaphors_phrases_train:
+        if answer:
+            train_true_datalist.append(json_data)
+        else:
+            train_false_datalist.append(json_data)
+    elif phrase in metaphors_phrases_test:
+        if answer:
+            test_true_datalist.append(json_data)
+        else:
+            test_false_datalist.append(json_data)
+    else:
+        if random.random() > 0.5:
+            if answer:
+                train_true_datalist.append(json_data)
+            else:
+                train_false_datalist.append(json_data)
+        else:
+            if answer:
+                test_true_datalist.append(json_data)
+            else:
+                test_false_datalist.append(json_data)
 
-# for data in similes:
-#     # source: image url
-#     # img file name = uuid
-#     filename = data['uuid'] + '.jpeg'
-#     filepath = os.path.join(image_folder, filename)
-#     if not os.path.exists(filepath):
-#         print(f'file {filename} not exist')
-#         continue
-#     phrase = data['phrase']
-#     question =f"\n<image>\nThe image represents the simile \"{phrase}\"."
-#     # label: category == Figurative or Figurative+Literal
-#     answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
-#     json_data = {
-#         'id': data['uuid'],
-#         'image':[filepath],
-#         "conversations": [
-#             {
-#                 "from": "human",
-#                 "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
-#             },
-#             { 
-#                 "from": "gpt",
-#                 "value": "True" if answer else "False"
-#             }
-#         ]
-#     }
+for data in similes:
+    # source: image url
+    # img file name = uuid
+    filename = data['uuid'] + '.jpeg'
+    filepath = os.path.join(image_folder, filename)
+    if not os.path.exists(filepath):
+        print(f'file {filename} not exist')
+        continue
+    phrase = data['phrase']
+    question =f"\n<image>\nThe image represents the simile \"{phrase}\"."
+    # label: category == Figurative or Figurative+Literal
+    answer = (data['category'] == 'Figurative') or (data['category'] == 'Figurative+Literal')
+    json_data = {
+        'id': data['uuid'],
+        'image':[filepath],
+        "conversations": [
+            {
+                "from": "human",
+                "value": instruction_ + question + '\nChoice list:[True, False]. Your answer is:'
+            },
+            { 
+                "from": "gpt",
+                "value": "True" if answer else "False"
+            }
+        ]
+    }
     
-#     if phrase in similes_phrases_train:
-#         if answer:
-#             train_true_datalist.append(json_data)
-#         else:
-#             train_false_datalist.append(json_data)
-#     elif phrase in similes_phrases_test:
-#         if answer:
-#             test_true_datalist.append(json_data)
-#         else:
-#             test_false_datalist.append(json_data)
-#     else:
-#         if random.random() > 0.5:
-#             if answer:
-#                 train_true_datalist.append(json_data)
-#             else:
-#                 train_false_datalist.append(json_data)
-#         else:
-#             if answer:
-#                 test_true_datalist.append(json_data)
-#             else:
-#                 test_false_datalist.append(json_data)
+    if phrase in similes_phrases_train:
+        if answer:
+            train_true_datalist.append(json_data)
+        else:
+            train_false_datalist.append(json_data)
+    elif phrase in similes_phrases_test:
+        if answer:
+            test_true_datalist.append(json_data)
+        else:
+            test_false_datalist.append(json_data)
+    else:
+        if random.random() > 0.5:
+            if answer:
+                train_true_datalist.append(json_data)
+            else:
+                train_false_datalist.append(json_data)
+        else:
+            if answer:
+                test_true_datalist.append(json_data)
+            else:
+                test_false_datalist.append(json_data)
 
-# random.shuffle(train_false_datalist)
-# random.shuffle(test_false_datalist)
-# train_datalist = train_true_datalist + train_false_datalist[:len(train_true_datalist)]
-# test_datalist = test_true_datalist + test_false_datalist[:len(test_true_datalist)]
+random.shuffle(train_false_datalist)
+random.shuffle(test_false_datalist)
+train_datalist = train_true_datalist + train_false_datalist[:len(train_true_datalist)]
+test_datalist = test_true_datalist + test_false_datalist[:len(test_true_datalist)]
 
-# print(len(train_datalist))
-# print(len(test_datalist))
+print(len(train_datalist))
+print(len(test_datalist))
 
-# with open(f'{train_folder}/dataset-0.json', 'w') as json_file:
-#     json.dump(train_datalist, json_file, indent=4)
+with open(f'{train_folder}/dataset-0.json', 'w') as json_file:
+    json.dump(train_datalist, json_file, indent=4)
 
-# with open(f'{test_folder}/dataset-0.json', 'w') as json_file:
-#     json.dump(test_datalist, json_file, indent=4)
+with open(f'{test_folder}/dataset-0.json', 'w') as json_file:
+    json.dump(test_datalist, json_file, indent=4)
 
 # breakpoint()
 

@@ -13,7 +13,7 @@ import numpy as np
 np.random.seed(42)
 random.seed(42)
 
-num_per_set = 2
+num_per_set = 3
 num_combination_per_sample = 7
 prompts = f'''Given {num_per_set} "positive" images and {num_per_set} "negative" images, where "positive" images share "common" visual concepts and "negative" images cannot, the "common" visual concepts exclusively depicted by the "positive" images. And then given 1 "query" image, please determine whether it belongs to "positive" or "negative".'''
 

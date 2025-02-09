@@ -168,7 +168,8 @@ with open('dataset/Spot-the-Diff/test/dataset-30.json','w') as fp:
     json.dump(sampled_data, fp, indent=4)
 
 original_data = json.load(open('dataset/CIRR/train/dataset-1.json','r'))
-sampled_data = random.sample(original_data, 4000)
+# sampled_data = random.sample(original_data, 4000)
+sampled_data = random.sample(original_data, 8000)
 with open('dataset/CIRR/train/dataset-31.json','w') as fp:
     json.dump(sampled_data, fp, indent=4)
 original_data = json.load(open('dataset/CIRR/test/dataset-1.json','r'))
@@ -217,3 +218,61 @@ shutil.copyfile('dataset/MIT-States/test/dataset-0.json', 'dataset/MIT-States/te
 
 shutil.copyfile('dataset/VISION/train/dataset-1.json', 'dataset/VISION/train/dataset-31.json')
 shutil.copyfile('dataset/VISION/test/dataset-1.json', 'dataset/VISION/test/dataset-31.json')
+
+
+
+# sc100
+
+shutil.copyfile('dataset/IRFL/train/dataset-1.json', 'dataset/IRFL/train/dataset-31.json')
+original_data = json.load(open('dataset/IRFL/test/dataset-1.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/IRFL/test/dataset-31.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+original_data = json.load(open('dataset/IRFL/train/dataset-2.json','r'))
+sampled_data = random.sample(original_data, 8000)
+with open('dataset/IRFL/train/dataset-32.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+original_data = json.load(open('dataset/IRFL/test/dataset-2.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/IRFL/test/dataset-32.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+shutil.copyfile('dataset/Bongard-HOI/train/dataset-2.json', 'dataset/Bongard-HOI/train/dataset-32.json')
+original_data = json.load(open('dataset/Bongard-HOI/test/dataset-2.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/Bongard-HOI/test/dataset-32.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+shutil.copyfile('dataset/IRFL/train/dataset-3.json', 'dataset/IRFL/train/dataset-33.json')
+shutil.copyfile('dataset/IRFL/test/dataset-3.json', 'dataset/IRFL/test/dataset-33.json')
+
+shutil.copyfile('dataset/IRFL/train/dataset-0.json', 'dataset/IRFL/train/dataset-30.json')
+original_data = json.load(open('dataset/IRFL/test/dataset-0.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/IRFL/test/dataset-30.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+original_data = json.load(open('dataset/NLVR2/train/dataset-1.json','r'))
+sampled_data = random.sample(original_data, 4000)
+with open('dataset/NLVR2/train/dataset-31.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+original_data = json.load(open('dataset/NLVR2/test/dataset-1.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/NLVR2/test/dataset-31.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+original_data = json.load(open('dataset/COMICS_Dialogue/train/dataset-0.json','r'))
+sampled_data = random.sample(original_data, 4000)
+with open('dataset/COMICS_Dialogue/train/dataset-30.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+original_data = json.load(open('dataset/COMICS_Dialogue/test/dataset-0.json','r'))
+sampled_data = random.sample(original_data, 1000)
+with open('dataset/COMICS_Dialogue/test/dataset-30.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+original_data = json.load(open('dataset/MagicBrush/train/dataset-1.json','r'))
+sampled_data = random.sample(original_data, 8000)
+with open('dataset/MagicBrush/train/dataset-31.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+shutil.copyfile('dataset/MagicBrush/test/dataset-1.json', 'dataset/MagicBrush/test/dataset-31.json')

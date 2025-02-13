@@ -633,6 +633,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             self.model2.zero_grad()
                             model.zero_grad()
                             torch.cuda.empty_cache()
+                          
                         ##############################################################################################################
                         
                         self.state.global_step += 1

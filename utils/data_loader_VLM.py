@@ -203,15 +203,15 @@ class LazySupervisedDataset(Dataset):
         
         if 'image' in source.keys():
             image_file = source['image']
-            image_folder = "/home/mila/s/sparsha.mishra/scratch/LLaVA/llava_ft"
-            if isinstance(image_file, list):
-                image = [Image.open(os.path.join(image_folder, image_path)).convert('RGB') for image_path in image_file] #.split(' |sep| ')
-            else:
-                image = [Image.open(os.path.join(image_folder, image_file)).convert('RGB')]
+            # image_folder = "/home/mila/s/sparsha.mishra/scratch/LLaVA/llava_ft"
             # if isinstance(image_file, list):
-            #     image = [Image.open(image_path).convert('RGB') for image_path in image_file] #.split(' |sep| ')
+            #     image = [Image.open(os.path.join(image_folder, image_path)).convert('RGB') for image_path in image_file] #.split(' |sep| ')
             # else:
-            #     image = [Image.open(image_file).convert('RGB')]
+            #     image = [Image.open(os.path.join(image_folder, image_file)).convert('RGB')]
+            if isinstance(image_file, list):
+                image = [Image.open(image_path).convert('RGB') for image_path in image_file] #.split(' |sep| ')
+            else:
+                image = [Image.open(image_file).convert('RGB')]
         
         if self.data_args.image_aspect_ratio == 'pad':
             def expand2square(pil_img, background_color):

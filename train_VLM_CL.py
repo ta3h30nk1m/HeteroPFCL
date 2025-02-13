@@ -162,8 +162,8 @@ def main():
     if 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
-        model, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-        models['thkim0305/llama3.2_1B_vl'] = model
+        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['thkim0305/llama3.2_1B_vl'] = model2
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids}
     
@@ -198,14 +198,15 @@ def main():
     task_vectors = [None for _ in range(training_args.num_clients)]
     
     original_weights = {}
-    if 'pq' in training_args.mode:
-        for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-            if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
-                original_weights[n] = p.clone().detach().cpu().flatten()
-    else:
-        for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-            if 'lora' in n:
-                original_weights[n] = p.clone().detach().cpu().flatten()
+    if 'tv' in training_args.mode:
+        if 'pq' in training_args.mode:
+            for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
+                if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
+                    original_weights[n] = p.clone().detach().cpu().flatten()
+        else:
+            for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
+                if 'lora' in n:
+                    original_weights[n] = p.clone().detach().cpu().flatten()
     lr_step = (init_lr - final_lr)/total_rounds
     mm_lr_step = (mm_init_lr - mm_final_lr)/total_rounds
     for curr_round in range(total_rounds):
@@ -373,6 +374,8 @@ def main():
                     task_vectors[client_id] = torch.ones(1)
                 else:
                     task_vectors[client_id] = trainer.task_vector
+                    
+                    models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")

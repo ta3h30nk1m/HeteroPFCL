@@ -82,7 +82,7 @@ class GenerationDataset(Dataset):
         return {
             'input_ids':inputs['input_ids'][0],
             'pixel_values':inputs['pixel_values'],
-            'gold':gold,
+            'gold':str(gold),
             'prompt':prompt,
             'image_file':image_file
         }

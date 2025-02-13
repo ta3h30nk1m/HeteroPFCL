@@ -51,7 +51,7 @@ from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.eetq import dispatch_eetq
 from peft.tuners.lora.gptq import dispatch_gptq
 from peft.tuners.lora.hqq import dispatch_hqq
-from .pqlorafreezelayer import Conv2d, PQLoraFreezeLayer2, dispatch_default
+from .dual_pqloralayer_freezeA import Conv2d, PQLoraFreezeALayer, dispatch_default
 from peft.tuners.lora.torchao import dispatch_torchao
 from peft.tuners.lora.tp_layer import dispatch_megatron
 
@@ -62,7 +62,7 @@ def _adapter_names_pre_forward_hook(target, args, kwargs, adapter_names):
     return args, kwargs
 
 
-class PQLoraFreezeModel2(BaseTuner):
+class Dual_PQLorafreezeAModel(BaseTuner):
     """
     Creates Low Rank Adapter (LoRA) model from a pretrained transformers model.
 
@@ -135,7 +135,7 @@ class PQLoraFreezeModel2(BaseTuner):
         - **peft_config** ([`LoraConfig`]): The configuration of the Lora model.
     """
 
-    prefix: str = "loraT_"
+    prefix: str = "lora"
 
     def __init__(self, model, config, adapter_name, low_cpu_mem_usage: bool = False) -> None:
         super().__init__(model, config, adapter_name, low_cpu_mem_usage=low_cpu_mem_usage)
@@ -220,7 +220,7 @@ class PQLoraFreezeModel2(BaseTuner):
         # note: AdaLoraLayer is a subclass of LoraLayer, we need to exclude it
         from peft.tuners.adalora import AdaLoraLayer
 
-        if isinstance(target, PQLoraFreezeLayer2) and not isinstance(target, AdaLoraLayer):
+        if isinstance(target, PQLoraFreezeALayer) and not isinstance(target, AdaLoraLayer):
             target.update_layer(
                 adapter_name,
                 r,
@@ -294,7 +294,7 @@ class PQLoraFreezeModel2(BaseTuner):
                         p.requires_grad = True
             elif bias == "lora_only":
                 for m in model.modules():
-                    if isinstance(m, PQLoraFreezeLayer2) and hasattr(m, "bias") and m.bias is not None:
+                    if isinstance(m, PQLoraFreezeALayer) and hasattr(m, "bias") and m.bias is not None:
                         m.bias.requires_grad = True
             else:
                 raise NotImplementedError(f"Requested bias: {bias}, is not implemented.")
@@ -426,7 +426,7 @@ class PQLoraFreezeModel2(BaseTuner):
             adapter_name (`str` or `list[str]`): Name of the adapter(s) to be activated.
         """
         for module in self.model.modules():
-            if isinstance(module, PQLoraFreezeLayer2):
+            if isinstance(module, PQLoraFreezeALayer):
                 if module.merged:
                     warnings.warn("Adapter cannot be set when the model is merged. Unmerging the model first.")
                     module.unmerge()
@@ -450,7 +450,7 @@ class PQLoraFreezeModel2(BaseTuner):
         # to check that there is at least one layer with the given name, or else something like typos can easily slip.
         expected_adapters = set()
         for layer in self.modules():
-            if isinstance(layer, PQLoraFreezeLayer2):
+            if isinstance(layer, PQLoraFreezeALayer):
                 expected_adapters |= layer.lora_A.keys()
                 expected_adapters |= layer.lora_embedding_A.keys()
         unique_adapters = {name for name in adapter_names if name != "__base__"}
@@ -460,7 +460,7 @@ class PQLoraFreezeModel2(BaseTuner):
 
         hook_handles = []
         for module in self.modules():
-            if isinstance(module, PQLoraFreezeLayer2) or isinstance(module, ModulesToSaveWrapper):
+            if isinstance(module, PQLoraFreezeALayer) or isinstance(module, ModulesToSaveWrapper):
                 pre_forward = partial(_adapter_names_pre_forward_hook, adapter_names=adapter_names)
                 handle = module.register_forward_pre_hook(pre_forward, with_kwargs=True)
                 hook_handles.append(handle)
@@ -669,7 +669,7 @@ class PQLoraFreezeModel2(BaseTuner):
         key_list = [key for key, _ in self.model.named_modules() if self.prefix not in key]
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFreezeLayer2):
+            if isinstance(target, PQLoraFreezeALayer):
                 if adapter_name in target.lora_A:
                     target_lora_A = target.lora_A[adapter_name].weight
                     target_lora_B = target.lora_B[adapter_name].weight
@@ -854,7 +854,7 @@ class PQLoraFreezeModel2(BaseTuner):
         new_adapter = None
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFreezeLayer2):
+            if isinstance(target, PQLoraFreezeALayer):
                 target.delete_adapter(adapter_name)
                 if new_adapter is None:
                     new_adapter = target.active_adapters[:]

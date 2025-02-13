@@ -60,6 +60,37 @@ logger = logging.get_logger(__name__)
 
 from eval_VLM_CL import anytime_evaluation
 
+@torch.no_grad()
+def get_grad_penultimate(logit, label, weight_last, input_penultimate, norm_layer, hidden_states_before_norm):
+    # Compute probabilities using softmax
+    prob = F.softmax(logit, dim=-1).to(torch.bfloat16)
+    
+    # One-hot encode the label
+    oh_label = F.one_hot(label.long(), num_classes=logit.shape[-1]).to(torch.bfloat16)
+
+    # Compute the gradient for the last layer
+    delta = (prob - oh_label) / logit.size(0)
+    
+    # Now, compute the gradient for the penultimate layer
+    grad_penultimate_layer = torch.matmul(delta, weight_last)  # Grad w.r.t. the output of the penultimate layer
+    
+    hidden_states = hidden_states_before_norm.to(torch.float32)
+    variance = hidden_states.pow(2).mean(-1, keepdim=True)
+    norm_factor = torch.rsqrt(variance + norm_layer.variance_epsilon)
+    
+    grad_normalized_hidden_states  = norm_layer.weight * norm_factor * ( 1 - hidden_states * hidden_states / ((variance + norm_layer.variance_epsilon) * hidden_states.size(-1)) )
+    
+    grad = grad_penultimate_layer * grad_normalized_hidden_states.to(torch.bfloat16)
+    
+    # Compute the gradient w.r.t the weights of the penultimate layer using the input to that layer (penultimate input)
+    # grad_weights_penultimate = torch.matmul(grad[:,:1].T, input_penultimate) # col # Backprop through penultimate
+    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate[:,:1]) # row  # Backprop through penultimate
+    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate).mean(dim=-1).view(-1)
+    grad_weights_penultimate = torch.matmul(grad.T, input_penultimate)
+    
+    return grad_weights_penultimate
+
+
 def fedavg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     model_to_load = global_state_dict
     with torch.no_grad():
@@ -147,7 +178,17 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
         self.fisher_cur = 0
         self.fisher_cnt = 0
         self.fisher_freq = fisher_freq
-        self.model2 = model2.cuda() if model2 is not None else None
+        self.hooks = []
+        if model2 is not None:
+            self.model2 = model2.cuda()
+            self.input_penultimate = []
+            self.hidden_states_before_norm = []
+            def hook_fn(module, input, output):
+                self.input_penultimate.append(input)
+            def hook_fn2(module, input, output):
+                self.hidden_states_before_norm.append(input)
+            self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+            self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
         
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -584,31 +625,42 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # compute fisher online
                         # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
                         # if step % self.fisher_freq == 0:
+                        self.input_penultimate = []
+                        self.hidden_states_before_norm = []
                         if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
                             torch.cuda.empty_cache()
-                            for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                p.requires_grad = True
-                            
+                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            #     p.requires_grad = True
                             with self.model2.disable_adapter():
                                 inputs = self._prepare_inputs(inputs)
 
-                                output = self.model2(**inputs)#.loss
-                                output.loss.backward()
-                                grads = []
-                                for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                    grads.append(p.grad)
-                                    # grads.append(p.grad[:,self.grad_subsample_idx])
-                                # for layer in self.model.base_model.model.model.layers:
-                                #     for p in layer.mlp.down_proj.base_layer.parameters():
-                                #         grads.append(p.grad[:,self.grad_subsample_idx])
+                                with torch.no_grad():
+                                    output = self.model2(**inputs)#.loss
                                 
-                                # grads = torch.cat(grads, dim=1)
-                                grads = torch.cat(grads)
+                                shift_labels = inputs['labels'][..., 1:]
+                                
+                                grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                            self.model2.base_model.language_model.lm_head.weight,
+                                                            self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                            self.model2.base_model.language_model.model.norm,
+                                                            self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                
+                                # output.loss.backward()
+                                # grads = []
+                                # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                #     grads.append(p.grad)
+                                #     # grads.append(p.grad[:,self.grad_subsample_idx])
+                                # # for layer in self.model.base_model.model.model.layers:
+                                # #     for p in layer.mlp.down_proj.base_layer.parameters():
+                                # #         grads.append(p.grad[:,self.grad_subsample_idx])
+                                
+                                # # grads = torch.cat(grads, dim=1)
+                                # grads = torch.cat(grads)
                             self.fisher_cur += (grads).detach()
                             self.fisher_cnt += 1
                             
-                            for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                p.requires_grad = False
+                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            #     p.requires_grad = False
                             # for layer in self.model.base_model.model.model.layers:
                             #     for p in layer.mlp.down_proj.base_layer.parameters():
                             #         p.requires_grad = False
@@ -772,6 +824,9 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
         if 'ours' in args.mode:
             self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
             self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
+        
+        for hook in self.hooks:
+            hook.remove()
         
         return TrainOutput(self.state.global_step, train_loss, metrics)
 

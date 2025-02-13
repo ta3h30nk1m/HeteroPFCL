@@ -267,6 +267,10 @@ def parse_choice_list(input_string):
     if match:
         return [f"Image {letter}" for letter in match]
     
+    # wcvqa
+    if 'Print only the answer with a single answer id' in input_string:
+        return ['1','2','3','4','5']
+    
     # If no choices found, return an empty list
     return []
 

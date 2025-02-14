@@ -215,3 +215,24 @@ original_data = json.load(open('dataset/HRVQA/test/dataset-5.json','r'))
 sampled_data = random.sample(original_data, 1000)
 with open('dataset/HRVQA/test/dataset-45.json','w') as fp:
     json.dump(sampled_data, fp, indent=4)
+    
+    
+
+original_data = json.load(open('dataset/WCVQA/train/dataset-0.json','r'))
+sampled_data = random.sample(original_data, 5000)
+with open('dataset/WCVQA/train/dataset-40.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+original_data = json.load(open('dataset/WCVQA/train/dataset-1.json','r'))
+sampled_data = random.sample(original_data, 7000)
+with open('dataset/WCVQA/train/dataset-41.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+original_data = json.load(open('dataset/WCVQA/train/dataset-2.json','r'))
+sampled_data = random.sample(original_data, 8000)
+with open('dataset/WCVQA/train/dataset-42.json','w') as fp:
+    json.dump(sampled_data, fp, indent=4)
+
+shutil.copyfile('dataset/WCVQA/test/dataset-0.json', 'dataset/WCVQA/test/dataset-40.json')
+shutil.copyfile('dataset/WCVQA/test/dataset-1.json', 'dataset/WCVQA/test/dataset-41.json')
+shutil.copyfile('dataset/WCVQA/test/dataset-2.json', 'dataset/WCVQA/test/dataset-42.json')
+shutil.copyfile('dataset/WCVQA/train/dataset-3.json', 'dataset/WCVQA/train/dataset-43.json')
+shutil.copyfile('dataset/WCVQA/test/dataset-3.json', 'dataset/WCVQA/test/dataset-43.json')

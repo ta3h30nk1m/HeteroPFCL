@@ -226,10 +226,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
     
-    elif training_args.mode == 'sft_only_B_train':
+    elif training_args.mode in ['sft_only_B_train', 'fedavg_only_B_train', 'fedours_only_B_train', 'fedours_tv_only_B_train']:
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             for n, p in layer.named_parameters():
                 if 'lora_A' in n:
+                    print(f"{p} frozen!!")
                     p.requires_grad = False
 
     elif training_args.mode == 'fedMultipqfullfreeze' or training_args.mode == 'fedMultipqfullfreeze_sft' or training_args.mode == 'fedMultipqfullfreeze_tv' or training_args.mode == 'fedMultipqfullfreeze_ours':

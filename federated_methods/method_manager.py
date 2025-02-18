@@ -16,15 +16,13 @@ def dummy_function(*args):
 
 def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Dict]:
     extra_modules = {}
-    if mode == 'sft':
+    if mode in ['sft', 'sft_only_B_train']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
-    elif mode == 'sft_only_B_train':
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
-    elif mode == 'fedavg':
+    elif mode in ['fedavg', 'fedavg_only_B_train']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode == 'fedsim_ours' or mode == 'fedsim_tv':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedsim_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
-    elif mode == 'fedours' or mode == 'fedours_tv' or mode == 'fedours_excludemean':
+    elif mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_only_B_train', 'fedours_tv_only_B_train']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedpq_sft' or mode == 'fedpqfreeze_sft' or mode == 'fedpqfreeze2_sft' or mode =='fedlastpqfullfreeze_sft' or mode == 'fedMultipqfullfreeze_sft' or mode == 'fedMulti2pqfullfreeze_sft' or mode == 'A_PCA_init' or mode == 'fedMultipqfreezeA_sft':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict

@@ -22,6 +22,7 @@ import torch.nn.functional as F
 
 from models.coda_prompt import CodaPrompt
 
+os.environ["WANDB_DISABLED"] = "true"
 def main():
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingConfig))

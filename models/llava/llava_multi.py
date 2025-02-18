@@ -12,7 +12,7 @@ from models.dual_pqlora.dual_pqloralayer import PQLoraLayer
 from models.dual_pqlora_freeze.dual_pqloralayer_freeze import PQLoraFreezeLayer
 from models.dual_pqlora_freezeA.dual_pqloralayer_freezeA import PQLoraFreezeALayer
 from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
-from models.dual_pqlora_freeze_full_moe.dual_pqlora_layer_freeze_full_moe improt PQMOELoraFullFreezeLayer
+from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
 from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
 logger = logging.get_logger(__name__)
 

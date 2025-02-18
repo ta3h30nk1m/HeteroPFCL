@@ -607,7 +607,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
 #  ------------------------------------------------------------------------------------------
 
 
-class Linear(nn.Module, PQLoraFullFreezeLayer):
+class Linear(nn.Module, PQMOELoraFullFreezeLayer):
     # Lora implemented in a dense layer
     def __init__(
         self,
@@ -625,7 +625,7 @@ class Linear(nn.Module, PQLoraFullFreezeLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQLoraFullFreezeLayer.__init__(self, base_layer, **kwargs)
+        PQMOELoraFullFreezeLayer.__init__(self, base_layer, **kwargs)
         self.fan_in_fan_out = fan_in_fan_out
 
         self._active_adapter = adapter_name
@@ -868,7 +868,7 @@ class Linear(nn.Module, PQLoraFullFreezeLayer):
         return "lora." + rep
 
 
-class Embedding(nn.Module, PQLoraFullFreezeLayer):
+class Embedding(nn.Module, PQMOELoraFullFreezeLayer):
     # LoRA implemented in a Embedding layer
     def __init__(
         self,
@@ -888,7 +888,7 @@ class Embedding(nn.Module, PQLoraFullFreezeLayer):
             raise ValueError(f"lora_bias={lora_bias} is not supported for {self.__class__.__name__}.")
 
         super().__init__()
-        PQLoraFullFreezeLayer.__init__(self, base_layer)
+        PQMOELoraFullFreezeLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self.update_layer(
@@ -1128,7 +1128,7 @@ class Embedding(nn.Module, PQLoraFullFreezeLayer):
         return "lora." + rep
 
 
-class _ConvNd(nn.Module, PQLoraFullFreezeLayer):
+class _ConvNd(nn.Module, PQMOELoraFullFreezeLayer):
     # Lora implemented in a conv(2,3)d layer
     def __init__(
         self,
@@ -1144,7 +1144,7 @@ class _ConvNd(nn.Module, PQLoraFullFreezeLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQLoraFullFreezeLayer.__init__(self, base_layer)
+        PQMOELoraFullFreezeLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self._kernel_dim = base_layer.weight.dim()

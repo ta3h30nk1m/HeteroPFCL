@@ -67,7 +67,7 @@ def OURS_set_state_dict(model, global_state_dict, local_state_dict_list, trainin
         if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
         or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
         or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
-        or 'w_gate' in k or 'w_noise' in k:
+        or 'lora_w_gate' in k or 'lora_w_noise' in k:
             keys_to_del.append(k)
     for k in keys_to_del:
         del global_state_dict[k]
@@ -413,23 +413,16 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             #     model.module.set_state('lora2')
         loss, outputs = super(LLaVATrainerOURS, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
+        # moe loss
+        # if 'moe' in self.args.mode:
+        #     from models.duallora_moe.dualmoelora import DualMOELoraLayer
+        #     moe_loss = []
+        #     for n, m in model.module.named_modules():
+        #         if isinstance(m, DualMOELoraLayer):
+        #             moe_loss.append(m.moe_loss)
+        #     moe_loss = sum(moe_loss) / len(moe_loss)
+        #     loss += 0.1*moe_loss
         
-        # reg loss
-        # reg_loss = 0
-        # for name, param in model.module.named_parameters():
-        #     if 'lora2_P' in name:
-        #         reg_loss += torch.std_mean(param,dim=0)[0]**2
-        # loss += 0.5*reg_loss
-        
-        # l1 loss
-        # l1_loss = 0
-        # for layer_num in range(len(outputs['local_ia3_layer'])):
-        #     l1_loss += torch.sum(torch.abs(outputs['local_ia3_layer'][layer_num])) / len(outputs['local_ia3_layer'])
-        # loss += 0.001*l1_loss
-
-        # loss_kl_1 = kl_loss(outputs['logits'], outputs_target.clone().detach())
-        # loss_kl_1 = ((outputs['logits'] - outputs_target.detach())**2).mean()
-
         return (loss, outputs) if return_outputs else loss
     
     def _inner_training_loop(

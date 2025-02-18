@@ -94,6 +94,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
+        if training_args.mode in ['fedours_moe']:
+            from models.duallora_moe.dualmoeloramodel import DualMOELoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALMOELORA'] = DualMOELoraModel
+            lora_config.peft_type = 'DUALMOELORA'
         elif training_args.mode in ['fedpq_sft', 'fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze', 'fedMultipqfreezeA', 'fedMulti2pqfreezeA', 'fedMultipqfreezeA_sft']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -979,12 +984,13 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
 def get_keys_to_del(training_args, new_global_state_dict):
     keys_to_del = []
     if training_args.mode == 'fedours' or training_args.mode == 'fedours_tv' or training_args.mode == 'fedours_excludemean' \
-    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include':
+    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include' \
+    or training_args.mode == 'fedours_moe':
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
             or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
             or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
-            or 'w_gate' in k or 'w_noise' in k:
+            or 'lora_w_gate' in k or 'lora_w_noise' in k:
                 keys_to_del.append(k)
     elif training_args.mode == 'fedpq' or training_args.mode == 'fedpq_sft':
         for k in new_global_state_dict.keys():

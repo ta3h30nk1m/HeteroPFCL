@@ -88,11 +88,17 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
         )
         
-        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_excludemean'] or training_args.mode =='feddat':
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_excludemean',
+                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include'] or training_args.mode =='feddat':
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
+        if training_args.mode in ['fedours_moe']:
+            from models.duallora_moe.dualmoeloramodel import DualMOELoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALMOELORA'] = DualMOELoraModel
+            lora_config.peft_type = 'DUALMOELORA'
         elif training_args.mode in ['fedpq_sft', 'fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze', 'fedMultipqfreezeA', 'fedMulti2pqfreezeA', 'fedMultipqfreezeA_sft']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -129,11 +135,18 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['fedduallastpqfullfreeze', 'fedduallastpqfullfreeze_tv',
                                     'feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean',
                                     'feddualMulti2pqfullfreeze', 'feddualMulti2pqfullfreeze_tv', 'feddualMulti2pqfullfreeze_excludemean',
-                                    'feddualpqfullfreeze','feddualpqfullfreeze_tv']:
+                                    'feddualpqfullfreeze','feddualpqfullfreeze_tv',
+                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include']:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeLORA'] = Dual_PQLorafreezeModel
             lora_config.peft_type = 'DUALPQFullFreezeLORA'
+        
+        elif training_args.mode in ['feddualMultipqfullfreeze_moe']:
+            from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = Dual_PQMOELorafreezeModel
+            lora_config.peft_type = 'DUALPQMOEFullFreezeLORA'
         
         elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean',
                                     'feddualMulti2pqfullfreezeA', 'feddualMulti2pqfullfreezeA_tv', 'feddualMulti2pqfullfreezeA_excludemean',]:
@@ -542,7 +555,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullFreezeLayer):
                         m.use_pq = False
         
-    elif training_args.mode == 'feddualMultipqfullfreeze' or training_args.mode == 'feddualMultipqfullfreeze_tv' or training_args.mode == 'feddualMultipqfullfreeze_excludemean':
+    elif training_args.mode == 'feddualMultipqfullfreeze' or training_args.mode == 'feddualMultipqfullfreeze_tv' or training_args.mode == 'feddualMultipqfullfreeze_excludemean' \
+        or training_args.mode == 'feddualMultipqfullfreeze_include' or training_args.mode == 'feddualMultipqfullfreeze_tv_include' or training_args.mode == 'feddualMultipqfullfreeze_excludemean_include' \
+        or training_args.mode == 'feddualMultipqfullfreeze_moe':
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -673,7 +688,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             model.load_state_dict(state_dict, strict=False)
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean',
                                     'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean',
-                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean']:
+                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean',
+                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe']:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
@@ -975,12 +991,14 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
 
 def get_keys_to_del(training_args, new_global_state_dict):
     keys_to_del = []
-    if training_args.mode == 'fedours' or training_args.mode == 'fedours_tv' or training_args.mode == 'fedours_excludemean':
+    if training_args.mode == 'fedours' or training_args.mode == 'fedours_tv' or training_args.mode == 'fedours_excludemean' \
+    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include' \
+    or training_args.mode == 'fedours_moe':
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
             or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
             or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
-            or 'w_gate' in k or 'w_noise' in k:
+            or 'lora_w_gate' in k or 'lora_w_noise' in k:
                 keys_to_del.append(k)
     elif training_args.mode == 'fedpq' or training_args.mode == 'fedpq_sft':
         for k in new_global_state_dict.keys():
@@ -1103,7 +1121,9 @@ def get_keys_to_del(training_args, new_global_state_dict):
                 keys_to_del.append(k)
     elif training_args.mode == 'feddualMultipqfreeze' or training_args.mode == 'feddualMultipqfullfreeze' or training_args.mode == 'feddualMultipqfullfreeze_tv' or training_args.mode == 'feddualMultipqfullfreeze_excludemean' \
         or training_args.mode == 'feddualMultipqfullfreezeA' or training_args.mode == 'feddualMultipqfullfreezeA_tv' or training_args.mode == 'feddualMultipqfullfreezeA_excludemean' \
-        or training_args.mode == 'feddualMultipqfreezeA' or training_args.mode == 'feddualMultipqfreezeA_excludemean':
+        or training_args.mode == 'feddualMultipqfreezeA' or training_args.mode == 'feddualMultipqfreezeA_excludemean' \
+        or training_args.mode == 'feddualMultipqfullfreeze_include' or training_args.mode == 'feddualMultipqfullfreeze_tv_include' or training_args.mode == 'feddualMultipqfullfreeze_excludemean_include'\
+        or training_args.mode == 'feddualMultipqfullfreeze_moe':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:

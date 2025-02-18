@@ -133,3 +133,5 @@ class TrainingConfig(transformers.TrainingArguments):
     
     load_pretrained_random:bool = False
     load_pretrained_pca:bool = False
+    
+    softmax_temp: float = 0.2

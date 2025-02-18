@@ -67,7 +67,7 @@ def OURS_set_state_dict(model, global_state_dict, local_state_dict_list, trainin
         if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
         or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
         or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
-        or 'w_gate' in k or 'w_noise' in k:
+        or 'lora_w_gate' in k or 'lora_w_noise' in k:
             keys_to_del.append(k)
     for k in keys_to_del:
         del global_state_dict[k]
@@ -180,7 +180,7 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
             weights = sim[client_id].clone()
             
             weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() - weights[client_id]
             
@@ -213,6 +213,56 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
         else:
             model.load_state_dict(new_global_state_dict, strict=False) 
 
+def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+    # first load loca model and then load global model
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
+            
+        # gradient based similarity wegithed averaging (exclude own)
+        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
+            # similarity matrix
+            sim = extra_state_dict_dict['task_similarity']
+            new_global_state_dict = {}
+            
+            weights = sim[client_id].clone()
+            
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
+            
+            sim_sum = weights.sum() #- weights[client_id]
+            
+            # # weights[client_id] = sim_sum
+            # # sim_sum += sim_sum
+            
+            for name in global_state_dict.keys():
+                new_param = 0
+                if 'lora1' in name:
+                    target_key = name.replace('lora1', 'lora2')
+                elif 'ia3_l_1' in name:
+                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                
+                for id in range(training_args.num_clients):
+                    # if id == client_id:
+                    #     continue
+                    # if training_args.is_hetero_model:
+                    #     breakpoint()
+                    # else:
+                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    
+                new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        else:
+            new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False) 
+
+
 def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
     # first load loca model and then load global model
     with torch.no_grad():
@@ -228,9 +278,9 @@ def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, clie
             new_global_state_dict = {}
             
             weights = sim[client_id].clone()
-            weights = (weights).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
-            sim_sum = weights.sum() - weights[client_id]
+            sim_sum = weights.sum() #- weights[client_id]
             
             # # weights[client_id] = sim_sum
             # # sim_sum += sim_sum
@@ -363,23 +413,16 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             #     model.module.set_state('lora2')
         loss, outputs = super(LLaVATrainerOURS, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
+        # moe loss
+        # if 'moe' in self.args.mode:
+        #     from models.duallora_moe.dualmoelora import DualMOELoraLayer
+        #     moe_loss = []
+        #     for n, m in model.module.named_modules():
+        #         if isinstance(m, DualMOELoraLayer):
+        #             moe_loss.append(m.moe_loss)
+        #     moe_loss = sum(moe_loss) / len(moe_loss)
+        #     loss += 0.1*moe_loss
         
-        # reg loss
-        # reg_loss = 0
-        # for name, param in model.module.named_parameters():
-        #     if 'lora2_P' in name:
-        #         reg_loss += torch.std_mean(param,dim=0)[0]**2
-        # loss += 0.5*reg_loss
-        
-        # l1 loss
-        # l1_loss = 0
-        # for layer_num in range(len(outputs['local_ia3_layer'])):
-        #     l1_loss += torch.sum(torch.abs(outputs['local_ia3_layer'][layer_num])) / len(outputs['local_ia3_layer'])
-        # loss += 0.001*l1_loss
-
-        # loss_kl_1 = kl_loss(outputs['logits'], outputs_target.clone().detach())
-        # loss_kl_1 = ((outputs['logits'] - outputs_target.detach())**2).mean()
-
         return (loss, outputs) if return_outputs else loss
     
     def _inner_training_loop(
@@ -1024,14 +1067,16 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                                or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "weight_decay": self.args.weight_decay,
                 },
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                            or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
                     "weight_decay": self.args.weight_decay,

@@ -485,10 +485,10 @@ def feddualpq_load_state_dict(model, global_state_dict, local_state_dict_list, c
                 for id in range(training_args.num_clients):
                     if id == client_id:
                         continue
-                    if training_args.is_hetero_model:
-                        breakpoint()
-                    else:
-                        new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    # if training_args.is_hetero_model:
+                    #     breakpoint()
+                    # else:
+                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):

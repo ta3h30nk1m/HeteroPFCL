@@ -271,7 +271,7 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
         else:
             model.load_state_dict(local_state_dict_list[client_id], strict=False)  
         
-        model_ids = kwargs['model_ids']
+        model_ids = extra_state_dict_dict['model_ids']
         
         for model_id, homo_ids in model_ids.items():
             if client_id in homo_ids:
@@ -285,7 +285,7 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
             
             weights = sim[client_id].clone()
             
-            for id in range(len(training_args.num_clients)):
+            for id in range(training_args.num_clients):
                 if id not in homo_client_ids:
                     weights[id] = -1e9
             

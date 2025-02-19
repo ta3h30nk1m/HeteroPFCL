@@ -129,10 +129,7 @@ def main():
                 
                 for name in global_state_dict.keys():
                     new_param = 0
-                    if 'lora1' in name:
-                        target_key = name.replace('lora1', 'lora2')
-                    elif 'ia3_l_1' in name:
-                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    target_key = name
                     
                     for id in range(len(prev_local_state_dict_list)):
                         # if id == client_id:
@@ -354,10 +351,10 @@ def main():
                 
                 for name in global_state_dict.keys():
                     new_param = 0
-                    if 'lora1' in name:
-                        target_key = name.replace('lora1', 'lora2')
-                    elif 'ia3_l_1' in name:
-                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    if 'lora' in name:
+                        target_key = name.replace('lora', 'lora2')
+                    elif 'ia3_l' in name:
+                        target_key = name.replace('ia3_l', 'ia3_l_2')
                     
                     for id in range(len(prev_local_state_dict_list)):
                         # if id == client_id:

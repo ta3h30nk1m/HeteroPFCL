@@ -112,30 +112,30 @@ def main():
                 with torch.no_grad():
                     model.load_state_dict(server_state_dict, strict=False)
                 
-                if ('fedours' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l')
-                        local_state_dict[target_key] = server_state_dict[name]
+                # if 'fedours' in training_args.load_checkpoint or :
+                #     local_state_dict = {}
+                #     for name in server_state_dict.keys():
+                #         if 'lora1' in name:
+                #             target_key = name.replace('lora1', 'lora')
+                #         elif 'ia3_l_1' in name:
+                #             target_key = name.replace('ia3_l_1', 'ia3_l')
+                #         local_state_dict[target_key] = server_state_dict[name]
                     
-                    server_state_dict = local_state_dict
+                #     server_state_dict = local_state_dict
                 
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
+                # with torch.no_grad():
+                #     model.load_state_dict(server_state_dict, strict=False)
                     
-                if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                        local_state_dict[target_key] = server_state_dict[name]
+                # if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
+                #     local_state_dict = {}
+                #     for name in server_state_dict.keys():
+                #         if 'lora1' in name:
+                #             target_key = name.replace('lora1', 'lora2')
+                #         elif 'ia3_l_1' in name:
+                #             target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                #         local_state_dict[target_key] = server_state_dict[name]
                     
-                    model.load_state_dict(local_state_dict, strict=False)
+                #     model.load_state_dict(local_state_dict, strict=False)
             
             
             global_state_dict = get_peft_state_maybe_zero_3(
@@ -307,28 +307,20 @@ def main():
             
                 weights = sim[-1][:-1].clone()
                 
-                weights = (weights/0.2).softmax(dim=0)
+                weights = (weights/training_args.softmax_temp).softmax(dim=0)
                 
                 sim_sum = weights.sum()
                 
                 for name in global_state_dict.keys():
                     new_param = 0
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                    else:
-                        if 'lora' in name:
-                            target_key = name.replace('lora', 'lora2')
-                        elif 'ia3_l' in name:
-                            target_key = name.replace('ia3_l', 'ia3_l_2')
+                    if 'lora' in name:
+                        target_key = name.replace('lora', 'lora2')
+                    elif 'ia3_l' in name:
+                        target_key = name.replace('ia3_l', 'ia3_l_2')
                     for id in range(len(prev_local_state_dict_list)):
                         new_param += weights[id]*prev_local_state_dict_list[id][target_key] / sim_sum
                     
                     new_global_state_dict[name] = new_param
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']: 
-                        new_global_state_dict[target_key] = new_param
                 
                 if 'zero3' in training_args.deepspeed:
                     load_deepspeed(new_global_state_dict, model, strict=False)

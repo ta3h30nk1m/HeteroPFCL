@@ -1212,7 +1212,7 @@ def orthonormal_kaiming_uniform_init(m):
 
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer
-def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module):
+def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, model2):
     random.seed(training_args.seed)
     client_task_vectors = []
     for client_id in range(len(train_datalists)):
@@ -1232,6 +1232,7 @@ def get_task_vectors(model, tokenizer, processor, train_datalists, training_args
         extra_state_dict_dict['test_datalist'] = []
         extra_state_dict_dict['processor'] = processor
         extra_state_dict_dict['data_args'] = data_args
+        extra_state_dict_dict['model2'] = model2
         copy_training_args = copy.deepcopy(training_args)
         copy_training_args.per_gpu_train_batch_size = 4
         copy_training_args.gradient_accumulation_steps = 1

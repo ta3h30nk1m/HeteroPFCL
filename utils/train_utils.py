@@ -89,7 +89,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         )
         
         if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_excludemean',
-                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include'] or training_args.mode =='feddat':
+                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero'] or training_args.mode =='feddat':
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
@@ -105,7 +105,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORA'] = PQLoraModel
             lora_config.peft_type = 'PQLORA'
         
-        elif training_args.mode in ['fedlastpqfullfreeze_sft', 'fedlastpqfullfreeze', 'fedlastpqfullfreeze_tv', 'fedlastpqfullfreeze_ours', 
+        elif training_args.mode in ['fedpqfullfreeze_sft', 'fedpqfullfreeze',
+                                    'fedlastpqfullfreeze_sft', 'fedlastpqfullfreeze', 'fedlastpqfullfreeze_tv', 'fedlastpqfullfreeze_ours', 
                                     'fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours',
                                     'fedMulti2pqfullfreeze_sft', 'fedMulti2pqfullfreeze', 'fedMulti2pqfullfreeze_tv', 'fedMulti2pqfullfreeze_ours',
                                     'fedMulti2pqfullfreezeA','fedMultipqfullfreezeA',
@@ -246,6 +247,18 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     print(f"{p} frozen!!")
                     p.requires_grad = False
 
+    elif training_args.mode == 'fedpqfullfreeze' or training_args.mode == 'fedpqfullfreeze_sft':
+        from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            for n, p in layer.named_parameters():
+                if 'lora_A' in n:
+                    p.requires_grad = False
+                elif 'lora_B' in n:
+                    p.requires_grad = False
+                    nn.init.kaiming_uniform_(p, a=math.sqrt(5))
+                elif 'lora_P' in n or 'lora_Q' in n:
+                    nn.init.zeros_(p)
+    
     elif training_args.mode == 'fedMultipqfullfreeze' or training_args.mode == 'fedMultipqfullfreeze_sft' or training_args.mode == 'fedMultipqfullfreeze_tv' or training_args.mode == 'fedMultipqfullfreeze_ours':
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(model.base_model.language_model.model.layers) // 4
@@ -992,7 +1005,7 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
 def get_keys_to_del(training_args, new_global_state_dict):
     keys_to_del = []
     if training_args.mode == 'fedours' or training_args.mode == 'fedours_tv' or training_args.mode == 'fedours_excludemean' \
-    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include' \
+    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include' or training_args.mode == 'fedours_excludemean_hetero' \
     or training_args.mode == 'fedours_moe':
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
@@ -1078,6 +1091,10 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+                keys_to_del.append(k)
+    elif training_args.mode == 'fedpqfullfreeze' or training_args.mode == 'fedpqfullfreeze_sft':
+        for k in new_global_state_dict.keys():
+            if 'lora_P' not in k and 'lora_Q' not in k:
                 keys_to_del.append(k)
     elif training_args.mode == 'feddualpq' or training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv':
         for k in new_global_state_dict.keys():

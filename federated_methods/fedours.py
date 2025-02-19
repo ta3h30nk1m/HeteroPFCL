@@ -263,6 +263,64 @@ def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_l
             model.load_state_dict(new_global_state_dict, strict=False) 
 
 
+def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+    # first load loca model and then load global model
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
+        
+        model_ids = kwargs['model_ids']
+        
+        for model_id, homo_ids in model_ids.items():
+            if client_id in homo_ids:
+                homo_client_ids = homo_ids
+        
+        # gradient based similarity wegithed averaging (exclude own)
+        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
+            # similarity matrix
+            sim = extra_state_dict_dict['task_similarity']
+            new_global_state_dict = {}
+            
+            weights = sim[client_id].clone()
+            
+            for id in range(len(training_args.num_clients)):
+                if id not in homo_client_ids:
+                    weights[id] = -1e9
+            
+            weights[client_id] = -1e9
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
+            
+            sim_sum = weights.sum() - weights[client_id]
+            
+            # # weights[client_id] = sim_sum
+            # # sim_sum += sim_sum
+            
+            for name in global_state_dict.keys():
+                new_param = 0
+                if 'lora1' in name:
+                    target_key = name.replace('lora1', 'lora2')
+                elif 'ia3_l_1' in name:
+                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                
+                for id in homo_client_ids:
+                    if id == client_id:
+                        continue
+                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    
+                new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        else:
+            new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False) 
+
+
 def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
     # first load loca model and then load global model
     with torch.no_grad():

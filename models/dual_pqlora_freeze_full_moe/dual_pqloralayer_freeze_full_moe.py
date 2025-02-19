@@ -38,7 +38,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
     adapter_layer_names = ("lora1_A", "lora1_B", "lora1_embedding_A", "lora1_embedding_B", "lora1_P", "lora1_Q",
                            "lora2_A", "lora2_B", "lora2_embedding_A", "lora2_embedding_B", "lora2_P", "lora2_Q",
-                           "lora_w_gate", "lora_w_noise")
+                           "lora_w_gate")#, "lora_w_noise")
     # All names of other parameters that may contain adapter-related parameters
     other_param_names = ("r", "lora_alpha", "scaling", "lora_dropout")
 
@@ -59,7 +59,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         self.lora2_Q = nn.ParameterDict({})
         
         self.lora_w_gate= nn.ParameterDict({})
-        self.lora_w_noise= nn.ParameterDict({})
+        # self.lora_w_noise= nn.ParameterDict({})
         # For Embedding layer
         self.lora1_embedding_A = nn.ParameterDict({})
         self.lora1_embedding_B = nn.ParameterDict({})
@@ -167,8 +167,8 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         else:
             self.scaling[adapter_name] = lora_alpha / r
 
-        self.lora_w_gate[adapter_name] = nn.Parameter(torch.zeros(self.in_features,2), requires_grad=True)
-        self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,2), requires_grad=True)
+        self.lora_w_gate[adapter_name] = nn.Parameter(torch.tensor([0.5]), requires_grad=True)
+        # self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,2), requires_grad=True)
 
         # for inits that require access to the base weight, use gather_param_ctx so that the weight is gathered when using DeepSpeed
         if isinstance(init_lora_weights, str) and init_lora_weights.startswith("pissa"):
@@ -475,9 +475,9 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             elif self.active_state =='lora2':
                 lora_output = lora2_B(lora2_A(dropout(sub_batch))@lora2_P + lora2_Q) * scaling
             elif self.active_state =='gate':
-                weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
-                
-                lora_output = weights[:,0].unsqueeze(-1).unsqueeze(-1) * lora1_B(lora1_A(dropout(sub_batch))@lora1_P + lora1_Q) * scaling + weights[:,1].unsqueeze(-1).unsqueeze(-1) * lora2_B(lora2_A(dropout(sub_batch))@lora2_P + lora2_Q) * scaling
+                # weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], train=self.train)
+                weights = self.lora_w_gate[active_adapter][0]
+                lora_output = weights * lora1_B(lora1_A(dropout(sub_batch))@lora1_P + lora1_Q) * scaling + (1-weights) * lora2_B(lora2_A(dropout(sub_batch))@lora2_P + lora2_Q) * scaling
                 
                 self.moe_loss = cv_squared(weights.sum(0))
             result[sub_batch_indices_list[i]] += lora_output.to(torch_result_dtype)
@@ -533,8 +533,6 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             p.requires_grad = True
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
-        for p in self.lora_w_noise.parameters():
-            p.requires_grad = True
         
     
     def activate_lora1(self):
@@ -565,8 +563,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             p.requires_grad = False
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
-        for p in self.lora_w_noise.parameters():
-            p.requires_grad = True
+
     def activate_lora2(self):
         if not self.freeze_AB:
             for p in self.lora1_A.parameters():
@@ -595,8 +592,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             p.requires_grad = True
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
-        for p in self.lora_w_noise.parameters():
-            p.requires_grad = True
+
 # Below code is based on https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
 # and modified to work with PyTorch FSDP
 
@@ -827,9 +823,10 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
                         elif self.active_state == 'lora2':
                             result = result + lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
                         elif self.active_state == 'gate':
-                            weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
-                            result = result + weights[:,0].unsqueeze(-1).unsqueeze(-1) * lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling + weights[:,1].unsqueeze(-1).unsqueeze(-1) * lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
-                            self.moe_loss = cv_squared(weights.sum(0))
+                            # weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], train=self.train)
+                            weights = self.lora_w_gate[active_adapter][0]
+                            result = result + weights * lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling + (1-weights)* lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
+                            # self.moe_loss = cv_squared(weights.sum(0))
                     else:
                         if self.active_state == 'lora1':
                             result = result + lora1_B(lora1_A(dropout(x))) * scaling
@@ -837,11 +834,11 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
                             result = result + lora2_B(lora2_A(dropout(x))) * scaling
                         elif self.active_state == 'gate':
                             # result = result + (lora1_B(lora1_A(dropout(x))) + lora2_B(lora2_A(dropout(x)))) * scaling / 2
-                            weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
-                        
-                            result = result + weights[:,0].unsqueeze(-1).unsqueeze(-1) * lora1_B(lora1_A(dropout(x))) * scaling + weights[:,1].unsqueeze(-1).unsqueeze(-1)  * lora2_B(lora2_A(dropout(x))) * scaling
+                            # weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], train=self.train)
+                            weights = self.lora_w_gate[active_adapter][0]
+                            result = result + weights * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights) * lora2_B(lora2_A(dropout(x))) * scaling
                             
-                            self.moe_loss = cv_squared(weights.sum(0))
+                            # self.moe_loss = cv_squared(weights.sum(0))
                 else:
                     raise ValueError("only support vanilla lora")
                     if isinstance(dropout, nn.Identity) or not self.training:

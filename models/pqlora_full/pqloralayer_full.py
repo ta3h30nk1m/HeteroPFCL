@@ -187,7 +187,8 @@ class PQLoraFullLayer(BaseTunerLayer):
             if self.lora_bias[adapter_name]:
                 nn.init.zeros_(self.lora_B[adapter_name].bias)
             
-            nn.init.ones_(self.lora_P[adapter_name])
+            # nn.init.ones_(self.lora_P[adapter_name])
+            self.lora_P[adapter_name].data = torch.eye(self.lora_P[adapter_name].shape[0])
             nn.init.kaiming_uniform_(self.lora_Q[adapter_name], a=math.sqrt(5))
             
         if adapter_name in self.lora_embedding_A.keys():

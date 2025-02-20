@@ -108,11 +108,24 @@ def main():
             if training_args.load_checkpoint is not None and not training_args.fedours:
                 logger.info(f'load {training_args.load_checkpoint}')
                 # server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
-                load_round = int(training_args.load_checkpoint.split('round')[-1][:-3])+1
+                load_round = int(training_args.load_checkpoint.split('round')[-1][:-4])+1
                 load_dir = training_args.load_checkpoint.split('/')[0]
                 prev_local_state_dict_list = []
                 for local_id in range(10):
                     prev_local_state_dict_list.append(torch.load(f"{load_dir}/{local_id}_client_model_round{load_round}.pth", map_location='cpu'))
+                
+                state_dict = get_peft_state_maybe_zero_3(
+                        model.named_parameters(), training_args.lora_bias
+                    )
+                non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                    model.named_parameters()
+                )
+                state_dict.update(non_lora_state_dict)
+                
+                keys_to_del = get_keys_to_del(training_args, state_dict)
+                for k in keys_to_del:
+                    del state_dict[k]
+                global_state_dict = state_dict
                 
                 new_global_state_dict = {}
             
@@ -166,7 +179,7 @@ def main():
                     load_deepspeed(new_global_state_dict, model, strict=False)
                 else:
                     model.load_state_dict(new_global_state_dict, strict=False) 
-            
+                del state_dict
             
             global_state_dict = get_peft_state_maybe_zero_3(
                         model.named_parameters(), training_args.lora_bias
@@ -322,6 +335,7 @@ def main():
             print('model loading done')
             
             if training_args.fedours:
+                global_state_dict = global_state_dict_list[client_id]
                 sims = []
                 for grad_idx in range(prev_task_vectors[0].shape[-1]):
                     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in prev_task_vectors] + [current_task_vectors[client_id][:,grad_idx]], dim=0), dim=-1)
@@ -382,8 +396,6 @@ def main():
                         else:
                             new_target_key = target_key
                         new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
-                        
-                    new_global_state_dict[name] = new_param
                     
                     new_global_state_dict[name] = new_param
                 

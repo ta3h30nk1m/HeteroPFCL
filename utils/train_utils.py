@@ -559,7 +559,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         tokenizer.image_token_index = model.config.image_token_index
     
     if training_args.load_pretrained_random or training_args.load_pretrained_pca:
-        if training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours', 'fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft' 'fedMultipqfreezeA' 'fedMultipqfreezeA_sft']:
+        if training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours', 'fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft' 'fedMultipqfreezeA' 'fedMultipqfreezeA_sft',
+                                  'fedMultipqfullfreeze256_sft','fedMultipqfullfreeze256',
+                                  'fedMultipqfullfreeze512_sft','fedMultipqfullfreeze512',
+                                  'fedMultipqfullfreeze1024_sft','fedMultipqfullfreeze1024',
+                                  ]:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
@@ -567,9 +571,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                    if '256' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r256.pth', map_location='cpu')
+                    elif '512' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r512.pth', map_location='cpu')
+                    elif '1024' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                    if '256' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')
+                    elif '512' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r512.pth', map_location='cpu')
+                    elif '1024' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
             if 'freezeA' in training_args.mode:
                 new_state_dict = {}
                 for k, v in state_dict.items():
@@ -589,7 +607,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean',
                                     'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean',
                                     'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean',
-                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe']:
+                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe',
+                                    'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
+                                    'feddualMultipqfullfreeze256_tv','feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv'
+                                    ]:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
@@ -597,9 +618,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                    if '256' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r256.pth', map_location='cpu')
+                    elif '512' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r512.pth', map_location='cpu')
+                    elif '1024' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                    if '256' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')
+                    elif '512' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r512.pth', map_location='cpu')
+                    elif '1024' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
             new_state_dict = {}
             for k, v in state_dict.items():
                 new_k1 = k.replace('lora', 'lora1')
@@ -616,54 +651,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 new_state_dict[new_k1] = v
                 new_state_dict[new_k2] = v
             model.load_state_dict(new_state_dict, strict=False)
-        elif training_args.mode in ['fedMulti2pqfullfreeze_sft', 'fedMulti2pqfullfreeze', 'fedMulti2pqfullfreeze_tv', 'fedMulti2pqfullfreeze_ours', 'fedMulti2pqfullfreezeA', 'fedMulti2pqfreezeA']:
-            if training_args.load_pretrained_random:
-                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise2_orthnormal_init.pth', map_location='cpu')
-                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise2_orthnormal_init.pth', map_location='cpu')
-            elif training_args.load_pretrained_pca:
-                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise2_pca_init.pth', map_location='cpu')
-                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise2_pca_init.pth', map_location='cpu')
-            
-            if 'freezeA' in training_args.mode:
-                new_state_dict = {}
-                for k, v in state_dict.items():
-                    if 'lora_P' in k:
-                        if 'full' in training_args.mode:
-                            v.data = torch.eye(v.shape[0]).to(torch.bfloat16)
-                        else:
-                            v = torch.ones(v.shape[0]).to(torch.bfloat16)
-                    elif 'lora_B' in k:
-                        v.data = torch.zeros_like(v)
-                    elif 'lora_Q' in k:
-                        nn.init.kaiming_uniform_(v, a=math.sqrt(5))
-                    new_state_dict[k] = v
-                state_dict = new_state_dict
-            
-            model.load_state_dict(state_dict, strict=False)
-        elif training_args.mode in ['feddualMulti2pqfullfreeze', 'feddualMulti2pqfullfreeze_tv', 'feddualMulti2pqfullfreeze_excludemean',
-                                    'feddualMulti2pqfullfreezeA', 'feddualMulti2pqfullfreezeA_tv', 'feddualMulti2pqfullfreezeA_excludemean',
-                                    'feddualMulti2pqfreezeA', 'feddualMulti2pqfreezeA_excludemean',]:
-            if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                state_dict = torch.load('llava_1b_blockwise2_orthnormal_init.pth', map_location='cpu')
-            elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                state_dict = torch.load('llava_3b_blockwise2_orthnormal_init.pth', map_location='cpu')
-            new_state_dict = {}
-            for k, v in state_dict.items():
-                new_k1 = k.replace('lora', 'lora1')
-                new_k2 = k.replace('lora', 'lora2')
-                if 'freezeA' in training_args.mode and 'lora_P' in k:
-                    v.data = torch.eye(v.shape[0]).to(torch.bfloat16)
-                elif 'freezeA' in training_args.mode and 'lora_B' in k:
-                    v.data = torch.zeros_like(v)
-                elif 'freezeA' in training_args.mode and 'lora_Q' in k:
-                    nn.init.kaiming_uniform_(v, a=math.sqrt(5))
-                new_state_dict[new_k1] = v
-                new_state_dict[new_k2] = v
-            model.load_state_dict(new_state_dict, strict=False)
+    
         print('load pretrained lora')
     
     total_count = 0

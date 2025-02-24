@@ -307,7 +307,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
-                    if isinstance(m, PQLoraFullFreezeLayer):
+                    if isinstance(m, PQLoraFullLayer):
                         m.r['default'] = r
                         m.lora_alpha['default'] = r*2
                         m.lora_A['default'] = nn.Linear(m.in_features, r, bias=False)
@@ -322,7 +322,6 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         nn.init.zeros_(m.lora_P['default'])
                         nn.init.zeros_(m.lora_Q['default'])
                         
-                        breakpoint()
             else:
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):

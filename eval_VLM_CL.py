@@ -425,6 +425,7 @@ def main():
             if not training_args.zeroshot:
                 model.load_state_dict(client_state_dict, strict=False)
                 model = model.to(torch.bfloat16)
+                model = model.to(device)
             if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean'] or 'dual' in training_args.mode:
                 model.set_state('gate')
             
@@ -459,6 +460,7 @@ def main():
                 model.load_state_dict(client_state_dict, strict=False)
                 
                 model = model.to(torch.bfloat16)
+                model = model.to(device)
                 
                 if ('ours_generator' in training_args.mode or 'fedours' in training_args.mode) and training_args.use_task_vector:
                     logger.info(f'load ./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth')

@@ -136,3 +136,6 @@ class TrainingConfig(transformers.TrainingArguments):
     
     softmax_temp: float = 0.2
     save_per_step: bool = False
+    
+    taskloss_weight: float = 0.1
+    distill_weight: float = 0.1

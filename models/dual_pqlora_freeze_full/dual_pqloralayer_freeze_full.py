@@ -32,6 +32,44 @@ from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.dora import DoraConv2dLayer, DoraConv3dLayer, DoraEmbeddingLayer, DoraLinearLayer, _DoraConvNdLayer
 import copy
 
+class ProjectMLP(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        hidden_features: int = 8,
+        bias: bool = False,
+        dropout: float = 0.0,
+        activation: str = "relu",
+    ) -> None:
+        super().__init__()
+
+        self.in_features = in_features
+        self.out_features = out_features
+        self.hidden_features = hidden_features
+        
+        # non_linearity = nn.ReLU(inplace=True)
+        # if activation == "sigmoid":
+        #     non_linearity = nn.Sigmoid()
+        # elif activation == "attention":
+        #     non_linearity = nn.Softmax(dim=-1)
+        non_linearity = nn.SiLU(inplace=True)
+
+        self.block = nn.Sequential(
+            nn.Linear(self.in_features, self.hidden_features, bias=bias),
+            non_linearity,
+            nn.Linear(self.hidden_features, self.out_features, bias=bias),
+        )
+        if dropout > 0.0:
+            self.block[1].register_forward_hook(
+                lambda m, inp, out: F.dropout(out, p=dropout, training=m.training)
+            )
+
+    def forward(self, x: torch.Tensor):
+        out = self.block(x)
+        return out
+
+
 class PQLoraFullFreezeLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
     adapter_layer_names = ("lora1_A", "lora1_B", "lora1_embedding_A", "lora1_embedding_B", "lora1_P", "lora1_Q",

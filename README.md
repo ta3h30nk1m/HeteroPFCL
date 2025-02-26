@@ -19,7 +19,7 @@ gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW
 ```
     - blockwise2 (8 layers)
 ```bash
-gdrive files downlaod 1daRFCws40l7dKstM6b_takNBF0xShZm7
+gdrive files download 1daRFCws40l7dKstM6b_takNBF0xShZm7
 gdrive files download 1xqGdFk49_3J7Y2Wtyn9eSKv9FL8lqSDe
 ```
     - blockwise (4 layers) - PCA
@@ -29,8 +29,24 @@ gdrive files download 1iQYOO5VNRTA282JZCsNlSWLF4x4n6R5c
 ```
     - blockwise2 (8 layers) - PCA
 ```bash
-gdrive files downlaod 1OTDkcu1hf_U09LM6ddyySFfJrAIZssfw
+gdrive files download 1OTDkcu1hf_U09LM6ddyySFfJrAIZssfw
 gdrive files download 1u53165H0il1leqA4dyo2k7MFNjd1u3_w
+```
+
+    - blockwise - PCA (R256)
+```bash
+gdrive files download 1IS4fEK0-KmVJ9rgmCtIzhYEDjpJWSW8x
+gdrive files download 1slnzeTumli3s5nTWkpLzJfRq0KW8-cUt
+```
+    - blockwise - PCA (R512)
+```bash
+gdrive files download 1tHjBCnYtObyQibuqdSrk7vvCEBRJemkA
+gdrive files download 1IZLEG2F1F2YiR-5QhwqldLnJvhup45Ao
+```
+    - blockwise - PCA (R1024)
+```bash
+gdrive files download 1uDJ3eMnsbdHcfxqphpPL57ovk1HqKEOU
+gdrive files download 1ADtJlXtyMWNVDk_W9GWG5CLawj64tiQ6
 ```
 
 ## New data instruction

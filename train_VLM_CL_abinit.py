@@ -68,7 +68,7 @@ def main():
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
     # select functions
-    set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules = select_method(training_args.mode)
+    # set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules = select_method(training_args.mode)
     
     # create folder
     training_args.state_dir = training_args.state_dir + '_' + training_args.note

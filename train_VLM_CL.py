@@ -107,36 +107,79 @@ def main():
             
             if training_args.load_checkpoint is not None and not training_args.fedours:
                 logger.info(f'load {training_args.load_checkpoint}')
-                server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
+                # server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
+                load_round = int(training_args.load_checkpoint.split('round')[-1][:-4])+1
+                load_dir = training_args.load_checkpoint.split('/')[0]
+                prev_local_state_dict_list = []
+                for local_id in range(10):
+                    prev_local_state_dict_list.append(torch.load(f"{load_dir}/{local_id}_client_model_round{load_round}.pth", map_location='cpu'))
                 
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
+                state_dict = get_peft_state_maybe_zero_3(
+                        model.named_parameters(), training_args.lora_bias
+                    )
+                non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                    model.named_parameters()
+                )
+                state_dict.update(non_lora_state_dict)
                 
-                if ('fedours' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    server_state_dict = local_state_dict
+                keys_to_del = get_keys_to_del(training_args, state_dict)
+                for k in keys_to_del:
+                    del state_dict[k]
+                global_state_dict = state_dict
                 
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
-                    
-                if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    model.load_state_dict(local_state_dict, strict=False)
+                new_global_state_dict = {}
             
+                weights = torch.ones(10)
+                sim_sum = weights.sum() #- weights[client_id]
+            
+                # # weights[client_id] = sim_sum
+                # # sim_sum += sim_sum
+                cur_layer_num = []
+                for k in global_state_dict.keys():
+                    if 'layers.' in k:
+                        cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num = sorted(list(set(cur_layer_num)))
+                
+                for name in global_state_dict.keys():
+                    new_param = 0
+                    target_key = name
+                    
+                    for id in range(len(prev_local_state_dict_list)):
+                        # if id == client_id:
+                        #     continue
+                        # else:
+                        splited = target_key.split('.')
+                        # if layer number is different
+                        layer_num = []
+                        for k in prev_local_state_dict_list[id].keys():
+                            if 'layers.' in k:
+                                layer_num.append(int(k.split('.')[5]))
+                        layer_num = len(set(layer_num)) // 4
+                        
+                        target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        if cur_layer_num[-1] != target_layers[-1]: # if different size
+                            if int(splited[5]) == cur_layer_num[0]: # mid layer
+                                splited[5] = str(target_layers[0])
+                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
+                                splited[5] = str(target_layers[1])
+                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
+                                splited[5] = str(target_layers[2])
+                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
+                                splited[5] = str(target_layers[3])
+                            new_target_key = '.'.join(splited)
+                        else:
+                            new_target_key = target_key
+                        new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
+                        
+                    new_global_state_dict[name] = new_param
+                    
+                    new_global_state_dict[name] = new_param
+                
+                if 'zero3' in training_args.deepspeed:
+                    load_deepspeed(new_global_state_dict, model, strict=False)
+                else:
+                    model.load_state_dict(new_global_state_dict, strict=False) 
+                del state_dict
             
             global_state_dict = get_peft_state_maybe_zero_3(
                         model.named_parameters(), training_args.lora_bias
@@ -174,7 +217,7 @@ def main():
         prev_task_vectors = tv_weights['task_vectors']
         prev_local_state_dict_list = tv_weights['local_state_dict_list']
         
-        current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module)
+        current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/llama3.2_1B_vl'])
     else:
         current_task_vectors = None
 
@@ -292,6 +335,7 @@ def main():
             print('model loading done')
             
             if training_args.fedours:
+                global_state_dict = global_state_dict_list[client_id]
                 sims = []
                 for grad_idx in range(prev_task_vectors[0].shape[-1]):
                     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in prev_task_vectors] + [current_task_vectors[client_id][:,grad_idx]], dim=0), dim=-1)
@@ -307,28 +351,53 @@ def main():
             
                 weights = sim[-1][:-1].clone()
                 
-                weights = (weights/0.2).softmax(dim=0)
+                weights = (weights/training_args.softmax_temp).softmax(dim=0)
                 
-                sim_sum = weights.sum()
+                sim_sum = weights.sum() #- weights[client_id]
+            
+                # # weights[client_id] = sim_sum
+                # # sim_sum += sim_sum
+                cur_layer_num = []
+                for k in global_state_dict.keys():
+                    if 'layers.' in k:
+                        cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num = sorted(list(set(cur_layer_num)))
                 
                 for name in global_state_dict.keys():
                     new_param = 0
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                    else:
-                        if 'lora' in name:
-                            target_key = name.replace('lora', 'lora2')
-                        elif 'ia3_l' in name:
-                            target_key = name.replace('ia3_l', 'ia3_l_2')
+                    if 'lora' in name:
+                        target_key = name.replace('lora', 'lora2')
+                    elif 'ia3_l' in name:
+                        target_key = name.replace('ia3_l', 'ia3_l_2')
+                    
                     for id in range(len(prev_local_state_dict_list)):
-                        new_param += weights[id]*prev_local_state_dict_list[id][target_key] / sim_sum
+                        # if id == client_id:
+                        #     continue
+                        # else:
+                        splited = target_key.split('.')
+                        # if layer number is different
+                        layer_num = []
+                        for k in prev_local_state_dict_list[id].keys():
+                            if 'layers.' in k:
+                                layer_num.append(int(k.split('.')[5]))
+                        layer_num = len(set(layer_num)) // 4
+                        
+                        target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        if cur_layer_num[-1] != target_layers[-1]: # if different size
+                            if int(splited[5]) == cur_layer_num[0]: # mid layer
+                                splited[5] = str(target_layers[0])
+                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
+                                splited[5] = str(target_layers[1])
+                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
+                                splited[5] = str(target_layers[2])
+                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
+                                splited[5] = str(target_layers[3])
+                            new_target_key = '.'.join(splited)
+                        else:
+                            new_target_key = target_key
+                        new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
                     
                     new_global_state_dict[name] = new_param
-                    if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']: 
-                        new_global_state_dict[target_key] = new_param
                 
                 if 'zero3' in training_args.deepspeed:
                     load_deepspeed(new_global_state_dict, model, strict=False)

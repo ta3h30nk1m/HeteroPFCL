@@ -1067,6 +1067,9 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
                 
                 splited = target_key.split('.')
                 if int(splited[5]) in cur_layer_num:
+                    if 'lora2_P' not in target_key or 'lora2_Q' not in target_key:
+                        continue
+                    
                     for id in range(training_args.num_clients):
                         if id == client_id:
                             continue

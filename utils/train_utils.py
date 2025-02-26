@@ -88,7 +88,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
         )
         
-        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_excludemean',
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include'] or training_args.mode =='feddat':
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -991,9 +991,7 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
 
 def get_keys_to_del(training_args, new_global_state_dict):
     keys_to_del = []
-    if training_args.mode == 'fedours' or training_args.mode == 'fedours_tv' or training_args.mode == 'fedours_excludemean' \
-    or training_args.mode == 'fedours_include' or training_args.mode == 'fedours_tv_include' or training_args.mode == 'fedours_excludemean_include' \
-    or training_args.mode == 'fedours_moe':
+    if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train']:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
             or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \

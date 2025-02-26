@@ -148,6 +148,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze256_tv', 'feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv',
                                     'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg',
                                     'feddualMultipqfullfreeze_distill', 'feddualMultipqfullfreeze_Taskloss', 'feddualMultipqfullfreeze_distillTaskloss'
+                                    'feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze'
                                     ]:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -279,6 +280,33 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             else:
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
+                        m.use_pq = False
+    elif training_args.mode in ['feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze']:
+        from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
+        if 'Block2' in training_args.mode:
+            block_layer_num = 2
+        elif 'Block4' in training_args.mode:
+            block_layer_num = 4
+        block_num = len(model.base_model.language_model.model.layers) // block_layer_num
+        target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n:
+                        p.requires_grad = False
+                        init_B = torch.empty_like(p)
+                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        p.data = copy.deepcopy(init_B)
+                        new_n = n.replace('lora1_B', 'lora2_B')
+                        dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
+                        dict(layer.named_parameters())[new_n].requires_grad = False
+                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora2_Q' in n or 'lora2_Q' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullFreezeLayer):
                         m.use_pq = False
     
     elif training_args.mode in ['fedMultipqfullfreeze256_sft','fedMultipqfullfreeze256',
@@ -1041,7 +1069,27 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
-    
+    elif training_args.mode in ['feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze']:
+        layer_num = []
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k:
+                layer_num.append(int(k.split('.')[5]))
+        layer_num = sorted(list(set(layer_num)))
+        
+        if 'Block2' in training_args.mode:
+            block_layer_num = 2
+        elif 'Block4' in training_args.mode:
+            block_layer_num = 4
+        
+        block_num = len(layer_num) // block_layer_num
+        
+        for i in range(block_num, 0, -1):
+            del layer_num[block_layer_num*i - 1]
+                    
+        layers_to_del = layer_num
+        for k in new_global_state_dict.keys():
+            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+                keys_to_del.append(k)
     elif training_args.mode in ['fedMultipqfullfreeze','fedMultipqfullfreeze_sft','fedMultipqfullfreeze_tv','fedMultipqfullfreeze_ours',
                                 'fedMultipqfullfreezeA','fedMultipqfullfreezeA_sft','fedMultipqfreezeA','fedMultipqfreezeA_sft',
                                 'fedMultipqfullfreeze256', 'fedMultipqfullfreeze256_sft',

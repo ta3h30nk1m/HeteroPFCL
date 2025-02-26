@@ -302,6 +302,78 @@ def fedBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, 
         else:
             model.load_state_dict(new_global_state_dict, strict=False)
 
+def feddualBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    # first load loca model and then load global model
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
+        
+        new_global_state_dict = {}
+        for key in local_state_dict_list[client_id].keys():
+            if 'lora2' in key:
+                new_key = key.replace('lora2','lora1')
+                new_global_state_dict[new_key] = copy.deepcopy(local_state_dict_list[client_id][key])
+                
+        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
+            # similarity matrix
+            sim = extra_state_dict_dict['task_similarity']
+            
+            weights = sim[client_id].clone()
+            
+            weights[client_id] = -1e9
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
+            
+            sim_sum = weights.sum() - weights[client_id]
+            
+            cur_layer_num = []
+            for k in global_state_dict.keys():
+                if 'layers.' in k:
+                    cur_layer_num.append(int(k.split('.')[5]))
+            cur_layer_num = sorted(list(set(cur_layer_num)))
+            
+            if 'Block2' in training_args.mode:
+                block_layer_num = 2
+            elif 'Block4' in training_args.mode:
+                block_layer_num = 4
+            for name in global_state_dict.keys():
+                new_param = 0
+                if 'lora1' in name:
+                    target_key = name.replace('lora1', 'lora2')
+                elif 'ia3_l_1' in name:
+                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                
+                for id in range(training_args.num_clients):
+                    if id == client_id:
+                        continue
+                    splited = target_key.split('.')
+                    # if layer number is different
+                    layer_num = []
+                    for k in local_state_dict_list[id].keys():
+                        if 'layers.' in k:
+                            layer_num.append(int(k.split('.')[5]))
+                    block_num = len(set(layer_num)) // block_layer_num
+                    target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
+                    if cur_layer_num[-1] != target_layers[-1]: # if different size
+                        idx = cur_layer_num.index(int(splited[5]))
+                        splited[5] = str(target_layers[idx])
+                        new_target_key = '.'.join(splited)
+                    else:
+                        new_target_key = target_key
+                    new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
+                    
+                new_global_state_dict[name] = new_param
+                # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+                #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+                #     torch.save(new_global_state_dict, output_dir)
+            # else:
+            #     new_global_state_dict = global_state_dict
+            if 'zero3' in training_args.deepspeed:
+                load_deepspeed(new_global_state_dict, model, strict=False)
+            else:
+                model.load_state_dict(new_global_state_dict, strict=False)
+
 
 def fedMultipq_tv_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model

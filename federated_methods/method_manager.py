@@ -10,7 +10,7 @@ from federated_methods.fedpq import (feddualpq_load_state_dict, fedpq_load_state
                                      fedFMLpq_load_state_dict, feddualFMLpq_load_state_dict, feddualMultipq_load_state_dict,
                                      fedMultipq_load_state_dict, fedlastpq_tv_load_state_dict, fedMultipq_tv_load_state_dict,
                                      feddualMulti2pq_load_state_dict, fedMulti2pq_load_state_dict, fedMulti2pq_tv_load_state_dict,
-                                     feddualMultipq_include_load_state_dict, fedBlockpq_load_state_dict, feddualMultipq_homoAgg_load_state_dict)
+                                     feddualMultipq_include_load_state_dict, fedBlockpq_load_state_dict, feddualMultipq_homoAgg_load_state_dict, feddualBlockpq_load_state_dict)
 
 from federated_methods.fedavg_layerwiseloss import fedavg_layerwise_create_trainer
 from federated_methods.fedours_layerwiseloss import fedours_layerwise_create_trainer
@@ -57,6 +57,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in ['fedBlock2pqfullfreeze', 'fedBlock4pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedBlockpq_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
+    elif mode in ['feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualBlockpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedMultipqfullfreeze_tv' or mode =='fedMultipqfullfreeze_ours':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_tv_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedMulti2pqfullfreeze' or mode =='fedMulti2pqfullfreezeA' or mode == 'fedMulti2pqfreezeA':

@@ -117,6 +117,7 @@ class LLaVATrainerOURS_Layerwise(LLaVATrainerOURS):
                 for target_idx in range(start_range, target_layer):
                     target_repr = model.module.base_model.language_model.model.layers[target_idx].mlp.down_proj.lora_C['default'](outputs.hidden_states[target_idx].detach())
                     blockwise_distill_loss += torch.norm(output_repr[inputs['attention_mask']] - target_repr[inputs['attention_mask']], dim=-1, p=2).nanmean()
+                distillation_loss += blockwise_distill_loss / (target_layer-start_range)
             loss += self.args.distill_weight * distillation_loss
             
         if 'Taskloss' in self.args.mode:

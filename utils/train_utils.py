@@ -162,7 +162,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             lora_config.peft_type = 'DUALPQMOEFullFreezeLORA'
         
         elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean',
-                                    'feddualMulti2pqfullfreezeA', 'feddualMulti2pqfullfreezeA_tv', 'feddualMulti2pqfullfreezeA_excludemean',]:
+                                    'feddualMulti2pqfullfreezeA', 'feddualMulti2pqfullfreezeA_tv', 'feddualMulti2pqfullfreezeA_excludemean','feddualpqfullfreezeA']:
             from models.dual_pqlora_freezeA_full.dual_pqloramodel_freezeA_full import Dual_PQLorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeALORA'] = Dual_PQLorafreezeAModel
@@ -674,6 +674,19 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeALayer):
                         m.use_pq = False
+    
+    elif training_args.mode == 'feddualpqfullfreezeA':
+        from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            for n, p in layer.named_parameters():
+                if 'lora1_A' in n or 'lora2_A' in n:
+                    p.requires_grad = False
+                elif 'lora1_P' in n or 'lora2_P' in n:
+                    p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
+            for n, m in layer.named_modules():
+                if isinstance(m, PQLoraFullFreezeALayer):
+                    m.freeze_AB = True
+    
     elif training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv':
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
@@ -1162,7 +1175,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         for k in new_global_state_dict.keys():
             if 'lora_P' not in k and 'lora_Q' not in k:
                 keys_to_del.append(k)
-    elif training_args.mode == 'feddualpq' or training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv' or training_args.mode == 'feddualpqfreezeA':
+    elif training_args.mode in ['feddualpq', 'feddualpqfullfreeze', 'feddualpqfullfreeze_tv', 'feddualpqfreezeA', 'feddualpqfullfreezeA']:
         for k in new_global_state_dict.keys():
             if 'lora1_P' not in k and 'lora1_Q' not in k:
                 keys_to_del.append(k)

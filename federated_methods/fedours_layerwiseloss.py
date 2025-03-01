@@ -136,6 +136,21 @@ class LLaVATrainerOURS_Layerwise(LLaVATrainerOURS):
                 blockwise_taskloss += loss_fct(
                     shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device)
                 )
+        if 'KLloss' in self.args.mode:
+            # projection -> layernorm -> head -> loss
+            labels = inputs['labels']
+            blockwise_taskloss = 0
+            for target_layer in target_layers:
+                proj_out = model.module.base_model.language_model.model.layers[target_layer].mlp.down_proj.lora_F['default'](outputs.hidden_states[target_layer])
+                proj_out = model.module.base_model.language_model.model.norm(proj_out)
+                block_logit = model.module.base_model.language_model.lm_head(proj_out)
+                
+                shift_logits = block_logit[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+
+                pred = shift_logits[shift_labels != -100]
+                target = (outputs.logits[..., :-1, :].contiguous())[shift_labels != -100].detach()
+                blockwise_taskloss += kl_loss(pred, target)
                 
             loss += self.args.taskloss_weight * blockwise_taskloss
     

@@ -203,16 +203,16 @@ def main():
     state_dict2 = get_peft_state_maybe_zero_3(
         model2.named_parameters(), training_args.lora_bias
     )
-
+    lora_r = 1024
     for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
-        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=training_args.lora_r)
-        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=training_args.lora_r)
+        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=lora_r)
+        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=lora_r)
 
         with torch.no_grad():
-            print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :training_args.lora_r]", V_3b[:, :training_args.lora_r].shape)
-            print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :training_args.lora_r]", V_1b[:, :training_args.lora_r].shape)
-            state_dict[layer_name_3b[idx]] = V_3b[:, :training_args.lora_r].to(torch.bfloat16).T
-            state_dict2[layer_name_1b[idx]] = V_1b[:, :training_args.lora_r].to(torch.bfloat16).T
+            print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :lora_r]", V_3b[:, :lora_r].shape)
+            print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :lora_r]", V_1b[:, :lora_r].shape)
+            state_dict[layer_name_3b[idx]] = V_3b[:, :lora_r].to(torch.bfloat16).T
+            state_dict2[layer_name_1b[idx]] = V_1b[:, :lora_r].to(torch.bfloat16).T
 
 
     output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")

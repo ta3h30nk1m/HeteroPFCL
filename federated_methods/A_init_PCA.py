@@ -95,22 +95,30 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         self.layer_name_1b = []
         self.layer_name_3b = []
 
+        for n, p in self.model.named_parameters():
+            if 'lora_A.default' in n and int(n.split('.')[5]) in self.target_layers:
+                self.layer_name_3b.append(n)
+
         for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
             if idx in self.target_layers:
                 for n, m in layer.named_modules():
                     if 'lora_A.default' in n:
                         self.hooks.append(m.register_forward_hook(hook_fn))
-                        self.layer_name_3b.append(n)
+                        # self.layer_name_3b.append(n)
             else:
                 for n, p in layer.named_parameters():
                     p.requires_grad = False
-                
+
+        for n, p in self.model2.named_parameters():
+            if 'lora_A.default' in n and int(n.split('.')[5]) in self.target_layers2:
+                self.layer_name_1b.append(n)
+
         for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
             if idx in self.target_layers2:
                 for n, m in layer.named_modules():
                     if 'lora_A.default' in n:
                         self.hooks.append(m.register_forward_hook(hook_fn2))
-                        self.layer_name_1b.append(n)
+                        # self.layer_name_1b.append(n)
             else:
                 for n, p in layer.named_parameters():
                     p.requires_grad = False

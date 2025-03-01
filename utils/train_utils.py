@@ -147,7 +147,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze256', 'feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
                                     'feddualMultipqfullfreeze256_tv', 'feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv',
                                     'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg',
-                                    'feddualMultipqfullfreeze_distill', 'feddualMultipqfullfreze_Taskloss', 'feddualMultipqfullfreeze_distillTaskloss','feddualMultipqfullfreeze_KLloss', 'feddualMultipqfullfreeze_distillKLloss',
+                                    'feddualMultipqfullfreeze_distill', 'feddualMultipqfullfreeze_Taskloss', 'feddualMultipqfullfreeze_distillTaskloss','feddualMultipqfullfreeze_KLloss', 'feddualMultipqfullfreeze_distillKLloss',
                                     'feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze'
                                     ]:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
@@ -645,7 +645,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeLayer):
                         m.freeze_AB = True
-                if 'Taskloss' in training_args.mode:
+                if 'Taskloss' in training_args.mode or 'KLloss' in training_args.mode:
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_F = nn.ModuleDict({})

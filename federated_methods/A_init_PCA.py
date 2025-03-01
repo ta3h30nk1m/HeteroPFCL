@@ -85,11 +85,13 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
             self.lora_inputs.append(input)
         def hook_fn2(module, input, output):
             self.lora_inputs2.append(input)
-        last_layer = len(self.model.base_model.language_model.model.layers) // 4
-        self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-        last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
-        self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
-
+        # last_layer = len(self.model.base_model.language_model.model.layers) // 4
+        # self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
+        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
+        self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
+        
         self.lora_A_input_1b = []
         self.lora_A_input_3b = []
         self.layer_name_1b = []

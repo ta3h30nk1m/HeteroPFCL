@@ -87,10 +87,12 @@ class LLaVATrainerABInit(LLaVATrainer):
         def hook_fn2(module, input, output):
             # Store the output for further processing
             self.lora_targets.append(output)
-        last_layer = len(self.model.base_model.language_model.model.layers) // 4
-        self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-        last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
-        self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        # last_layer = len(self.model.base_model.language_model.model.layers) // 4
+        # self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
+        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
+        self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
         if train_A:
             
             # only makes lora_A for target layers trainable

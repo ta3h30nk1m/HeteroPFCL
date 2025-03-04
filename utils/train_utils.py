@@ -719,13 +719,13 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_F = nn.ModuleDict({})
-                            m.lora_F['default'] = ProjectMLP(model.base_model.language_model.config.hidden_size, model.base_model.language_model.config.hidden_size, r).to(compute_dtype)
+                            m.lora_F['default'] = ProjectMLP(model.base_model.language_model.config.hidden_size, model.base_model.language_model.config.hidden_size, 128).to(compute_dtype)
                             m.lora_F['default'].requires_grad = True
                 if 'distill' in training_args.mode:
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_C = nn.ModuleDict({})
-                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,r).to(compute_dtype)
+                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
             else:
                 for n, m in layer.named_modules():
@@ -735,7 +735,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_C = nn.ModuleDict({})
-                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,r).to(compute_dtype)
+                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
     
     elif training_args.mode == 'feddualMultipqfullfreezeA' or training_args.mode == 'feddualMultipqfullfreezeA_tv' or training_args.mode == 'feddualMultipqfullfreezeA_excludemean':

@@ -291,19 +291,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
-                for n, p in layer.named_parameters():
-                    if 'lora1_A' in n or 'lora2_A' in n:
-                        p.requires_grad = False
-                    elif 'lora1_B' in n:
-                        p.requires_grad = False
-                        init_B = torch.empty_like(p)
-                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
-                        p.data = copy.deepcopy(init_B)
-                        new_n = n.replace('lora1_B', 'lora2_B')
-                        dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
-                        dict(layer.named_parameters())[new_n].requires_grad = False
-                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora2_Q' in n or 'lora2_Q' in n:
-                        nn.init.zeros_(p)
+                for n, m in layer.named_modules():
+                    if isinstance(m,PQLoraFullFreezeLayer):
+                        m.lora1_A['default'].apply(orthonormal_kaiming_uniform_init)
+                        m.lora1_B['default'].apply(orthonormal_kaiming_uniform_init)
+                        
+                        m.lora2_A['default'].weight.data = copy.deepcopy(m.lora1_A['default'].weight.data)
+                        m.lora2_B['default'].weight.data = copy.deepcopy(m.lora1_B['default'].weight.data)
+                        
+                        m.lora1_A['default'].weight.requires_grad = False
+                        m.lora1_B['default'].weight.requires_grad = False
+                        m.lora2_A['default'].weight.requires_grad = False
+                        m.lora2_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora1_P['default'])
+                        nn.init.zeros_(m.lora1_Q['default'])
+                        nn.init.zeros_(m.lora2_P['default'])
+                        nn.init.zeros_(m.lora2_Q['default'])
             else:
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeLayer):
@@ -575,7 +579,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         new_n = n.replace('lora1_B', 'lora2_B')
                         dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
                         dict(layer.named_parameters())[new_n].requires_grad = False
-                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora2_Q' in n or 'lora2_Q' in n:
+                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
                         nn.init.zeros_(p)
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeLayer):
@@ -640,7 +644,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         new_n = n.replace('lora1_B', 'lora2_B')
                         dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
                         dict(layer.named_parameters())[new_n].requires_grad = False
-                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora2_Q' in n or 'lora2_Q' in n:
+                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
                         nn.init.zeros_(p)
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullFreezeLayer):
@@ -713,7 +717,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         new_n = n.replace('lora1_B', 'lora2_B')
                         dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
                         dict(layer.named_parameters())[new_n].requires_grad = False
-                elif 'lora1_P' in n or 'lora2_P' in n or 'lora2_Q' in n or 'lora2_Q' in n:
+                elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
                     nn.init.zeros_(p)
             for n, m in layer.named_modules():
                 if isinstance(m, PQLoraFullFreezeLayer):

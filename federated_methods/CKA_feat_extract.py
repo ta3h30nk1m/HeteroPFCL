@@ -69,7 +69,7 @@ def cka_create_trainer(model, tokenizer, training_args, data_module, model2):
         tokenizer=tokenizer,
         args=training_args,
         client_id = 0,
-        curr_round = 1,
+        curr_round = 0,
         test_datalist=None,
         processor=None,
         data_args=None,
@@ -98,10 +98,9 @@ class CKA_Feat_Extract(LLaVATrainerFEDAVG):
         # model: 3b
         # model2: 1b
         with torch.no_grad():
-            loss, outputs = super(CKA_Feat_Extract, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-
-            loss2, outputs2 = super(CKA_Feat_Extract, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+            loss2, outputs2 = super(CKA_Feat_Extract, self).compute_loss(self.model2, copy.deepcopy(inputs), return_outputs=True, num_items_in_batch=num_items_in_batch)
         
+        loss, outputs = super(CKA_Feat_Extract, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         if len(self.hidden_feat_1b) == 0:
             for feat in outputs.hidden_states:
                 self.hidden_feat_3b.append(feat.reshape(-1, feat.size(-1)).detach().cpu())

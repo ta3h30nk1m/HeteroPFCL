@@ -103,8 +103,8 @@ class LLaVATrainerOURS_PQGRAD(LLaVATrainerFEDAVG):
         self.mu = 0.1
         
         self.fisher_ema_ratio = ema_ratio
-        self.task_vector=task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
-        self.fisher_old = fisher_old #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
+        self.task_vector= None #task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
+        self.fisher_old = [f.cuda() for f in self.fisher_old] if fisher_old is not None else None #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
         # self.fisher_cur = 0
         # self.fisher_cnt = 0
         self.fisher_freq = fisher_freq

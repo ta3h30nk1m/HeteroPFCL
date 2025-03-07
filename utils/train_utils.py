@@ -88,7 +88,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
         )
         
-        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean',
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero', 'feddat']:
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -618,13 +618,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     elif training_args.mode == 'feddualpqfreezeA':
         from models.dual_pqlora_freezeA.dual_pqloralayer_freezeA import PQLoraFreezeALayer
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
-            for n, p in layer.named_parameters():
-                if 'lora1_A' in n or 'lora2_A' in n:
-                    p.requires_grad = False
-                elif 'lora1_P' in n or 'lora2_P' in n:
-                    p.data = torch.ones_like(p)
             for n, m in layer.named_modules():
-                if isinstance(m, PQLoraFreezeALayer):
+                if isinstance(m,PQLoraFreezeALayer):
+                    m.lora1_A['default'].apply(orthonormal_kaiming_uniform_init)
+                    m.lora2_A['default'].weight.data = copy.deepcopy(m.lora1_A['default'].weight.data)
+                    m.lora1_A['default'].weight.requires_grad = False
+                    m.lora2_A['default'].weight.requires_grad = False
+                    
+                    m.lora1_P['default'].data = torch.ones_like(m.lora1_P['default'])
+                    m.lora2_P['default'].data = torch.ones_like(m.lora2_P['default'])
+
                     m.freeze_AB = True
 
     elif training_args.mode in ['feddualMultipqfullfreeze','feddualMultipqfullfreeze_tv','feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
@@ -838,33 +841,39 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     elif training_args.mode == 'feddualpqfullfreezeA':
         from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
-            for n, p in layer.named_parameters():
-                if 'lora1_A' in n or 'lora2_A' in n:
-                    p.requires_grad = False
-                elif 'lora1_P' in n or 'lora2_P' in n:
-                    p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
             for n, m in layer.named_modules():
-                if isinstance(m, PQLoraFullFreezeALayer):
+                if isinstance(m,PQLoraFullFreezeALayer):
+                    m.lora1_A['default'].apply(orthonormal_kaiming_uniform_init)
+                    m.lora2_A['default'].weight.data = copy.deepcopy(m.lora1_A['default'].weight.data)
+                    m.lora1_A['default'].weight.requires_grad = False
+                    m.lora2_A['default'].weight.requires_grad = False
+                    
+                    m.lora1_P['default'].data = torch.eye(m.lora1_P['default'].shape[0]).to(torch.bfloat16)
+                    m.lora2_P['default'].data = torch.eye(m.lora2_P['default'].shape[0]).to(torch.bfloat16)
+
                     m.freeze_AB = True
     
     elif training_args.mode == 'feddualpqfullfreeze' or training_args.mode == 'feddualpqfullfreeze_tv':
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
-            for n, p in layer.named_parameters():
-                if 'lora1_A' in n or 'lora2_A' in n:
-                    p.requires_grad = False
-                elif 'lora1_B' in n:
-                        p.requires_grad = False
-                        init_B = torch.empty_like(p)
-                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
-                        p.data = copy.deepcopy(init_B)
-                        new_n = n.replace('lora1_B', 'lora2_B')
-                        dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
-                        dict(layer.named_parameters())[new_n].requires_grad = False
-                elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
-                    nn.init.zeros_(p)
             for n, m in layer.named_modules():
-                if isinstance(m, PQLoraFullFreezeLayer):
+                if isinstance(m,PQLoraFullFreezeLayer):
+                    m.lora1_A['default'].apply(orthonormal_kaiming_uniform_init)
+                    m.lora1_B['default'].apply(orthonormal_kaiming_uniform_init)
+                    
+                    m.lora2_A['default'].weight.data = copy.deepcopy(m.lora1_A['default'].weight.data)
+                    m.lora2_B['default'].weight.data = copy.deepcopy(m.lora1_B['default'].weight.data)
+                    
+                    m.lora1_A['default'].weight.requires_grad = False
+                    m.lora1_B['default'].weight.requires_grad = False
+                    m.lora2_A['default'].weight.requires_grad = False
+                    m.lora2_B['default'].weight.requires_grad = False
+                    
+                    nn.init.zeros_(m.lora1_P['default'])
+                    nn.init.zeros_(m.lora1_Q['default'])
+                    nn.init.zeros_(m.lora2_P['default'])
+                    nn.init.zeros_(m.lora2_Q['default'])
+                    
                     m.freeze_AB = True
 
     model.config.mm_projector_lr = training_args.mm_projector_lr
@@ -1211,7 +1220,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
     keys_to_del = []
     if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero',
                               'fedours_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg',
-                              'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg',
+                              'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','fedours_self',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

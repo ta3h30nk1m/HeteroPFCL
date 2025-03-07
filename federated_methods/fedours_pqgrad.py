@@ -593,14 +593,13 @@ class LLaVATrainerOURS_PQGRAD(LLaVATrainerFEDAVG):
                         self.input_penultimate = []
                         self.hidden_states_before_norm = []
                         if 'tv' not in args.mode and 'excludemean' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
-
                             inputs = self._prepare_inputs(inputs)
                             output = self.model(**inputs).loss
-                            output.backward()
                             grads = []
                             for n, p in self.model.base_model.language_model.model.layers[-1].named_parameters():
-                                if 'lora2_P' or 'lora2_Q' in n:
-                                    grads.append(p.grad.flatten())
+                                if 'lora2_P' in n or 'lora2_Q' in n:
+                                    grad = torch.autograd.grad(output, p, retain_graph=True)
+                                    grads.append(grad[0].flatten())
                                 # grads = []
                                 # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 #     grads.append(p.grad)

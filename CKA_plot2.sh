@@ -1,12 +1,12 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="debug"
-MODE="feddualMultipqfullfreeze"
+NOTE="debug4"
+MODE="sft"
 MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=999
+SCENARIO=998
 NUM_ROUNDS=1
 NUM_TASKS=1
 NUM_CLIENTS=2
@@ -39,7 +39,7 @@ POOL_SIZE=4
 PROMPT_TOP_K=1
 EMA_RATIO=0.9
 
-BATCHSIZE=2
+BATCHSIZE=1
 
 LR=2e-5
 MM_PROJECTOR_LR=1e-4 #3e-4
@@ -83,9 +83,9 @@ fi
 LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29509 \
-    --include localhost:9 \
-    CKA_compute.py \
+deepspeed --master_port 29510 \
+    --include localhost:10 \
+    CKA_compute2.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
     --model_name_for_dataarg $MODEL_NAME \
@@ -138,8 +138,7 @@ deepspeed --master_port 29509 \
     --use_fisher $USE_FISHER \
     --fedours False \
     --is_hetero_model True \
-    --load_pretrained_pca True \
-    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
+    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type

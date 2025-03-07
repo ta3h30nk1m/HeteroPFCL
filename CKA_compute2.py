@@ -81,116 +81,8 @@ def main():
         training_args.gradient_checkpointing_kwargs = {'use_reentrant':False}
     
     
-    model_ids = {}
-    model_list = {}
-    models = {}
-    global_state_dict_list = []
-    local_state_dict_list = []
-    old_local_state_dict_list = []
-    for client_id in range(len(train_datalists)):
-        train_datalist = train_datalists[client_id]
-        model_id = train_datalist[0]['model_id']
-        
-        if model_id in model_list.keys():
-            local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
-            old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
-            global_state_dict = copy.deepcopy(model_list[model_id])
-            keys_to_del = get_keys_to_del(training_args, global_state_dict)
-            for k in keys_to_del:
-                del global_state_dict[k]
-            global_state_dict_list.append(global_state_dict)
-            
-            model_ids[model_id].append(client_id)
-        else:
-            new_model_args = copy.deepcopy(model_args)
-            new_model_args.model_name_or_path = model_id
-            model, tokenizer, processor, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-            
-            if training_args.load_checkpoint is not None and not training_args.fedours:
-                logger.info(f'load {training_args.load_checkpoint}')
-                server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
-                
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
-                
-                if ('fedours' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    server_state_dict = local_state_dict
-                
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
-                    
-                if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    model.load_state_dict(local_state_dict, strict=False)
-            
-            
-            global_state_dict = get_peft_state_maybe_zero_3(
-                        model.named_parameters(), training_args.lora_bias
-                    )
-            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-                model.named_parameters()
-            )
-            global_state_dict.update(non_lora_state_dict)
-            
-            local_state_dict_list.append(copy.deepcopy(global_state_dict))
-            old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
-            new_global_state_dict=copy.deepcopy(global_state_dict)
-            keys_to_del = get_keys_to_del(training_args, new_global_state_dict)
-            for k in keys_to_del:
-                del new_global_state_dict[k]
-            global_state_dict_list.append(new_global_state_dict)
-            
-            model_list[model_id] = global_state_dict
-            
-            models[model_id] = model
-            
-            model_ids[model_id] = [client_id]
-            
-    del model_list
-    extra_state_dict_dict = {'model_ids':model_ids}
-    
-    ##############################################################################################
-    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
-    model2 = models["thkim0305/llama3.2_1B_vl"]
-    # model2 = models['thkim0305/qwen2.5_3B_vl']
-    model = models["thkim0305/llama3.2_3B_vl"]
-    
-    model = model.to(device='cuda', dtype=torch.bfloat16)
-    model2 = model2.to(device='cuda', dtype=torch.bfloat16)
-    
-    # load model
-    # 0 6 8 9 vs 1 2 3 4 5 7
-    model_round = 20
-    model1_client = 6
-    model2_client = 7
-    # state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
-    state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict1 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict2 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
-    
-    with torch.no_grad():
-        model.load_state_dict(state_dict2, strict=False)
-        model2.load_state_dict(state_dict1, strict=False)
-    
-    # data_path = "dataset/llava_finetune/llava_v1_5_mix665k.json"
-    data_path = "dataset/combined_data2.json"
+    data_path = "dataset/llava_finetune/llava_v1_5_mix665k.json"
+    # data_path = "dataset/combined_data2.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     public_datalist = json.load(open(data_path, "r"))
     
@@ -199,29 +91,49 @@ def main():
     
     random.shuffle(public_datalist)
     
-    ##### B init #####
-    public_datalist_ = public_datalist[:]
-    
-    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
-                                                tokenizer=tokenizer,
-                                                processor=processor,
-                                                data_args=copy.deepcopy(new_data_args))
-    
-    trainer = cka_create_trainer(model, tokenizer, training_args, data_module, model2)
+    model_ids = {}
+    model_list = {}
+    models = {}
+    global_state_dict_list = []
+    local_state_dict_list = []
+    old_local_state_dict_list = []
+    hidden_feats = []
+    for client_id in range(len(train_datalists)):
+        train_datalist = train_datalists[client_id]
+        model_id = train_datalist[0]['model_id']
+        
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = model_id
+        model, tokenizer, processor, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
 
-    results = trainer.train()
+    ##############################################################################################
     
-    hidden_feat_1b = trainer.hidden_feat_1b
-    hidden_feat_3b = trainer.hidden_feat_3b
+        public_datalist_ = public_datalist[1100:1200]
+        # public_datalist_ = public_datalist[:]
     
-    device = model.device
-    
-    trainer.deepspeed.empty_partition_cache()
-    trainer.accelerator.free_memory()
-    del model, model2, trainer
-    gc.collect()
-    torch.cuda.empty_cache()
-    
+        data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+                                                    tokenizer=tokenizer,
+                                                    processor=processor,
+                                                    data_args=copy.deepcopy(new_data_args))
+        
+        trainer = cka_create_trainer(model, tokenizer, training_args, data_module, model)
+
+        results = trainer.train()
+        
+        # hidden_feat_1b = trainer.hidden_feat_1b
+        # hidden_feat_3b = trainer.hidden_feat_3b
+        hidden_feats.append(trainer.hidden_feat_3b)
+        
+        device = model.device
+        
+        trainer.deepspeed.empty_partition_cache()
+        trainer.accelerator.free_memory()
+        model = model.cpu()
+        del model, trainer
+        gc.collect()
+        torch.cuda.empty_cache()
+    hidden_feat_1b = hidden_feats[0]
+    hidden_feat_3b = hidden_feats[1]
     cka_matrix = torch.zeros(len(hidden_feat_1b), len(hidden_feat_3b))
     
     for i, feat_1b in enumerate(hidden_feat_1b):
@@ -232,11 +144,9 @@ def main():
     plot_cka(cka_matrix=cka_matrix, 
         first_layers=[str(i) for i in range(len(hidden_feat_1b))],
         second_layers=[str(i) for i in range(len(hidden_feat_3b))],
-        first_name="1B",
-        second_name="3B",
+        first_name="Llama3 8B",
+        second_name="Llama3 1B",
         save_path = 'cka_plots',
-        # title=f'feddualMultipqfullfreeze_round{model_round}_client{model1_client}_{model2_client}'
-        title=f'blockwise_dual_gradsim_round{model_round}_client{model1_client}_{model2_client}_otherdata'
         )
     return
     ################################################################################################

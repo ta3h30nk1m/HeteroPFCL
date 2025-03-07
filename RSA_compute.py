@@ -20,7 +20,7 @@ import time
 import datetime
 import torch.nn.functional as F
 
-from federated_methods.CKA_feat_extract import cka_create_trainer, cka_base, cka_batch
+from federated_methods.CKA_feat_extract import cka_create_trainer, compute_rdm, rdm_similarity
 
 os.environ["WANDB_DISABLED"] = "true"
 
@@ -175,19 +175,19 @@ def main():
     
     # load model
     # 0 6 8 9 vs 1 2 3 4 5 7
-    model_round = 20
-    model1_client = 6
-    model2_client = 7
-    # state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
-    state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict1 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
-    # state_dict2 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # model_round = 20
+    # model1_client = 6
+    # model2_client = 7
+    # # state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # # state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_CC_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # state_dict1 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # state_dict2 = torch.load(f'./client_states_feddualMultipqfullfreeze_pca_T05_bs4_saveoptim_lr2e-5_1e-4_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # # state_dict1 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model1_client}_client_model_round{model_round}.pth', map_location='cpu')
+    # # state_dict2 = torch.load(f'./client_states_fedMultipqfullfreeze_sft_bs4_saveoptim_lr2e-5_sc132_4tasks_5rounds_fixitr100_T0125_decay099/{model2_client}_client_model_round{model_round}.pth', map_location='cpu')
     
-    with torch.no_grad():
-        model.load_state_dict(state_dict2, strict=False)
-        model2.load_state_dict(state_dict1, strict=False)
+    # with torch.no_grad():
+    #     model.load_state_dict(state_dict2, strict=False)
+    #     model2.load_state_dict(state_dict1, strict=False)
     
     # data_path = "dataset/llava_finetune/llava_v1_5_mix665k.json"
     data_path = "dataset/combined_data2.json"
@@ -227,16 +227,19 @@ def main():
     for i, feat_1b in enumerate(hidden_feat_1b):
         for j, feat_3b in enumerate(hidden_feat_3b):
             feat_1b_gpu, feat_3b_gpu = feat_1b.to(device), feat_3b.to(device)
-            cka_matrix[i,j] = cka_base(feat_1b_gpu, feat_3b_gpu)
+            rdm1 = compute_rdm(feat_1b_gpu, metric='correlation')
+            rdm2 = compute_rdm(feat_3b_gpu, metric='correlation')
+            cka_matrix[i,j] = rdm_similarity(rdm1.float(), rdm2.float())
 
     plot_cka(cka_matrix=cka_matrix, 
         first_layers=[str(i) for i in range(len(hidden_feat_1b))],
         second_layers=[str(i) for i in range(len(hidden_feat_3b))],
         first_name="1B",
         second_name="3B",
-        save_path = 'cka_plots',
+        save_path = 'rsa_plots',
         # title=f'feddualMultipqfullfreeze_round{model_round}_client{model1_client}_{model2_client}'
-        title=f'blockwise_dual_gradsim_round{model_round}_client{model1_client}_{model2_client}_otherdata'
+        # title=f'blockwise_dual_gradsim_round{model_round}_client{model1_client}_{model2_client}_otherdata'
+        title='1B vs 3B unseen'
         )
     return
     ################################################################################################

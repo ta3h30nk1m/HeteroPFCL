@@ -101,16 +101,20 @@ class CKA_Feat_Extract(LLaVATrainerFEDAVG):
             loss2, outputs2 = super(CKA_Feat_Extract, self).compute_loss(self.model2, copy.deepcopy(inputs), return_outputs=True, num_items_in_batch=num_items_in_batch)
         
         loss, outputs = super(CKA_Feat_Extract, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+        
+        labels = inputs['labels']
+        shift_labels = labels[..., 1:].contiguous()
+        print((shift_labels != -100).sum())
         if len(self.hidden_feat_1b) == 0:
             for feat in outputs.hidden_states:
-                self.hidden_feat_3b.append(feat.reshape(-1, feat.size(-1)).detach().cpu())
+                self.hidden_feat_3b.append(feat[..., :-1, :][shift_labels != -100].detach().cpu())
             for feat in outputs2.hidden_states:
-                self.hidden_feat_1b.append(feat.reshape(-1, feat.size(-1)).detach().cpu())
+                self.hidden_feat_1b.append(feat[..., :-1, :][shift_labels != -100].detach().cpu())
         else:
             for i,feat in enumerate(outputs.hidden_states):
-                self.hidden_feat_3b[i] = torch.cat((self.hidden_feat_3b[i], feat.reshape(-1, feat.size(-1)).detach().cpu()))
+                self.hidden_feat_3b[i] = torch.cat((self.hidden_feat_3b[i], feat[..., :-1, :][shift_labels != -100].detach().cpu()))
             for i,feat in enumerate(outputs2.hidden_states):
-                self.hidden_feat_1b[i] = torch.cat((self.hidden_feat_1b[i], feat.reshape(-1, feat.size(-1)).detach().cpu()))
+                self.hidden_feat_1b[i] = torch.cat((self.hidden_feat_1b[i], feat[..., :-1, :][shift_labels != -100].detach().cpu()))
         loss = loss*0
         return (loss, outputs) if return_outputs else loss
     
@@ -362,3 +366,124 @@ def cka_batch(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     # Compute the CKA value
     cka = hsic1_xy.sum() / (hsic1_xx.sum() * hsic1_yy.sum()).sqrt()
     return cka
+
+
+import numpy as np
+from sklearn.cross_decomposition import CCA
+
+def compute_pwcca(X, Y, n_components=None):
+    """
+    Compute Projection-Weighted CCA (PWCCA) between two datasets X and Y.
+
+    Args:
+        X (numpy.ndarray): Shape (num_samples, feature_dim_X).
+        Y (numpy.ndarray): Shape (num_samples, feature_dim_Y).
+        n_components (int, optional): Number of canonical dimensions to use.
+            Defaults to min(X.shape[1], Y.shape[1]).
+
+    Returns:
+        pwcca_value (float): The PWCCA value (scalar).
+        correlations (np.ndarray): Per-dimension canonical correlations (length = n_components).
+    """
+    # Defaults to the smaller feature dimension
+    if n_components is None:
+        n_components = min(X.shape[1], Y.shape[1])
+    
+    # 1. Center the data
+    Xc = X - X.mean(axis=0, keepdims=True)
+    Yc = Y - Y.mean(axis=0, keepdims=True)
+    
+    # 2. Fit CCA
+    cca = CCA(n_components=n_components)
+    cca.fit(Xc, Yc)
+    Xc_cca, Yc_cca = cca.transform(Xc, Yc)  # shape: (num_samples, n_components)
+    
+    # 3. Compute per-dimension correlation
+    correlations = []
+    for i in range(n_components):
+        corr_matrix = np.corrcoef(Xc_cca[:, i], Yc_cca[:, i])
+        corr = corr_matrix[0, 1]
+        correlations.append(corr)
+    correlations = np.array(correlations)
+    
+    # 4. Compute projection-based weights alpha_i
+    #    Following Morcos et al., "Insights on representational similarity...", alpha is 
+    #    based on how strongly X projects onto each canonical dimension.
+    #    We can obtain the canonical directions in X-space from `cca.x_loadings_` (shape: [feature_dim_X, n_components]).
+    
+    comps = cca.x_loadings_        # (feature_dim_X, n_components)
+    # Project the centered data Xc onto these components to see how "important" each component is
+    X_projections = Xc @ comps     # (num_samples, n_components)
+    # Sum of absolute values (or sums of squares) is often used; the official references use sum of absolute projections.
+    alpha = np.sum(np.abs(X_projections), axis=0)
+    alpha /= alpha.sum()  # normalize so that sum(alpha) = 1
+    
+    # 5. Weighted sum of correlations = PWCCA
+    pwcca_value = np.sum(alpha * correlations)
+    
+    return pwcca_value, correlations
+
+from scipy.stats import spearmanr
+
+def compute_rdm(activations, metric='correlation'):
+    """
+    Given activations of shape (N, D), compute the RDM as an (N, N) matrix,
+    where entry (i, j) is the dissimilarity between sample i and sample j.
+
+    Supported metrics:
+      - 'euclidean': Uses torch.cdist (L2 distance)
+      - 'correlation': Uses correlation distance = 1 - Pearson correlation
+    """
+    if metric == 'euclidean':
+        # Euclidean distance between all pairs
+        rdm = torch.cdist(activations, activations, p=2)
+
+    elif metric == 'correlation':
+        # 1) Center each row
+        X_centered = activations - activations.mean(dim=1, keepdim=True)
+        
+        # 2) Normalize each row to have unit standard deviation
+        X_std = X_centered.std(dim=1, keepdim=True) + 1e-8
+        X_normalized = X_centered / X_std  # shape: (N, D)
+        
+        # 3) Compute similarity = dot product = Pearson correlation
+        #    (since each row is zero-mean and unit-variance)
+        similarity = X_normalized @ X_normalized.t()  # shape: (N, N)
+        
+        # 4) Convert similarity to dissimilarity
+        #    correlation distance = 1 - correlation
+        rdm = 1 - similarity
+
+    else:
+        raise NotImplementedError(f"Metric '{metric}' not implemented.")
+
+    return rdm
+
+def rdm_similarity(rdm1, rdm2, method='spearman'):
+    """
+    Compare two RDMs via correlation.
+
+    Args:
+        rdm1 (torch.Tensor): RDM of shape (N, N)
+        rdm2 (torch.Tensor): RDM of shape (N, N)
+        method (str): 'spearman' or 'pearson'
+
+    Returns:
+        float: The correlation (similarity) between rdm1 and rdm2.
+    """
+    # Extract upper triangular entries (excluding diagonal)
+    triu_indices = torch.triu_indices(rdm1.size(0), rdm1.size(1), offset=1)
+    rdm1_flat = rdm1[triu_indices[0], triu_indices[1]]
+    rdm2_flat = rdm2[triu_indices[0], triu_indices[1]]
+
+    # Convert to numpy
+    rdm1_flat_np = rdm1_flat.cpu().numpy()
+    rdm2_flat_np = rdm2_flat.cpu().numpy()
+
+    if method == 'spearman':
+        corr, _ = spearmanr(rdm1_flat_np, rdm2_flat_np)
+    elif method == 'pearson':
+        corr = np.corrcoef(rdm1_flat_np, rdm2_flat_np)[0, 1]
+    else:
+        raise ValueError("method must be 'spearman' or 'pearson'")
+    return corr

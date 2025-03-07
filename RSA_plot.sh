@@ -1,7 +1,7 @@
 #!/bin/bash
 # CIL CONFIG
 NOTE="debug"
-MODE="feddualMultipqfullfreeze"
+MODE="sft"
 MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
@@ -83,9 +83,9 @@ fi
 LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29509 \
-    --include localhost:9 \
-    CKA_compute.py \
+deepspeed --master_port 29506 \
+    --include localhost:6 \
+    RSA_compute.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
     --model_name_for_dataarg $MODEL_NAME \

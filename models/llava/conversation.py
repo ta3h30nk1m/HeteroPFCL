@@ -389,6 +389,16 @@ conv_llama3 = Conversation(
     sep="<|eot_id|>",
 )
 
+conv_qwen = Conversation(
+    system="<|im_start|>system\nYou are a helpful assistant.<|im_end|>",
+    roles=("\n<|im_start|>user\n", "\n<|im_start|>assistant\n"),
+    version="qwen",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="<|im_end|>",
+)
+
 default_conversation = conv_vicuna_v1
 conv_templates = {
     "default": conv_vicuna_v0,
@@ -412,6 +422,7 @@ conv_templates = {
     "mpt": conv_mpt,
     
     "llama3": conv_llama3,
+    "qwen": conv_qwen,
 }
 
 

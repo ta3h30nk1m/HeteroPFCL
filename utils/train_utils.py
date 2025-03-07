@@ -213,8 +213,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
         model = get_peft_model(model, ia3_config)
 
-    if model_args.version in conversation_lib_llava.conv_templates:
-        conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates[model_args.version]
+    if 'llama3' in model_args.model_name_or_path.lower():
+        conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates['llama3']
+    elif 'qwen2' in model_args.model_name_or_path.lower():
+        conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates['qwen']
     else:
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates["vicuna_v1"]
 
@@ -458,6 +460,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         m.lora2_B['default'].weight.requires_grad = False
                         
                         m.lora1_P['default'].init_zero()
+                        m.lora2_P['default'].init_zero()
                         m.lora2_P['default'].layer1.weight.data.copy_(m.lora1_P['default'].layer1.weight.data)
                         
                         m.freeze_AB = True
@@ -639,6 +642,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         p.requires_grad = False
                         init_B = torch.empty_like(p)
                         nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        # Get the current shape of the weight matrix
+                        rows, cols = p.size()
+
+                        # Ensure the matrix is contiguous
+                        init_B = init_B.contiguous()
+
+                        # Perform Singular Value Decomposition
+                        u, _, v = torch.svd(init_B, some=False)
+                        
+                        u = u.contiguous()
+                        v = v.contiguous()
+
+                        # Use U or V from SVD based on the shape of the weight matrix
+                        if rows > cols:
+                            init_B.data = u[:, :cols].to(torch.bfloat16)
+                        else:
+                            init_B.data = v[:rows, :].to(torch.bfloat16)
                         p.data = copy.deepcopy(init_B)
                         new_n = n.replace('lora1_B', 'lora2_B')
                         dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)

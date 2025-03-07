@@ -28,7 +28,7 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
         self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
         self.post_init()
         
-        self.active_state = 'lora1'
+        self.active_state = 'gate'
     
     def set_state(self, state):
         assert state in ['lora1', 'lora2', 'gate'], state

@@ -153,7 +153,7 @@ class PQLoraLILFullFreezeLayer(BaseTunerLayer):
         self.in_features = in_features
         self.out_features = out_features
         
-        self.active_state = 'lora1'
+        self.active_state = 'gate'
         self.use_pq = True
         self.freeze_AB = False
 
@@ -824,7 +824,7 @@ class Linear(nn.Module, PQLoraLILFullFreezeLayer):
                         elif self.active_state == 'lora2':
                             result = result + lora2_B(lora2_P(lora2_A(dropout(x)))) * scaling
                         elif self.active_state == 'gate':
-                            result = result + (lora1_B(lora1_P(lora1_A(dropout(x)))) + lora2_B(lora1_P(lora2_A(dropout(x))))) * scaling / 2
+                            result = result + (lora1_B(lora1_P(lora1_A(dropout(x)))) + lora2_B(lora2_P(lora2_A(dropout(x))))) * scaling / 2
                     else:
                         if self.active_state == 'lora1':
                             result = result + lora1_B(lora1_A(dropout(x))) * scaling

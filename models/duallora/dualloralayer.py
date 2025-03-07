@@ -109,7 +109,7 @@ class DualLoraLayer(BaseTunerLayer):
         self.in_features = in_features
         self.out_features = out_features
         
-        self.active_state = 'lora1'
+        self.active_state = 'gate'
 
     def update_layer(
         self,

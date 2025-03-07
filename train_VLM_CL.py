@@ -277,12 +277,21 @@ def main():
             else:
                 # vectorize cosine sim and then average them
                 sims = []
-                for grad_idx in range(task_vectors[0].shape[-1]):
-                    task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
-                    sim = torch.matmul(task_vector,
-                                    torch.transpose(task_vector, 1, 0))
-                    sim = torch.transpose(sim, 1, 0)
-                    sims.append(sim)
+                if 'pqgrad' in training_args.mode or 'pqfisher' in training_args.mode:
+                    for grad_idx in range(len(task_vectors[0])):
+                        task_vector = F.normalize(torch.stack([tv[grad_idx] for tv in task_vectors], dim=0), dim=-1)
+                        sim = torch.matmul(task_vector,
+                                        torch.transpose(task_vector, 1, 0))
+                        sim = torch.transpose(sim, 1, 0)
+                        sims.append(sim)
+                
+                else:
+                    for grad_idx in range(task_vectors[0].shape[-1]):
+                        task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
+                        sim = torch.matmul(task_vector,
+                                        torch.transpose(task_vector, 1, 0))
+                        sim = torch.transpose(sim, 1, 0)
+                        sims.append(sim)
                 
                 sim = torch.stack(sims, dim=0).mean(dim=0)
             # sim = torch.ones(10,10)
@@ -464,12 +473,12 @@ def main():
             )
             state_dict.update(non_lora_state_dict)
             
-            if 'full' in training_args.mode:
-                print("Determinant of P")
-                for k in state_dict.keys():
-                    if 'lora_P' in k or 'lora1_P' in k or 'lora2_P' in k:
-                        square_matrix = state_dict[k].to(torch.float32)
-                        print(k, torch.det(square_matrix))
+            # if 'full' in training_args.mode:
+            #     print("Determinant of P")
+            #     for k in state_dict.keys():
+            #         if 'lora_P' in k or 'lora1_P' in k or 'lora2_P' in k:
+            #             square_matrix = state_dict[k].to(torch.float32)
+            #             print(k, torch.det(square_matrix))
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             

@@ -95,7 +95,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['feddualMultipqfullfreeze_homoAggOnly']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAggOnly_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     
-    elif mode in ['fedMultipqfullfreeze_distill', 'fedMultipqfullfreeze_Taskloss', 'fedMultipqfullfreeze_distillTaskloss']:
+    elif mode in ['fedMultipqfullfreeze_distill', 'fedMultipqfullfreeze_Taskloss', 'fedMultipqfullfreeze_distillTaskloss',
+                  'feddualMulitpqLILfullfreeze512_Taskloss','feddualMultipqLILfullfreeze512_KLloss','feddualMultipqLILfullfreeze512_distillTaskloss']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_load_state_dict, fedavg_layerwise_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_distill', 'feddualMultipqfullfreeze_Taskloss', 'feddualMultipqfullfreeze_distillTaskloss', 'feddualMultipqfullfreeze_KLloss', 'feddualMultipqfullfreeze_distillKLloss',
                   'feddualMultipqfullfreeze256_Taskloss', 'feddualMultipqfullfreeze512_Taskloss','feddualMultipqfullfreeze1024_Taskloss',

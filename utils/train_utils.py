@@ -161,6 +161,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeLORA'] = Dual_PQLorafreezeModel
             lora_config.peft_type = 'DUALPQFullFreezeLORA'
         
+        elif training_args.mode in ['feddualMultipfullfreeze']:
+            from models.dual_plora_freeze_full.dual_ploramodel_freeze_full import Dual_PLorafreezeModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALPFullFreezeLORA'] = Dual_PLorafreezeModel
+            lora_config.peft_type = 'DUALPFullFreezeLORA'
+        
         elif training_args.mode in ['feddualMultipqfullfreeze_moe']:
             from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -684,6 +690,50 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullFreezeLayer):
                         m.use_pq = False
     
+    elif training_args.mode in ['feddualMultipfullfreeze']:
+        from models.dual_plora_freeze_full.dual_ploralayer_freeze_full import PLoraFullFreezeLayer
+        last_layer = len(model.base_model.language_model.model.layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n:
+                        p.requires_grad = False
+                        init_B = torch.empty_like(p)
+                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        # Get the current shape of the weight matrix
+                        rows, cols = p.size()
+
+                        # Ensure the matrix is contiguous
+                        init_B = init_B.contiguous()
+
+                        # Perform Singular Value Decomposition
+                        u, _, v = torch.svd(init_B, some=False)
+                        
+                        u = u.contiguous()
+                        v = v.contiguous()
+
+                        # Use U or V from SVD based on the shape of the weight matrix
+                        if rows > cols:
+                            init_B.data = u[:, :cols].to(torch.bfloat16)
+                        else:
+                            init_B.data = v[:rows, :].to(torch.bfloat16)
+                        p.data = copy.deepcopy(init_B)
+                        new_n = n.replace('lora1_B', 'lora2_B')
+                        dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
+                        dict(layer.named_parameters())[new_n].requires_grad = False
+                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
+                        nn.init.zeros_(p)
+                for n, m in layer.named_modules():
+                    if isinstance(m, PLoraFullFreezeLayer):
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PLoraFullFreezeLayer):
+                        m.use_pq = False
+    
     elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg',]:
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         last_layer = len(model.base_model.language_model.model.layers) // 2
@@ -950,7 +1000,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze256_distillTaskloss', 'feddualMultipqfullfreeze512_distillTaskloss','feddualMultipqfullfreeze1024_distillTaskloss',
                                     'feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg',
                                     'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
-                                    'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL'
+                                    'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
+                                    'feddualMultipfullfreeze',
                                     ]:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -982,8 +1033,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
             new_state_dict = {}
             for k, v in state_dict.items():
-                if 'LIL' in training_args.mode and ('lora_P' in k or 'lora_Q' in k):
+                if ('LIL' in training_args.mode or 'pfullfreeze' in training_args.mode) and ('lora_P' in k or 'lora_Q' in k):
                     continue
+                
                 new_k1 = k.replace('lora', 'lora1')
                 new_k2 = k.replace('lora', 'lora2')
                 if 'freezeA' in training_args.mode and 'lora_P' in k:
@@ -1419,7 +1471,8 @@ def get_keys_to_del(training_args, new_global_state_dict):
                                 'feddualMultipqfullfreeze256_distill', 'feddualMultipqfullfreeze512_distill','feddualMultipqfullfreeze1024_distill',
                                 'feddualMultipqfullfreeze256_distillTaskloss', 'feddualMultipqfullfreeze512_distillTaskloss','feddualMultipqfullfreeze1024_distillTaskloss',
                                 'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
-                                'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL'
+                                'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
+                                'feddualMultipfullfreeze',
                                 ]:
         layer_num = []
         for k in new_global_state_dict.keys():

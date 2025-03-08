@@ -46,7 +46,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
                   'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
                   'feddualMultipqfullfreeze256_tv','feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv',
                   'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
-                'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL']:
+                'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
+                'feddualMultipfullfreeze',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_pqgrad', 'feddualMultipqfullfreeze_pqfisher']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_pqgrad_create_trainer, OURS_aggregate_state_dict

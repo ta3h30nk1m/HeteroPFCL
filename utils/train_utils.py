@@ -249,9 +249,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     elif training_args.mode == 'fedpqfullfreezeA' or training_args.mode == 'fedpqfullfreezeA_sft' or training_args.mode == 'fedpqfreezeA' or training_args.mode == 'fedpqfreezeA_sft':
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
-            for n, p in layer.named_parameters():
-                if 'lora_A' in n:
-                    p.requires_grad = False
+            for n, m in layer.named_modules():
+                if isinstance(m,PQLoraFullLayer):
+                    m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
+                    m.lora_A['default'].weight.requires_grad = False
                     
     elif training_args.mode == 'fedMultipqfullfreeze' or training_args.mode == 'fedMultipqfullfreeze_sft' or training_args.mode == 'fedMultipqfullfreeze_tv' or training_args.mode == 'fedMultipqfullfreeze_ours':
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
@@ -259,14 +260,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
-                for n, p in layer.named_parameters():
-                    if 'lora_A' in n:
-                        p.requires_grad = False
-                    elif 'lora_B' in n:
-                        p.requires_grad = False
-                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
-                    elif 'lora_P' in n or 'lora_Q' in n:
-                        nn.init.zeros_(p)
+                for n, m in layer.named_modules():
+                    if isinstance(m,PQLoraFullLayer):
+                        m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
+                        m.lora_B['default'].apply(orthonormal_kaiming_uniform_init)
+
+                        m.lora_A['default'].weight.requires_grad = False
+                        m.lora_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora_P['default'])
+                        nn.init.zeros_(m.lora_Q['default'])
             else:
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
@@ -283,14 +286,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
-                for n, p in layer.named_parameters():
-                    if 'lora_A' in n:
-                        p.requires_grad = False
-                    elif 'lora_B' in n:
-                        p.requires_grad = False
-                        nn.init.kaiming_uniform_(p, a=math.sqrt(5))
-                    elif 'lora_P' in n or 'lora_Q' in n:
-                        nn.init.zeros_(p)
+                for n, m in layer.named_modules():
+                    if isinstance(m,PQLoraFullLayer):
+                        m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
+                        m.lora_B['default'].apply(orthonormal_kaiming_uniform_init)
+
+                        m.lora_A['default'].weight.requires_grad = False
+                        m.lora_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora_P['default'])
+                        nn.init.zeros_(m.lora_Q['default'])
             else:
                 for n, m in layer.named_modules():
                     if isinstance(m, PQLoraFullLayer):
@@ -349,8 +354,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         m.lora_B['default'] = nn.Linear(r, m.out_features, bias=False)
                         m.lora_P['default'] = nn.Parameter(torch.ones((r,r)))  # Initialized to 1
                         m.lora_Q['default'] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
-                        nn.init.kaiming_uniform_(m.lora_A['default'].weight, a=math.sqrt(5))
-                        nn.init.kaiming_uniform_(m.lora_B['default'].weight, a=math.sqrt(5))
+                        # nn.init.kaiming_uniform_(m.lora_A['default'].weight, a=math.sqrt(5))
+                        # nn.init.kaiming_uniform_(m.lora_B['default'].weight, a=math.sqrt(5))
+                        m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
+                        m.lora_B['default'].apply(orthonormal_kaiming_uniform_init)
+                        
                         m.lora_A['default'].weight.requires_grad = False
                         m.lora_B['default'].weight.requires_grad = False
                         

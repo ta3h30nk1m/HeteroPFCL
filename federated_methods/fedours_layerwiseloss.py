@@ -103,9 +103,9 @@ class LLaVATrainerOURS_Layerwise(LLaVATrainerOURS):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):      
         inputs['output_hidden_states'] = True
         loss, outputs = super(LLaVATrainerOURS_Layerwise, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-        if 'feddualMultipqfullfreeze' in self.args.mode:
-            layer_num = len(self.model.base_model.language_model.model.layers) // 4
-            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+        # if 'feddualMultipqfullfreeze' in self.args.mode:
+        layer_num = len(self.model.base_model.language_model.model.layers) // 4
+        target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
         
         if 'distill' in self.args.mode:
             # self-dstill on 

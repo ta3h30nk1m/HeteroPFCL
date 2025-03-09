@@ -493,7 +493,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraLILFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_C = nn.ModuleDict({})
-                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,m.r['default']).to(compute_dtype)
+                            m.lora_C['default'] = nn.Linear(128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
             else:
                 for n, m in layer.named_modules():
@@ -503,7 +503,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraLILFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_C = nn.ModuleDict({})
-                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,m.r['default']).to(compute_dtype)
+                            m.lora_C['default'] = nn.Linear(128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
 
     elif training_args.mode in ['fedMultipqfullfreeze256_ABinit','fedMultipqfullfreeze512_ABinit','fedMultipqfullfreeze1024_ABinit']:

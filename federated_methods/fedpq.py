@@ -1694,14 +1694,8 @@ def feddualOptimalpq_load_state_dict(model, global_state_dict, local_state_dict_
                                 target_layers = [8,15]
                         
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
-                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                splited[5] = str(target_layers[2])
-                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                splited[5] = str(target_layers[3])
+                            index = cur_layer_num.index(int(splited[5]))
+                            splited[5] = str(target_layers[index])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key

@@ -93,11 +93,12 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
         # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
         # self.target_layers2 = [1,2,3,4,5,6,7,9,10,11,12,13,14,15]
-        last_layer = len(self.model.base_model.language_model.model.layers) // 2
-        self.target_layers = [last_layer*1 -1,last_layer*2 -1]
-        last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
-        self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
-        
+        # last_layer = len(self.model.base_model.language_model.model.layers) // 2
+        # self.target_layers = [last_layer*1 -1,last_layer*2 -1]
+        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
+        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
+        self.target_layers = [5,7,11,14,18,20,23,27]
+        self.target_layers2 = [5,6,8,9,11,12,14,15]
         self.lora_A_input_1b = []
         self.lora_A_input_3b = []
         self.layer_name_1b = []

@@ -81,18 +81,31 @@ class LLaVATrainerABInit(LLaVATrainer):
         self.lora_outputs = []
         self.lora_targets = []
         # Define a simple function to store the output of a layer
-        def hook_fn(module, input, output):
+        def hook_fn_A1(module, input, output):
             # Store the output for further processing
             self.lora_outputs.append(output)
-        def hook_fn2(module, input, output):
+        def hook_fn_A2(module, input, output):
             # Store the output for further processing
             self.lora_targets.append(output)
+        def hook_fn_B1(module, input, output):
+            # Store the output for further processing
+            self.lora_outputs.append(output.detach().cpu())
+        def hook_fn_B2(module, input, output):
+            # Store the output for further processing
+            self.lora_targets.append(output.detach().cpu())
         # last_layer = len(self.model.base_model.language_model.model.layers) // 4
         # self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
         # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
         # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
-        self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
-        self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
+        # self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
+        # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
+        # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
+        # self.target_layers2 = [1,2,3,4,5,6,7,9,10,11,12,13,14,15]
+        last_layer = len(self.model.base_model.language_model.model.layers) // 2
+        self.target_layers = [last_layer*1 -1,last_layer*2 -1]
+        last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
+        self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
+        
         if train_A:
             
             # only makes lora_A for target layers trainable
@@ -106,7 +119,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                     
                     for n, m in layer.named_modules():
                         if 'lora_A.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn))
+                            self.hooks.append(m.register_forward_hook(hook_fn_A1))
                 else:
                     for n, p in layer.named_parameters():
                         p.requires_grad = False
@@ -115,7 +128,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                 if idx in self.target_layers2:
                     for n, m in layer.named_modules():
                         if 'lora_A.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn2))
+                            self.hooks.append(m.register_forward_hook(hook_fn_A2))
         else:
             # only makes lora_B for target layers trainable
             self.lora_B_output_1b = []
@@ -136,7 +149,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                             p.requires_grad = True
                     for n, m in layer.named_modules():
                         if 'lora_B.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn))
+                            self.hooks.append(m.register_forward_hook(hook_fn_B1))
                 else:
                     for n, p in layer.named_parameters():
                         p.requires_grad = False
@@ -151,7 +164,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                             p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
                     for n, m in layer.named_modules():
                         if 'lora_B.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn2))
+                            self.hooks.append(m.register_forward_hook(hook_fn_B2))
             
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         self.lora_outputs = []
@@ -779,7 +792,7 @@ class LLaVATrainerABInit(LLaVATrainer):
         #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
         #     self._save_optimizer_and_scheduler(output_dir)
         ##############################################################################################################
-        
+        del self.lora_outputs, self.lora_targets
         for hook in self.hooks:
             hook.remove()
         

@@ -598,7 +598,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
         if 'llama3.2_3B_vl' in model_args.model_name_or_path:
             target_layers = [5,7,11,14,18,20,23,27]
-        elif 'llama3.1_3B_vl' in model_args.model_name_or_path:
+        elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
             target_layers = [5,6,8,9,11,12,14,15]
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:

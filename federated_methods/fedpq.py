@@ -275,27 +275,28 @@ def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dic
             target_key = name
             splited = target_key.split('.')
             if int(splited[5]) in cur_layer_num:
-                # if layer number is different
-                layer_num = []
-                for k in local_state_dict_list[id].keys():
-                    if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
-                layer_num = len(set(layer_num)) // 4
-                
-                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                if cur_layer_num[-1] != target_layers[-1]: # if different size
-                    if int(splited[5]) == cur_layer_num[0]: # mid layer
-                        splited[5] = str(target_layers[0])
-                    elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                        splited[5] = str(target_layers[1])
-                    elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                        splited[5] = str(target_layers[2])
-                    elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                        splited[5] = str(target_layers[3])
-                    new_target_key = '.'.join(splited)
-                else:
-                    new_target_key = target_key
                 for id in range(training_args.num_clients):
+                    # if layer number is different
+                    layer_num = []
+                    for k in local_state_dict_list[id].keys():
+                        if 'layers.' in k:
+                            layer_num.append(int(k.split('.')[5]))
+                    layer_num = len(set(layer_num)) // 4
+                    
+                    target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                    if cur_layer_num[-1] != target_layers[-1]: # if different size
+                        if int(splited[5]) == cur_layer_num[0]: # mid layer
+                            splited[5] = str(target_layers[0])
+                        elif int(splited[5]) == cur_layer_num[1]: # last layer 
+                            splited[5] = str(target_layers[1])
+                        elif int(splited[5]) == cur_layer_num[2]: # last layer 
+                            splited[5] = str(target_layers[2])
+                        elif int(splited[5]) == cur_layer_num[3]: # last layer 
+                            splited[5] = str(target_layers[3])
+                        new_target_key = '.'.join(splited)
+                    else:
+                        new_target_key = target_key
+                
                     new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
             else:
                 for id in homo_client_ids:

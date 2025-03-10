@@ -482,7 +482,7 @@ def main():
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             
-            if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            if (training_args.local_rank == 0 or training_args.local_rank == -1) and (curr_round+1)%(total_rounds/20) == 0:
                 torch.save(state_dict, output_dir)
             
             local_state_dict = getattr(trainer, 'global_weight', None)
@@ -501,9 +501,9 @@ def main():
         aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **extra_state_dict_dict)
         
         # Save server model
-        if training_args.mode != 'fedours':
-            if (training_args.local_rank == 0 or training_args.local_rank == -1): 
-                torch.save(global_state_dict_list[0], os.path.join(training_args.state_dir, f"server_model_round{curr_round}.pth"))
+        # if training_args.mode != 'fedours':
+        #     if (training_args.local_rank == 0 or training_args.local_rank == -1): 
+        #         torch.save(global_state_dict_list[0], os.path.join(training_args.state_dir, f"server_model_round{curr_round}.pth"))
             
     if training_args.use_task_vector:
         path = os.path.join(training_args.state_dir, f"round{curr_round+1}_task_vector_local_weights.pth")

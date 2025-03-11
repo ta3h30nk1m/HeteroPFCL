@@ -320,6 +320,15 @@ def can_infer(answer, choices):
     return False
 
 def main():
+    # Fix the random seeds
+    torch.manual_seed(training_args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(training_args.seed)
+    random.seed(training_args.seed)
+    torch.cuda.manual_seed(training_args.seed)
+    torch.cuda.manual_seed_all(training_args.seed)
+    torch.use_deterministic_algorithms(True)
     
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingConfig))
@@ -361,13 +370,6 @@ def main():
     else:
         device = torch.device("cpu")
     logger.info(f"Set the device ({device})")
-
-    # Fix the random seeds
-    torch.manual_seed(training_args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(training_args.seed)
-    random.seed(training_args.seed)
 
     # model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     

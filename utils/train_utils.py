@@ -190,8 +190,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeALORA'] = Dual_PQLorafreezeAModel
             lora_config.peft_type = 'DUALPQFullFreezeALORA'
             
-        elif training_args.mode == 'fedMultipqfullfreeze_ABinit' or training_args.mode == 'fedMulti2pqfullfreeze_ABinit' or training_args.mode == 'fedOptimal8pqfullfreeze_ABinit'\
-            or training_args.mode == 'fedMultipqfullfreeze256_ABinit' or training_args.mode == 'fedMultipqfullfreeze512_ABinit' or training_args.mode == 'fedMultipqfullfreeze1024_ABinit':
+        elif training_args.mode in ['fedMultipqfullfreeze_ABinit', 'fedMulti2pqfullfreeze_ABinit','fedOptimal2pqfullfreeze_ABinit','fedOptimal4pqfullfreeze_ABinit','fedOptimal8pqfullfreeze_ABinit',
+                                   'fedMultipqfullfreeze256_ABinit', 'fedMultipqfullfreeze512_ABinit', 'fedMultipqfullfreeze1024_ABinit']:
             from models.pqlora_full_init.pqloramodel_full_init import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
@@ -603,6 +603,54 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             target_layers = [5,7,11,14,18,20,23,27]
         elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
             target_layers = [5,6,8,9,11,12,14,15]
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if 'lora_A.default' in n or 'lora_B.default' in n:
+                        m.apply(orthonormal_kaiming_uniform_init)
+                for n, p in layer.named_parameters():
+                    if 'lora_A' in n:
+                        p.requires_grad = True
+                    elif 'lora_B' in n:
+                        p.requires_grad = False
+                    elif 'lora_P' in n or 'lora_Q' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullInitLayer):
+                        m.use_pq = False
+                for n, p in layer.named_parameters():
+                    p.requires_grad = False
+    elif training_args.mode in ['fedOptimal4pqfullfreeze_ABinit']:
+        from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
+        if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+            target_layers = [5,11,20,27]
+        elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+            target_layers = [5,8,12,15]
+        for idx, layer in enumerate(model.base_model.language_model.model.layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if 'lora_A.default' in n or 'lora_B.default' in n:
+                        m.apply(orthonormal_kaiming_uniform_init)
+                for n, p in layer.named_parameters():
+                    if 'lora_A' in n:
+                        p.requires_grad = True
+                    elif 'lora_B' in n:
+                        p.requires_grad = False
+                    elif 'lora_P' in n or 'lora_Q' in n:
+                        nn.init.zeros_(p)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullInitLayer):
+                        m.use_pq = False
+                for n, p in layer.named_parameters():
+                    p.requires_grad = False
+    elif training_args.mode in ['fedOptimal2pqfullfreeze_ABinit']:
+        from models.pqlora_full_init.pqloralayer_full_init import PQLoraFullInitLayer
+        if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+            target_layers = [11,27]
+        elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+            target_layers = [8,15]
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
@@ -1374,10 +1422,10 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
         #             datalist.extend(batch[:])
         #             iteration -= 1
         # if len(datalist) < num_iterations*total_batchsize:
-            # batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
-            # mul = (total_batchsize//len(batch)) + 1
-            # batch = (batch*mul)[:total_batchsize]
-            # datalist.extend(batch[:])
+        #     batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
+        #     mul = (total_batchsize//len(batch)) + 1
+        #     batch = (batch*mul)[:total_batchsize]
+        #     datalist.extend(batch[:])
         
         # memory only: priority-based sampling
         for i, sample in enumerate(sub_dataset):

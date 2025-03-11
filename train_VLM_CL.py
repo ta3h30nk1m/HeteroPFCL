@@ -23,17 +23,7 @@ import torch.nn.functional as F
 from models.coda_prompt import CodaPrompt
 
 os.environ["WANDB_DISABLED"] = "true"
-def main():
-    # Fix the random seeds
-    torch.manual_seed(training_args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(training_args.seed)
-    random.seed(training_args.seed)
-    torch.cuda.manual_seed(training_args.seed)
-    torch.cuda.manual_seed_all(training_args.seed)
-    torch.use_deterministic_algorithms(True)
-    
+def main():    
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingConfig))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
@@ -53,6 +43,16 @@ def main():
                 bnb_4bit_quant_type=training_args.quant_type # {'fp4', 'nf4'}
             )
         ))
+    
+    # Fix the random seeds
+    torch.manual_seed(training_args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(training_args.seed)
+    random.seed(training_args.seed)
+    torch.cuda.manual_seed(training_args.seed)
+    torch.cuda.manual_seed_all(training_args.seed)
+    torch.use_deterministic_algorithms(True)
 
     logging.config.fileConfig("./configuration/logging.conf")
     logger = logging.getLogger()

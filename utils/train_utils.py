@@ -1200,24 +1200,20 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['feddualOptimal2pqfullfreeze','feddualOptimal4pqfullfreeze','feddualOptimal8pqfullfreeze',]:
             if training_args.load_pretrained_pca:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise_Optimal_pca_init.pth', map_location='cpu')
-                    original_target_layers = [5,7,11,14,18,20,23,27]
                     if 'Optimal8' in training_args.mode:
-                        target_layers = [5,7,11,14,18,20,23,27]
+                        state_dict = torch.load('llava_1b_blockwise_Optimal8_pca_init.pth', map_location='cpu')
                     elif 'Optimal4' in training_args.mode:
-                        target_layers = [5,11,20,27]
+                        state_dict = torch.load('llava_1b_blockwise_Optimal4_pca_init.pth', map_location='cpu')
                     elif 'Optimal2' in training_args.mode:
-                        target_layers = [11,27]
+                        state_dict = torch.load('llava_1b_blockwise_Optimal2_pca_init.pth', map_location='cpu')
             
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise_Optimal_pca_init.pth', map_location='cpu')
-                    original_target_layers = [5,6,8,9,11,12,14,15]
                     if 'Optimal8' in training_args.mode:
-                        target_layers = [5,6,8,9,11,12,14,15]
+                        state_dict = torch.load('llava_3b_blockwise_Optimal8_pca_init.pth', map_location='cpu')
                     elif 'Optimal4' in training_args.mode:
-                        target_layers = [5,8,12,15]
+                        state_dict = torch.load('llava_3b_blockwise_Optimal4_pca_init.pth', map_location='cpu')
                     elif 'Optimal2' in training_args.mode:
-                        target_layers = [8,15]
+                        state_dict = torch.load('llava_3b_blockwise_Optimal2_pca_init.pth', map_location='cpu')
             new_state_dict = {}
             for k, v in state_dict.items():
                 if ('LIL' in training_args.mode or 'pfullfreeze' in training_args.mode) and ('lora_P' in k or 'lora_Q' in k):
@@ -1225,13 +1221,6 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 
                 new_k1 = k.replace('lora', 'lora1')
                 new_k2 = k.replace('lora', 'lora2')
-                layer_id = int(k.split('.')[5])
-                if layer_id in original_target_layers and layer_id not in target_layers:
-                    if 'lora_A' in k:
-                        nn.init.kaiming_uniform_(v, a=math.sqrt(5))
-                    elif 'lora_B' in k:
-                        nn.init.zeros_(v)
-            
                 if 'freezeA' in training_args.mode and 'lora_P' in k:
                     if 'full' in training_args.mode:
                         v.data = torch.eye(v.shape[0]).to(torch.bfloat16)

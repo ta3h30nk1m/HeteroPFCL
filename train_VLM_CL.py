@@ -52,7 +52,6 @@ def main():
     random.seed(training_args.seed)
     torch.cuda.manual_seed(training_args.seed)
     torch.cuda.manual_seed_all(training_args.seed)
-    torch.use_deterministic_algorithms(True)
 
     logging.config.fileConfig("./configuration/logging.conf")
     logger = logging.getLogger()

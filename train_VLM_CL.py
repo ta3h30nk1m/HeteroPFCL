@@ -339,7 +339,7 @@ def main():
             extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
-            
+           
             load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
             

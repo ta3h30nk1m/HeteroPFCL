@@ -97,8 +97,16 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         # self.target_layers = [last_layer*1 -1,last_layer*2 -1]
         # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
         # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
-        self.target_layers = [5,7,11,14,18,20,23,27]
-        self.target_layers2 = [5,6,8,9,11,12,14,15]
+        if 'Optimal2' in self.args.mode:
+            self.target_layers = [11,27]
+            self.target_layers2 = [8,15]
+        elif 'Optimal4' in self.args.mode:
+            self.target_layers = [5,11,20,27]
+            self.target_layers2 = [5,8,12,15]
+        elif 'Optimal8' in self.args.mode:
+            self.target_layers = [5,7,11,14,18,20,23,27]
+            self.target_layers2 = [5,6,8,9,11,12,14,15]
+        
         self.lora_A_input_1b = []
         self.lora_A_input_3b = []
         self.layer_name_1b = []

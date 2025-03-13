@@ -12,7 +12,9 @@ from federated_methods.fedpq import (feddualpq_load_state_dict, fedpq_load_state
                                      feddualMulti2pq_load_state_dict, fedMulti2pq_load_state_dict, fedMulti2pq_tv_load_state_dict,
                                      feddualMultipq_include_load_state_dict, fedBlockpq_load_state_dict, feddualMultipq_homoAgg_load_state_dict, feddualBlockpq_load_state_dict,
                                      feddualMulti05pq_homoAgg_load_state_dict,feddualMulti05pq_load_state_dict,
-                                     feddualMulti05pq_homoAggOnly_load_state_dict,feddualMultipq_homoAggOnly_load_state_dict)
+                                     feddualMulti05pq_homoAggOnly_load_state_dict,feddualMultipq_homoAggOnly_load_state_dict, feddualOptimalpq_load_state_dict,
+                                     fedMultipq_HomoAgg_load_state_dict, fedMultipq_HomoAggOnly_load_state_dict
+                                     )
 
 from federated_methods.fedavg_layerwiseloss import fedavg_layerwise_create_trainer
 from federated_methods.fedours_layerwiseloss import fedours_layerwise_create_trainer
@@ -106,6 +108,13 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in 'feddualMultipqWNfullfreeze':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_layerwise_create_trainer, OURS_aggregate_state_dict
+    elif mode in ['feddualOptimal2pqfullfreeze','feddualOptimal4pqfullfreeze','feddualOptimal8pqfullfreeze']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualOptimalpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    elif mode in ['fedMultipqfullfreeze_homoAgg']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_HomoAgg_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
+    elif mode in ['fedMultipqfullfreeze_homoAggOnly']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_HomoAggOnly_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
+    
     elif mode =='fedavg_memefficient':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_memefficient_load_state_dict, fedavg_create_trainer, fedavg_memefficient_aggregate_state_dict
     elif mode == 'fedours_memefficient':

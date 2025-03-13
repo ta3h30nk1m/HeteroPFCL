@@ -319,8 +319,7 @@ def can_infer(answer, choices):
     # If no match found, return False
     return False
 
-def main():
-    
+def main():    
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingConfig))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
@@ -340,6 +339,15 @@ def main():
                 bnb_4bit_quant_type=training_args.quant_type # {'fp4', 'nf4'}
             )
         ))
+        
+    # Fix the random seeds
+    torch.manual_seed(training_args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(training_args.seed)
+    random.seed(training_args.seed)
+    torch.cuda.manual_seed(training_args.seed)
+    torch.cuda.manual_seed_all(training_args.seed)
 
     logging.config.fileConfig("./configuration/logging.conf")
     logger = logging.getLogger()
@@ -361,13 +369,6 @@ def main():
     else:
         device = torch.device("cpu")
     logger.info(f"Set the device ({device})")
-
-    # Fix the random seeds
-    torch.manual_seed(training_args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(training_args.seed)
-    random.seed(training_args.seed)
 
     # model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     
@@ -426,7 +427,7 @@ def main():
                 model.load_state_dict(client_state_dict, strict=False)
                 model = model.to(torch.bfloat16)
                 model = model.to(device)
-            if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean'] or 'dual' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode:
                 model.set_state('gate')
             
             for client_id_ in range(training_args.num_clients):
@@ -467,7 +468,7 @@ def main():
                     personal_global_state_dict = torch.load(f'./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth', map_location='cpu')
                     model.load_state_dict(personal_global_state_dict, strict=False)
             # model.load_state_dict(server_state_dict, strict=False)
-            if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_moe', 'fedours_excludemean_hetero'] or 'dual' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode:
                 # for name, module in model.named_modules():
                 #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                 #         module.set_state('lora2')
@@ -490,7 +491,7 @@ def main():
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
-                if training_args.mode in ['fedours', 'fedours_tv'] or 'dual' in training_args.mode:
+                if 'fedours' in training_args.mode or 'dual' in training_args.mode:
                     # for name, module in model.named_modules():
                     #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                     #         module.set_state('lora1')

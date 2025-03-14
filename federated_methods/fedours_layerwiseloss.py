@@ -136,6 +136,8 @@ class LLaVATrainerOURS_Layerwise(LLaVATrainerOURS):
                 blockwise_taskloss += loss_fct(
                     shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device)
                 )
+            loss += self.args.taskloss_weight * blockwise_taskloss
+
         if 'KLloss' in self.args.mode:
             # projection -> layernorm -> head -> loss
             labels = inputs['labels']

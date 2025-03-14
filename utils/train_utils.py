@@ -1064,8 +1064,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:
                             m.lora_F = nn.ModuleDict({})
-                            m.lora_F['default'] = ProjectMLP(model.base_model.language_model.config.hidden_size, model.base_model.language_model.config.hidden_size, 128).to(compute_dtype)
-                            m.lora_F['default'].requires_grad = True
+                            # m.lora_F['default'] = ProjectMLP(model.base_model.language_model.config.hidden_size, model.base_model.language_model.config.hidden_size, 128).to(compute_dtype)
+                            # m.lora_F['default'].requires_grad = True
+                            m.lora_F['default'] = nn.Identity(model.base_model.language_model.config.hidden_size,model.base_model.language_model.config.hidden_size).to(compute_dtype)
+                            m.lora_F['default'].requires_grad = False
                 if 'distill' in training_args.mode:
                     for n, m in layer.named_modules():
                         if isinstance(m, PQLoraFullFreezeLayer) and 'mlp.down_proj' in n:

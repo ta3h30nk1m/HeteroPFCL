@@ -16,6 +16,7 @@ from federated_methods.fedpq import (feddualpq_load_state_dict, fedpq_load_state
                                      fedMultipq_HomoAgg_load_state_dict, fedMultipq_HomoAggOnly_load_state_dict
                                      )
 
+from federated_methods.sft_layerwiseloss import sft_layerwise_create_trainer
 from federated_methods.fedavg_layerwiseloss import fedavg_layerwise_create_trainer
 from federated_methods.fedours_layerwiseloss import fedours_layerwise_create_trainer
 from federated_methods.fedours_pqgrad import fedours_pqgrad_create_trainer
@@ -37,6 +38,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_include_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode == 'fedours_self':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_self_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    elif mode == 'fedMultipqfullfreeze_sft_Taskloss':
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, sft_layerwise_create_trainer, fedavg_aggregate_state_dict
     elif 'sft' in mode:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode in ['feddualpq','feddualpqfullfreeze','feddualpqfullfreeze_tv','feddualpqfreezeA','feddualpqfullfreezeA']:

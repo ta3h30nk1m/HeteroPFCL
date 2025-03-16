@@ -37,7 +37,7 @@ class DualMOELoraLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
     adapter_layer_names = ("lora1_A", "lora1_B", "lora1_embedding_A", "lora1_embedding_B",
                            "lora2_A", "lora2_B", "lora2_embedding_A", "lora2_embedding_B",
-                           "lora_w_gate")#, "lora_w_noise")
+                           "lora_w_gate", "lora_w_noise")
     # All names of other parameters that may contain adapter-related parameters
     other_param_names = ("r", "lora_alpha", "scaling", "lora_dropout")
 
@@ -53,7 +53,7 @@ class DualMOELoraLayer(BaseTunerLayer):
         self.lora2_B = nn.ModuleDict({})
         
         self.lora_w_gate= nn.ParameterDict({})
-        # self.lora_w_noise= nn.ParameterDict({})
+        self.lora_w_noise= nn.ParameterDict({})
         # For Embedding layer
         self.lora1_embedding_A = nn.ParameterDict({})
         self.lora1_embedding_B = nn.ParameterDict({})
@@ -154,8 +154,8 @@ class DualMOELoraLayer(BaseTunerLayer):
         else:
             self.scaling[adapter_name] = lora_alpha / r
         
-        self.lora_w_gate[adapter_name] = nn.Parameter(torch.tensor([0.5]), requires_grad=True)
-        # self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,2), requires_grad=True)
+        self.lora_w_gate[adapter_name] = nn.Parameter(torch.zeros(self.in_features,1), requires_grad=True)
+        self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,1), requires_grad=True)
 
         # for inits that require access to the base weight, use gather_param_ctx so that the weight is gathered when using DeepSpeed
         if isinstance(init_lora_weights, str) and init_lora_weights.startswith("pissa"):
@@ -459,8 +459,8 @@ class DualMOELoraLayer(BaseTunerLayer):
                 lora_output = lora2_B(lora2_A(dropout(sub_batch))) * scaling
             elif self.active_state =='gate':
                 # lora_output = (lora1_B(lora1_A(dropout(sub_batch))) + lora2_B(lora2_A(dropout(sub_batch)))) * scaling / 2
-                # weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], train=self.train)
-                weights = self.lora_w_gate[active_adapter][0]
+                weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
+                # weights = self.lora_w_gate[active_adapter][0]
                 lora_output = weights * lora1_B(lora1_A(dropout(sub_batch))) * scaling + (1-weights) * lora2_B(lora2_A(dropout(sub_batch))) * scaling
                 
                 # self.moe_loss = cv_squared(weights.sum(0))
@@ -491,6 +491,8 @@ class DualMOELoraLayer(BaseTunerLayer):
             p.requires_grad = True
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
+        for p in self.lora_w_noise.parameters():
+            p.requires_grad = True
     
     def activate_lora1(self):
         for p in self.lora1_A.parameters():
@@ -511,6 +513,8 @@ class DualMOELoraLayer(BaseTunerLayer):
             p.requires_grad = False
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
+        for p in self.lora_w_noise.parameters():
+            p.requires_grad = True
     
     def activate_lora2(self):
         for p in self.lora1_A.parameters():
@@ -530,6 +534,8 @@ class DualMOELoraLayer(BaseTunerLayer):
         for p in self.lora2_embedding_B.parameters():
             p.requires_grad = True
         for p in self.lora_w_gate.parameters():
+            p.requires_grad = True
+        for p in self.lora_w_noise.parameters():
             p.requires_grad = True
 # Below code is based on https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
 # and modified to work with PyTorch FSDP
@@ -817,8 +823,8 @@ class Linear(nn.Module, DualMOELoraLayer):
                         )
                 elif self.active_state == 'gate':
                     if not self.use_dora[active_adapter]:
-                        # weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], train=self.train)
-                        weights = self.lora_w_gate[active_adapter]
+                        weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
+                        # weights = self.lora_w_gate[active_adapter]
                         result = result + weights * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights)* lora2_B(lora2_A(dropout(x))) * scaling
                         
                         # self.moe_loss = cv_squared(weights.sum(0))
@@ -855,20 +861,23 @@ class Linear(nn.Module, DualMOELoraLayer):
         return "lora." + rep
 
 
-def moe_gating_weight(x, w_gate, train=True, noise_epsilon=1e-5):
+def moe_gating_weight(x, w_gate, w_noise, train=True, noise_epsilon=1e-5):
     clean_logits = x @ w_gate
     if train:
         with torch.no_grad():
-            noise_stddev = ((nn.Softplus()(clean_logits) + noise_epsilon))
+            noise_stddev = ((nn.Softplus()(x @ w_noise) + noise_epsilon))
         noisy_logits = clean_logits + (torch.randn_like(clean_logits) * noise_stddev)
         logits = noisy_logits
     else:
         logits = clean_logits
+        
+    # FIXME: Do mean or not
     logits = logits.mean(dim=1)
     
-    logits = nn.Softmax(1)(logits)
+    # logits = nn.Softmax(1)(logits)
+    logits = torch.sigmoid(logits)
     if not train:
-        print(f"weights: [{logits[:,0].mean()}, {logits[:,1].mean()}]")
+        print(f"weights: [{logits}]")
     return logits
 
 def cv_squared(x):

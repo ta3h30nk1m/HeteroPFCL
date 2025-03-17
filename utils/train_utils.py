@@ -206,7 +206,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = Dual_PQMOELorafreezeModel
             lora_config.peft_type = 'DUALPQMOEFullFreezeLORA'
         
-        elif training_args.mode in ['feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
+        elif training_args.mode in ['feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024','feddualMultipqLILfullfreeze128','feddualMultipqLILfullfreeze256',
                                 'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
                                 'feddualMultipqLILfullfreeze512_Taskloss','feddualMultipqLILfullfreeze512_KLloss','feddualMultipqLILfullfreeze512_distillTaskloss',
                                 ]:
@@ -517,16 +517,21 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         m.use_pq = False
 
 
-    elif training_args.mode in ['feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
+    elif training_args.mode in ['feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024','feddualMultipqLILfullfreeze128','feddualMultipqLILfullfreeze256',
                                 'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
                                 'feddualMultipqLILfullfreeze512_Taskloss','feddualMultipqLILfullfreeze512_KLloss','feddualMultipqLILfullfreeze512_distillTaskloss',]:
         from models.dual_pqlora_LIL_freeze_full.dual_pqloraLILlayer_freeze_full import PQLoraLILFullFreezeLayer, LoraInLora
+        from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import ProjectMLP
         last_layer = len(model.base_model.language_model.model.layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
         if '512' in training_args.mode:
             r = 512
         elif '1024' in training_args.mode:
             r = 1024
+        elif '256' in training_args.mode:
+            r = 256
+        else:
+            r = 128
         for idx, layer in enumerate(model.base_model.language_model.model.layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
@@ -1228,7 +1233,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze256_distill', 'feddualMultipqfullfreeze512_distill','feddualMultipqfullfreeze1024_distill',
                                     'feddualMultipqfullfreeze256_distillTaskloss', 'feddualMultipqfullfreeze512_distillTaskloss','feddualMultipqfullfreeze1024_distillTaskloss',
                                     'feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg',
-                                    'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
+                                    'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024','feddualMultipqLILfullfreeze128','feddualMultipqLILfullfreeze256',
                                     'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
                                     'feddualMultipqLILfullfreeze512_Taskloss','feddualMultipqLILfullfreeze512_KLloss','feddualMultipqLILfullfreeze512_distillTaskloss',
                                     'feddualMultipfullfreeze', 'feddualMultipq_freezeA_trainB_weightnormP', 'feddualMultipqWNfullfreeze'
@@ -1760,7 +1765,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
                                 'feddualMultipqfullfreeze256_KLloss', 'feddualMultipqfullfreeze512_KLloss','feddualMultipqfullfreeze1024_KLloss',
                                 'feddualMultipqfullfreeze256_distill', 'feddualMultipqfullfreeze512_distill','feddualMultipqfullfreeze1024_distill',
                                 'feddualMultipqfullfreeze256_distillTaskloss', 'feddualMultipqfullfreeze512_distillTaskloss','feddualMultipqfullfreeze1024_distillTaskloss',
-                                'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024',
+                                'feddualMultipqLILfullfreeze512','feddualMultipqLILfullfreeze1024','feddualMultipqLILfullfreeze128','feddualMultipqLILfullfreeze256',
                                 'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
                                 'feddualMultipqLILfullfreeze512_Taskloss','feddualMultipqLILfullfreeze512_KLloss','feddualMultipqLILfullfreeze512_distillTaskloss',
                                 'feddualMultipfullfreeze','feddualMultipqWNfullfreeze' 

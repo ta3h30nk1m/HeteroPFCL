@@ -515,7 +515,7 @@ def main():
             
     if training_args.use_task_vector:
         path = os.path.join(training_args.state_dir, f"round{curr_round+1}_task_vector_local_weights.pth")
-        tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': local_state_dict_list}
+        tv_weight = {'task_vectors': task_vectors}#, 'local_state_dict_list': local_state_dict_list}
         torch.save(tv_weight, path)
         
         # task_vector = F.normalize(torch.stack(task_vectors, dim=0), dim=-1)

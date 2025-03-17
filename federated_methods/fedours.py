@@ -478,8 +478,13 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 self.input_penultimate.append(input)
             def hook_fn2(module, input, output):
                 self.hidden_states_before_norm.append(input)
-            self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
-            self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
+            
+            if self.data_args.is_multimodal:
+                self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
+            else:
+                self.hooks.append(self.model2.base_model.model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.model.model.norm.register_forward_hook(hook_fn2))
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # if self.curr_round > 0:
@@ -963,11 +968,18 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                                     output = self.model2(**inputs)#.loss
                                 shift_labels = inputs['labels'][..., 1:]
                                 
-                                grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                            self.model2.base_model.language_model.lm_head.weight,
-                                                            self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                            self.model2.base_model.language_model.model.norm,
-                                                            self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                if self.data_args.is_multimodal:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.language_model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.language_model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                else:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
                                 # grads = []
                                 # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                                 #     grads.append(p.grad)

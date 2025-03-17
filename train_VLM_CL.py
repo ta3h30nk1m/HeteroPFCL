@@ -20,8 +20,6 @@ import time
 import datetime
 import torch.nn.functional as F
 
-from models.coda_prompt import CodaPrompt
-
 os.environ["WANDB_DISABLED"] = "true"
 def main():    
     parser = transformers.HfArgumentParser(
@@ -204,11 +202,17 @@ def main():
             
             model_ids[model_id] = [client_id]
     
-    if 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and training_args.use_task_vector and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
+    elif not data_args.is_multimodal and training_args.use_task_vector and 'meta-llama/Llama-3.2-1B' not in models.keys():
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
+        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['meta-llama/Llama-3.2-1B'] = model2
+    
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids}
     
@@ -340,7 +344,7 @@ def main():
             extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
-           
+
             load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
             
@@ -429,7 +433,7 @@ def main():
                 
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
-                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
+                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'] if data_args.is_multimodal else models['meta-llama/Llama-3.2-1B']
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
@@ -455,7 +459,10 @@ def main():
                 else:
                     task_vectors[client_id] = trainer.task_vector
                     
-                    models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                    if data_args.is_multimodal:
+                        models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                    else:
+                        models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")

@@ -9,9 +9,10 @@ from peft.tuners.lora import LoraLayer
 from functools import reduce
 import torch.nn.utils as nn_utils
 
-from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration
+from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
 
 from models.llava.llava_multi import LlavaMultiForConditionalGeneration
+from models.llava.llama_model import CustomLlamaForCausalLM
 import copy
 ACCESS_TOKEN = "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"
 
@@ -42,29 +43,47 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if tokenizer.unk_token is not None and tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.unk_token
     
-    if model_args.model_type == 'llama3-8b':
-        tokenizer.pad_token = tokenizer.eos_token
-        
     if training_args.is_eval:
         tokenizer.padding_side = "left"
     
     processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
     
-    if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
-        model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
-            model_args.model_name_or_path,
-            torch_dtype=compute_dtype,
-            use_flash_attention_2=True
-        )
+    if data_args.is_multimodal:
+        if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
+            model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True
+            )
+        else:
+            model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True
+            )
     else:
-        model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
-            model_args.model_name_or_path,
-            torch_dtype=compute_dtype,
-            use_flash_attention_2=True
-        )
-        
+        if 'llama' in model_args.model_name_or_path.lower():
+            model = CustomLlamaForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True
+            )
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True
+            )
     model.config.use_cache = False
-    model.vision_tower.requires_grad_(False)
+    if getattr(model, 'vision_tower', None) is not None:
+        model.vision_tower.requires_grad_(False)
+    
+    if tokenizer.pad_token is None:
+        smart_tokenizer_and_embedding_resize(
+            special_tokens_dict=dict(pad_token="[PAD]"),
+            tokenizer=tokenizer,
+            model=model,
+        )
     
     model = model.to(training_args.device)
     
@@ -242,14 +261,15 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
         model = get_peft_model(model, ia3_config)
 
-    if 'llama3' in model_args.model_name_or_path.lower():
+    if 'llama3' in model_args.model_name_or_path.lower() or 'llama-3' in model_args.model_name_or_path.lower():
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates['llama3']
     elif 'qwen2' in model_args.model_name_or_path.lower():
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates['qwen']
     else:
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates["vicuna_v1"]
 
-    data_args.image_processor = processor.image_processor
+    if getattr(processor, 'image_processor', None) is not None:
+        data_args.image_processor = processor.image_processor
 
     model.config.tokenizer_padding_side = tokenizer.padding_side
     model.config.tokenizer_model_max_length = tokenizer.model_max_length
@@ -1325,6 +1345,30 @@ def find_all_linear_names(model):
 
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.trainer_pt_utils import get_parameter_names
+
+def smart_tokenizer_and_embedding_resize(
+    special_tokens_dict,
+    tokenizer,
+    model,
+):
+    """Resize tokenizer and embedding.
+
+    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
+    """
+    num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    model.resize_token_embeddings(len(tokenizer))
+
+    if num_new_tokens > 0:
+        input_embeddings = model.get_input_embeddings().weight.data
+        output_embeddings = model.get_output_embeddings().weight.data
+
+        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True)
+        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True)
+
+        input_embeddings[-num_new_tokens:] = input_embeddings_avg
+        output_embeddings[-num_new_tokens:] = output_embeddings_avg
 
 def get_decay_parameter_names(model):
     """

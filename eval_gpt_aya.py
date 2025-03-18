@@ -83,6 +83,11 @@ if __name__ == '__main__':
         os.makedirs(output_dir, exist_ok=True)
         cur_reviews = []
 
+    if os.path.exists(args.output):
+        print('result exists')
+        import sys
+        sys.exit()
+    
     review_file = open(f'{args.output}', 'a',encoding='utf-8')
 
     template = "[Instruction]\nPlease act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question displayed below. A good answer should follow these rules: \n1.It should be in the same language as the question. \n2. It should answer the request in the instruction. \n3.It should be factually and semantically comprehensible. \n4. It should be grammatically correct and fluent. \nBegin your evaluation by providing a short explanation. Be as objective as possible. After providing your explanation, you must rate the response on a scale of 1 to 10 by strictly following this format: \"[[rating]]\", for example: \"Rating: [[5]]\".A human annotated answer is given for reference.\n\n[Question]\n{question}\n\n[The Start of Assistant's Answer]\n{answer}\n[The End of Assistant's Answer]\n\n[Reference]\n{reference}"

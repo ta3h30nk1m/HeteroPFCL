@@ -2,9 +2,9 @@
     {
         "client_id": 0,
         "datasets":[
-            {"dataset": "Fed-aya","subset_id": 10, "type":"open-ended", "metric":"RougeL"},
-            {"dataset": "Fed-aya","subset_id": 11, "type":"open-ended", "metric":"RougeL"},
-            {"dataset": "Fed-aya","subset_id": 12, "type":"open-ended", "metric":"RougeL"}
+            {"dataset": "Fed-aya","subset_id": 0, "type":"open-ended", "metric":"RougeL"},
+            {"dataset": "Fed-aya","subset_id": 1, "type":"open-ended", "metric":"RougeL"},
+            {"dataset": "Fed-aya","subset_id": 2, "type":"open-ended", "metric":"RougeL"}
         ],
         "model_id": "meta-llama/Llama-3.2-1B-Instruct"
     },

@@ -490,7 +490,7 @@ def main():
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             
-            if (training_args.local_rank == 0 or training_args.local_rank == -1) and (curr_round+1)%(total_rounds/20) == 0:
+            if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(total_rounds/20) == 0:
                 torch.save(state_dict, output_dir)
             
             local_state_dict = getattr(trainer, 'global_weight', None)

@@ -6,7 +6,7 @@
             {"dataset": "Fed-aya","subset_id": 1, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Fed-aya","subset_id": 2, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "meta-llama/Llama-3.2-1B-Instruct"
+        "model_id": "meta-llama/Llama-3.2-3B-Instruct"
     },
     {
         "client_id": 1,
@@ -15,7 +15,7 @@
             {"dataset": "Fed-aya","subset_id": 11, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Fed-aya","subset_id": 12, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "meta-llama/Llama-3.2-1B-Instruct"
+        "model_id": "meta-llama/Llama-3.2-3B-Instruct"
     },
     {
         "client_id": 2,
@@ -51,7 +51,7 @@
             {"dataset": "Fed-aya","subset_id": 51, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Fed-aya","subset_id": 52, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "meta-llama/Llama-3.2-1B-Instruct"
+        "model_id": "meta-llama/Llama-3.2-3B-Instruct"
     },
     {
         "client_id": 6,
@@ -60,7 +60,7 @@
             {"dataset": "Fed-aya","subset_id": 61, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Fed-aya","subset_id": 62, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "meta-llama/Llama-3.2-1B-Instruct"
+        "model_id": "meta-llama/Llama-3.2-3B-Instruct"
     },
     {
         "client_id": 7,
@@ -87,6 +87,6 @@
             {"dataset": "Fed-aya","subset_id": 91, "type":"open-ended", "metric":"RougeL"},
             {"dataset": "Fed-aya","subset_id": 92, "type":"open-ended", "metric":"RougeL"}
         ],
-        "model_id": "meta-llama/Llama-3.2-1B-Instruct"
+        "model_id": "meta-llama/Llama-3.2-3B-Instruct"
     }
 ]

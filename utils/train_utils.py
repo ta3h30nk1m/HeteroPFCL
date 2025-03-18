@@ -1577,8 +1577,9 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
     
     return datalist
 
-def get_keys_to_del(training_args, new_global_state_dict):
+def get_keys_to_del(training_args, new_global_state_dict, data_args):
     keys_to_del = []
+    layer_index = 5 if data_args.is_multimodal else 4
     if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero',
                               'fedours_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly',
                               'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','fedours_self','feddualMulti05pqfullfreeze_homoAggOnly',
@@ -1597,12 +1598,12 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         layers_to_del = layer_num[:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
     
     elif training_args.mode in ['fedBlock2pqfullfreeze', 'fedBlock2pqfullfreeze_sft',
@@ -1610,7 +1611,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         if 'Block2' in training_args.mode:
@@ -1625,13 +1626,13 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualBlock2pqfullfreeze', 'feddualBlock4pqfullfreeze']:
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         if 'Block2' in training_args.mode:
@@ -1646,7 +1647,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
                     
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['fedMultipqfullfreeze','fedMultipqfullfreeze_sft','fedMultipqfullfreeze_tv','fedMultipqfullfreeze_ours','fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly',
                                 'fedMultipqfullfreezeA','fedMultipqfullfreezeA_sft','fedMultipqfreezeA','fedMultipqfreezeA_sft',
@@ -1657,7 +1658,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         index = len(layer_num) // 4
@@ -1668,13 +1669,13 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'fedMulti2pqfullfreeze' or training_args.mode == 'fedMulti2pqfullfreeze_sft' or training_args.mode == 'fedMulti2pqfullfreeze_tv' or training_args.mode == 'fedMulti2pqfullfreeze_ours' or training_args.mode == 'fedMulti2pqfullfreezeA' or training_args.mode == 'fedMulti2pqfreezeA':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         index = len(layer_num) // 4
@@ -1689,32 +1690,32 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
 
     elif training_args.mode == 'fedFLpq' or training_args.mode == 'fedFLpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'fedFMLpq':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         mid_layer = int(len(layer_num)/2) - 1
         del layer_num[mid_layer]
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora_P' not in k and 'lora_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'fedpqfullfreeze' or training_args.mode == 'fedpqfullfreeze_sft' or training_args.mode == 'fedpqfullfreezeA_sft' or training_args.mode == 'fedpqfullfreezeA' or training_args.mode == 'fedpqfreezeA_sft' or training_args.mode == 'fedpqfreezeA':
         for k in new_global_state_dict.keys():
@@ -1728,29 +1729,29 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         layers_to_del = layer_num[:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'feddualFLpq' or training_args.mode == 'feddualFLpqfreeze':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'feddualFMLpq':
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         mid_layer = int(len(layer_num)/2) - 1
@@ -1758,7 +1759,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num[1:-1]
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualMultipqfreeze','feddualMultipqfullfreeze','feddualMultipqfullfreeze_tv','feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
                                 'feddualMultipqfullfreezeA','feddualMultipqfullfreezeA_tv','feddualMultipqfullfreezeA_excludemean',
@@ -1779,7 +1780,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         index = len(layer_num) // 4
@@ -1790,14 +1791,14 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean',
                                 ]:
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         index = len(layer_num) // 2
@@ -1806,14 +1807,14 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualOptimal2pqfullfreeze','feddualOptimal4pqfullfreeze','feddualOptimal8pqfullfreeze',
                                 ]:
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         if len(layer_num) == 28: # llama3.2 3B
@@ -1835,7 +1836,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode == 'feddualMulti2pqfullfreeze' or training_args.mode == 'feddualMulti2pqfullfreeze_tv'  or training_args.mode == 'feddualMulti2pqfullfreeze_excludemean' \
         or training_args.mode == 'feddualMulti2pqfullfreezeA' or training_args.mode == 'feddualMulti2pqfullfreezeA_tv' or training_args.mode == 'feddualMulti2pqfullfreezeA_excludemean' \
@@ -1843,7 +1844,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:
-                layer_num.append(int(k.split('.')[5]))
+                layer_num.append(int(k.split('.')[layer_index]))
         layer_num = sorted(list(set(layer_num)))
         
         index = len(layer_num) // 4
@@ -1858,7 +1859,7 @@ def get_keys_to_del(training_args, new_global_state_dict):
         
         layers_to_del = layer_num
         for k in new_global_state_dict.keys():
-            if 'layers.' in k and int(k.split('.')[5]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
+            if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
 
     return keys_to_del

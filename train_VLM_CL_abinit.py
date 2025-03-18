@@ -21,7 +21,7 @@ import datetime
 import torch.nn.functional as F
 
 from federated_methods.AB_init import ABInit_create_trainer
-
+os.environ["WANDB_DISABLED"] = "true"
 def main():
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingConfig))
@@ -93,7 +93,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             global_state_dict = copy.deepcopy(model_list[model_id])
-            keys_to_del = get_keys_to_del(training_args, global_state_dict)
+            keys_to_del = get_keys_to_del(training_args, global_state_dict, data_args)
             for k in keys_to_del:
                 del global_state_dict[k]
             global_state_dict_list.append(global_state_dict)
@@ -148,7 +148,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(global_state_dict))
             old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
             new_global_state_dict=copy.deepcopy(global_state_dict)
-            keys_to_del = get_keys_to_del(training_args, new_global_state_dict)
+            keys_to_del = get_keys_to_del(training_args, new_global_state_dict, data_args)
             for k in keys_to_del:
                 del new_global_state_dict[k]
             global_state_dict_list.append(new_global_state_dict)
@@ -271,7 +271,7 @@ def main():
     
 
     ##### B init #####
-    public_datalist_ = public_datalist[10000:12000]
+    public_datalist_ = public_datalist[10000:11000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,

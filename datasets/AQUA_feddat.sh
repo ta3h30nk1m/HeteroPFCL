@@ -10,6 +10,6 @@ rm -rf ArtVQA
 cd AQUA
 mv Images images
 
-gdrive files download 
+gdrive files download 1VLX4WwmE6tYhKK7vK1lSNZb5eFt64p53
 tar -xvf AQUA_feddat_jsons.tar
 rm AQUA_feddat_jsons.tar

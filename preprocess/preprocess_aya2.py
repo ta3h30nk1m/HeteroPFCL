@@ -270,7 +270,7 @@ if __name__ == '__main__':
     tasks = []
     for i, client_names in enumerate(client_configs):
         for j, client_key in enumerate(client_names):
-            if i == 0: continue
+            if i == 0 and os.path.exists(os.path.join(test_folder, f'dataset-{j}.json')): continue
             if os.path.exists(os.path.join(test_folder, f'dataset-{i}{j}.json')): continue
             task_args = (
                 i,

@@ -164,19 +164,22 @@ def main():
     
     ##############################################################################################
     # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
-    model2 = models["thkim0305/llama3.2_1B_vl"]
+    # llm models: meta-llama/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-3B-Instruct meta-llama/Llama-3.1-8B-Instruct
+    # model2 = models["thkim0305/llama3.2_1B_vl"]
+    model2 = models["meta-llama/Llama-3.2-1B-Instruct"]
     
-    data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
+    # data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
+    data_path = 'chatbotIT.json'
     public_datalist = json.load(open(data_path, "r"))
     
     # Filter out items without the "image" key
-    public_datalist = [item for item in public_datalist if "image" in item]
+    # public_datalist = [item for item in public_datalist if "image" in item]
     
     random.shuffle(public_datalist)
 
     ##### A_PCA init #####
-    public_datalist_ = public_datalist[:200]
+    public_datalist_ = public_datalist[:1000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -184,9 +187,10 @@ def main():
                                                 data_args=copy.deepcopy(new_data_args))
     
     # train bigger model
-    model = models["thkim0305/llama3.2_3B_vl"]
+    # model = models["thkim0305/llama3.2_3B_vl"]
+    model = models["meta-llama/Llama-3.2-3B-Instruct"]
     from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
-    trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, train_A = True)
+    trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
 
     results = trainer.train()
 
@@ -203,7 +207,7 @@ def main():
     state_dict2 = get_peft_state_maybe_zero_3(
         model2.named_parameters(), training_args.lora_bias
     )
-    lora_r = 128
+    lora_r = 16
     for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
         _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=lora_r)
         _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=lora_r)
@@ -232,7 +236,7 @@ def main():
     model.load_state_dict(state_dict, strict=False) 
     model2.load_state_dict(state_dict2, strict=False) 
 
-    public_datalist_ = public_datalist[2000:7000]
+    public_datalist_ = public_datalist[2000:10000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -240,9 +244,10 @@ def main():
                                                 data_args=copy.deepcopy(new_data_args))
     
     # train bigger model
-    model = models["thkim0305/llama3.2_3B_vl"]
+    # model = models["thkim0305/llama3.2_3B_vl"]
+    model = models["meta-llama/Llama-3.2-3B-Instruct"]
     from federated_methods.AB_init import ABInit_create_trainer
-    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, train_A = True)
+    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
 
     results = trainer.train()
     
@@ -266,19 +271,16 @@ def main():
     
 
     ##### B init #####
-    public_datalist_ = public_datalist[7000:7100]
+    public_datalist_ = public_datalist[10000:12000]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(new_data_args))
     
-    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, train_A = False)
+    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = False)
 
     results = trainer.train()
-    
-    last_layer = len(model.base_model.language_model.model.layers) // 4
-    target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
     
     lora_B_output_1b = trainer.lora_B_output_1b
     lora_B_output_3b = trainer.lora_B_output_3b

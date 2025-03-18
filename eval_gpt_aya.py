@@ -113,3 +113,4 @@ if __name__ == '__main__':
         review_file.write(json.dumps(review_item, ensure_ascii=False) + '\n')
         review_file.flush()
     review_file.close()
+    print('gpt evaluation finished!')

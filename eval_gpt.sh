@@ -1,6 +1,7 @@
 #!/bin/bash
 
-base_dir="zeroshot/llama3_3b"
+# base_dir="fedours/fedours_T05_bs4_100iter_fedaya_1b"
+base_dir="fedavg/fedavg_bs4_100iter_fedaya_1b"
 
 # Associate each integer value with a list of corresponding dataset names
 declare -A dataset_map
@@ -27,7 +28,7 @@ for i in "${!dataset_map[@]}"; do
         
         echo "Processing ${dataset} (client ${i})..."
         OPENAI_API_KEY="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" \
-        python eval_gpt_aya.py -r "$input_file" -o "$output_file" --random_seed 42
+        python eval_gpt_aya.py -r "$input_file" -o "$output_file" --random_seed 42 > fedours_T05_bs4_100iter_fedaya_1b_gpteval.out 2>&1 &
     done
 done
 

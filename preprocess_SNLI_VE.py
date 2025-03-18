@@ -76,13 +76,13 @@ with open(input_file, "r", encoding="utf-8") as f:
 
 os.makedirs(f'{base_dir}/{dir_type}', exist_ok=True)
 os.makedirs(f'{base_dir}/images', exist_ok=True)
-for idx, subtask in enumerate(list(final_data.keys())):
-    if subtask == 'Uncategorized':
-        continue
+del final_data['Uncategorized']
+
+for idx, subtask in enumerate(sorted(list(final_data.keys()))):
     sampled_subtask = random.sample(final_data[subtask], min(len(final_data[subtask]), max_num))
     print(f"{subtask} original {len(final_data[subtask])} sampled {len(sampled_subtask)}")
-
-    with open(f"{base_dir}/{dir_type}/dataset-{idx}.json", 'w', encoding='utf-8') as f:
+    random.shuffle(sampled_subtask)
+    with open(f"{base_dir}/{dir_type}/dataset-{idx//4}{idx%4}.json", 'w', encoding='utf-8') as f:
         json.dump(sampled_subtask, f, indent=4)
 
     for item in sampled_subtask:

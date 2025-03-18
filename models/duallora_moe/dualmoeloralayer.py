@@ -461,7 +461,7 @@ class DualMOELoraLayer(BaseTunerLayer):
                 # lora_output = (lora1_B(lora1_A(dropout(sub_batch))) + lora2_B(lora2_A(dropout(sub_batch)))) * scaling / 2
                 weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
                 # weights = self.lora_w_gate[active_adapter][0]
-                lora_output = weights * lora1_B(lora1_A(dropout(sub_batch))) * scaling + (1-weights) * lora2_B(lora2_A(dropout(sub_batch))) * scaling
+                lora_output = weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(sub_batch))) * scaling + (1-weights.unsqueeze(-1)) * lora2_B(lora2_A(dropout(sub_batch))) * scaling
                 
                 # self.moe_loss = cv_squared(weights.sum(0))
             result[sub_batch_indices_list[i]] += lora_output.to(torch_result_dtype)
@@ -825,7 +825,7 @@ class Linear(nn.Module, DualMOELoraLayer):
                     if not self.use_dora[active_adapter]:
                         weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.train)
                         # weights = self.lora_w_gate[active_adapter]
-                        result = result + weights * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights)* lora2_B(lora2_A(dropout(x))) * scaling
+                        result = result + weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights.unsqueeze(-1))* lora2_B(lora2_A(dropout(x))) * scaling
                         
                         # self.moe_loss = cv_squared(weights.sum(0))
                     else:

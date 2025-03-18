@@ -60,7 +60,7 @@ logger = logging.get_logger(__name__)
 
 from eval_VLM_CL import anytime_evaluation
 
-def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, train_A=True):
+def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     trainer = LLaVATrainerABInit(model=model,
@@ -68,15 +68,17 @@ def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, 
         args=training_args,
         model2 = model2,
         train_A=train_A,
+        data_args=data_args,
         **data_module,
         )
     return trainer
 
 class LLaVATrainerABInit(LLaVATrainer):
-    def __init__(self, model2, train_A,**kwargs):
+    def __init__(self, model2, train_A,data_args,**kwargs):
         super(LLaVATrainerABInit, self).__init__(**kwargs)
         self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
         self.train_A = train_A
+        self.data_args=data_args
         self.hooks = []
         self.lora_outputs = []
         self.lora_targets = []
@@ -93,10 +95,16 @@ class LLaVATrainerABInit(LLaVATrainer):
         def hook_fn_B2(module, input, output):
             # Store the output for further processing
             self.lora_targets.append(output.detach().cpu())
-        # last_layer = len(self.model.base_model.language_model.model.layers) // 4
-        # self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
-        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        if self.data_args.is_multimodal:
+            last_layer = len(self.model.base_model.language_model.model.layers) // 4
+            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+            last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
+            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        else:
+            last_layer = len(self.model.base_model.model.model.layers) // 4
+            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+            last_layer2 = len(self.model2.base_model.model.model.layers) // 4
+            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
         # self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
         # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
         # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
@@ -106,39 +114,61 @@ class LLaVATrainerABInit(LLaVATrainer):
         # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
         # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
         
-        if 'Optimal2' in self.args.mode:
-            self.target_layers = [11,27]
-            self.target_layers2 = [8,15]
-        elif 'Optimal4' in self.args.mode:
-            self.target_layers = [5,11,20,27]
-            self.target_layers2 = [5,8,12,15]
-        elif 'Optimal8' in self.args.mode:
-            self.target_layers = [5,7,11,14,18,20,23,27]
-            self.target_layers2 = [5,6,8,9,11,12,14,15]
+        # if 'Optimal2' in self.args.mode:
+        #     self.target_layers = [11,27]
+        #     self.target_layers2 = [8,15]
+        # elif 'Optimal4' in self.args.mode:
+        #     self.target_layers = [5,11,20,27]
+        #     self.target_layers2 = [5,8,12,15]
+        # elif 'Optimal8' in self.args.mode:
+        #     self.target_layers = [5,7,11,14,18,20,23,27]
+        #     self.target_layers2 = [5,6,8,9,11,12,14,15]
         
         if train_A:
-            
-            # only makes lora_A for target layers trainable
-            for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
-                if idx in self.target_layers:
-                    for n, p in layer.named_parameters():
-                        if 'lora_A' in n:
-                            p.requires_grad = True
-                        else:
+            if self.data_args.is_multimodal:
+                # only makes lora_A for target layers trainable
+                for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
+                    if idx in self.target_layers:
+                        for n, p in layer.named_parameters():
+                            if 'lora_A' in n:
+                                p.requires_grad = True
+                            else:
+                                p.requires_grad = False
+                        
+                        for n, m in layer.named_modules():
+                            if 'lora_A.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_A1))
+                    else:
+                        for n, p in layer.named_parameters():
                             p.requires_grad = False
-                    
-                    for n, m in layer.named_modules():
-                        if 'lora_A.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn_A1))
-                else:
-                    for n, p in layer.named_parameters():
-                        p.requires_grad = False
-            # only makes lora_A for target layers trainable
-            for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                if idx in self.target_layers2:
-                    for n, m in layer.named_modules():
-                        if 'lora_A.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn_A2))
+                # only makes lora_A for target layers trainable
+                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
+                    if idx in self.target_layers2:
+                        for n, m in layer.named_modules():
+                            if 'lora_A.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_A2))
+            else:
+                # only makes lora_A for target layers trainable
+                for idx, layer in enumerate(self.model.base_model.model.model.layers):
+                    if idx in self.target_layers:
+                        for n, p in layer.named_parameters():
+                            if 'lora_A' in n:
+                                p.requires_grad = True
+                            else:
+                                p.requires_grad = False
+                        
+                        for n, m in layer.named_modules():
+                            if 'lora_A.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_A1))
+                    else:
+                        for n, p in layer.named_parameters():
+                            p.requires_grad = False
+                # only makes lora_A for target layers trainable
+                for idx, layer in enumerate(self.model2.base_model.model.model.layers):
+                    if idx in self.target_layers2:
+                        for n, m in layer.named_modules():
+                            if 'lora_A.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_A2))
         else:
             # only makes lora_B for target layers trainable
             self.lora_B_output_1b = []
@@ -146,36 +176,67 @@ class LLaVATrainerABInit(LLaVATrainer):
             self.layer_name_1b = []
             self.layer_name_3b = []
             
-            for n, p in self.model.named_parameters():
-                if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers:
-                    self.layer_name_3b.append(n)
-            
-            for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
-                if idx in self.target_layers:
-                    for n, p in layer.named_parameters():
-                        if 'lora_P' in n:
-                            p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                        else:
-                            p.requires_grad = True
-                    for n, m in layer.named_modules():
-                        if 'lora_B.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn_B1))
-                else:
-                    for n, p in layer.named_parameters():
-                        p.requires_grad = False
-            
-            for n, p in self.model2.named_parameters():
-                if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers2:
-                    self.layer_name_1b.append(n)
-            for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                if idx in self.target_layers2:
-                    for n, p in layer.named_parameters():
-                        if 'lora_P' in n:
-                            p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                    for n, m in layer.named_modules():
-                        if 'lora_B.default' in n:
-                            self.hooks.append(m.register_forward_hook(hook_fn_B2))
-            
+            if self.data_args.is_multimodal:
+                for n, p in self.model.named_parameters():
+                    if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers:
+                        self.layer_name_3b.append(n)
+                for n, p in self.model2.named_parameters():
+                    if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers2:
+                        self.layer_name_1b.append(n)
+                for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
+                    if idx in self.target_layers:
+                        for n, p in layer.named_parameters():
+                            if 'lora_P' in n:
+                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                            else:
+                                p.requires_grad = True
+                        for n, m in layer.named_modules():
+                            if 'lora_B.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_B1))
+                    else:
+                        for n, p in layer.named_parameters():
+                            p.requires_grad = False
+                
+                
+                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
+                    if idx in self.target_layers2:
+                        for n, p in layer.named_parameters():
+                            if 'lora_P' in n:
+                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                        for n, m in layer.named_modules():
+                            if 'lora_B.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_B2))
+            else:
+                for n, p in self.model.named_parameters():
+                    if 'lora_B.default' in n and int(n.split('.')[4]) in self.target_layers:
+                        self.layer_name_3b.append(n)
+                for n, p in self.model2.named_parameters():
+                    if 'lora_B.default' in n and int(n.split('.')[4]) in self.target_layers2:
+                        self.layer_name_1b.append(n)
+                for idx, layer in enumerate(self.model.base_model.model.model.layers):
+                    if idx in self.target_layers:
+                        for n, p in layer.named_parameters():
+                            if 'lora_P' in n:
+                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                            else:
+                                p.requires_grad = True
+                        for n, m in layer.named_modules():
+                            if 'lora_B.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_B1))
+                    else:
+                        for n, p in layer.named_parameters():
+                            p.requires_grad = False
+                
+                
+                for idx, layer in enumerate(self.model2.base_model.model.model.layers):
+                    if idx in self.target_layers2:
+                        for n, p in layer.named_parameters():
+                            if 'lora_P' in n:
+                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                        for n, m in layer.named_modules():
+                            if 'lora_B.default' in n:
+                                self.hooks.append(m.register_forward_hook(hook_fn_B2))
+        self.model_accepts_loss_kwargs = False
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         self.lora_outputs = []
         self.lora_targets = []
@@ -214,7 +275,13 @@ class LLaVATrainerABInit(LLaVATrainer):
             # encourage orthogonality
             cos_loss = 0
             layer_cnt = 0
-            for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
+            
+            if self.data_args.is_multimodal:
+                layers = self.model.base_model.language_model.model.layers
+            else:
+                layers = self.model.base_model.model.model.layers
+            
+            for idx, layer in enumerate(layers):
                 if idx in self.target_layers:
                     for n, p in layer.named_parameters():
                         if 'lora_A' in n:

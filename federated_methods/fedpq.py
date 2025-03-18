@@ -17,6 +17,7 @@ def fedpq_load_state_dict(model, global_state_dict, local_state_dict_list, clien
 
 def fedlastpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -33,11 +34,11 @@ def fedlastpq_load_state_dict(model, global_state_dict, local_state_dict_list, c
                 layer_num = []
                 for k in local_state_dict_list[id].keys():
                     if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
+                        layer_num.append(int(k.split('.')[layer_index]))
                 layer_num = sorted(list(set(layer_num)))
                 splited = target_key.split('.')
-                if int(splited[5]) != layer_num[-1]: # last layer
-                    splited[5] = str(layer_num[-1])
+                if int(splited[layer_index]) != layer_num[-1]: # last layer
+                    splited[layer_index] = str(layer_num[-1])
                     target_key = '.'.join(splited)
                 new_param += local_state_dict_list[id][target_key] / training_args.num_clients
                 
@@ -54,6 +55,7 @@ def fedlastpq_load_state_dict(model, global_state_dict, local_state_dict_list, c
 
 def fedlastpq_tv_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -83,11 +85,11 @@ def fedlastpq_tv_load_state_dict(model, global_state_dict, local_state_dict_list
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = sorted(list(set(layer_num)))
                     splited = name.split('.')
-                    if int(splited[5]) != layer_num[-1]: # last layer
-                        splited[5] = str(layer_num[-1])
+                    if int(splited[layer_index]) != layer_num[-1]: # last layer
+                        splited[layer_index] = str(layer_num[-1])
                         target_key = '.'.join(splited)
                     else:
                         target_key = name
@@ -104,6 +106,7 @@ def fedlastpq_tv_load_state_dict(model, global_state_dict, local_state_dict_list
 
 def fedFLpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -117,16 +120,16 @@ def fedFLpq_load_state_dict(model, global_state_dict, local_state_dict_list, cli
             
             for id in range(training_args.num_clients):
                 splited = target_key.split('.')
-                if int(splited[5]) != 0: # first layer
+                if int(splited[layer_index]) != 0: # first layer
                     # if layer number is different
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = sorted(list(set(layer_num)))
                     
-                    if int(splited[5]) != layer_num[-1]: # last layer
-                        splited[5] = str(layer_num[-1])
+                    if int(splited[layer_index]) != layer_num[-1]: # last layer
+                        splited[layer_index] = str(layer_num[-1])
                         target_key = '.'.join(splited)
                 new_param += local_state_dict_list[id][target_key] / training_args.num_clients
                 
@@ -143,6 +146,7 @@ def fedFLpq_load_state_dict(model, global_state_dict, local_state_dict_list, cli
 
 def fedFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -154,7 +158,7 @@ def fedFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list, cl
         cur_layer_num = []
         for k in global_state_dict.keys():
             if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
         
         for name in global_state_dict.keys():
@@ -163,21 +167,21 @@ def fedFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list, cl
             
             for id in range(training_args.num_clients):
                 splited = target_key.split('.')
-                if int(splited[5]) != 0: # first layer
+                if int(splited[layer_index]) != 0: # first layer
                     # if layer number is different
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = sorted(list(set(layer_num)))
                     
                     mid_layer = layer_num[int(len(layer_num)/2)] - 1
                     
                     if cur_layer_num[-1] != layer_num[-1]: # if different size
-                        if int(splited[5]) == cur_layer_num[-2]: # mid layer
-                            splited[5] = str(mid_layer)
-                        elif int(splited[5]) == cur_layer_num[-1]: # last layer 
-                            splited[5] = str(layer_num[-1])
+                        if int(splited[layer_index]) == cur_layer_num[-2]: # mid layer
+                            splited[layer_index] = str(mid_layer)
+                        elif int(splited[layer_index]) == cur_layer_num[-1]: # last layer 
+                            splited[layer_index] = str(layer_num[-1])
                         new_target_key = '.'.join(splited)
                     else:
                         new_target_key = target_key
@@ -198,6 +202,7 @@ def fedFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list, cl
 
 def fedMultipq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -207,7 +212,7 @@ def fedMultipq_load_state_dict(model, global_state_dict, local_state_dict_list, 
         cur_layer_num = []
         for k in global_state_dict.keys():
             if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
         new_global_state_dict = {}
         for name in global_state_dict.keys():
@@ -221,19 +226,13 @@ def fedMultipq_load_state_dict(model, global_state_dict, local_state_dict_list, 
                 layer_num = []
                 for k in local_state_dict_list[id].keys():
                     if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
+                        layer_num.append(int(k.split('.')[layer_index]))
                 layer_num = len(set(layer_num)) // 4
                 
                 target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                 if cur_layer_num[-1] != target_layers[-1]: # if different size
-                    if int(splited[5]) == cur_layer_num[0]: # mid layer
-                        splited[5] = str(target_layers[0])
-                    elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                        splited[5] = str(target_layers[1])
-                    elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                        splited[5] = str(target_layers[2])
-                    elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                        splited[5] = str(target_layers[3])
+                    target_idx = cur_layer_num.index(int(splited[layer_index]))
+                    splited[layer_index] = str(target_layers[target_idx])
                     new_target_key = '.'.join(splited)
                 else:
                     new_target_key = target_key
@@ -252,6 +251,7 @@ def fedMultipq_load_state_dict(model, global_state_dict, local_state_dict_list, 
 
 def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -267,32 +267,26 @@ def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dic
         cur_layer_num = []
         for k in global_state_dict.keys():
             if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
         new_global_state_dict = {}
         for name in global_state_dict.keys():
             new_param = 0
             target_key = name
             splited = target_key.split('.')
-            if int(splited[5]) in cur_layer_num:
+            if int(splited[layer_index]) in cur_layer_num:
                 for id in range(training_args.num_clients):
                     # if layer number is different
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = len(set(layer_num)) // 4
                     
                     target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                     if cur_layer_num[-1] != target_layers[-1]: # if different size
-                        if int(splited[5]) == cur_layer_num[0]: # mid layer
-                            splited[5] = str(target_layers[0])
-                        elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                            splited[5] = str(target_layers[1])
-                        elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                            splited[5] = str(target_layers[2])
-                        elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                            splited[5] = str(target_layers[3])
+                        idx = cur_layer_num.index(int(splited[layer_index]))
+                        splited[layer_index] = str(target_layers[idx])
                         new_target_key = '.'.join(splited)
                     else:
                         new_target_key = target_key
@@ -315,6 +309,7 @@ def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dic
             
 def fedMultipq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -330,14 +325,14 @@ def fedMultipq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state
         cur_layer_num = []
         for k in global_state_dict.keys():
             if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
         new_global_state_dict = {}
         for name in global_state_dict.keys():
             new_param = 0
             target_key = name
             splited = target_key.split('.')
-            if int(splited[5]) in cur_layer_num:
+            if int(splited[layer_index]) in cur_layer_num:
                 continue
             else:
                 for id in homo_client_ids:
@@ -356,6 +351,7 @@ def fedMultipq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state
 
 def fedBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -365,7 +361,7 @@ def fedBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, 
         cur_layer_num = []
         for k in global_state_dict.keys():
             if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
+                cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
         new_global_state_dict = {}
         
@@ -384,12 +380,12 @@ def fedBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, 
                 layer_num = []
                 for k in local_state_dict_list[id].keys():
                     if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
+                        layer_num.append(int(k.split('.')[layer_index]))
                 block_num = len(set(layer_num)) // block_layer_num
                 target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
                 if cur_layer_num[-1] != target_layers[-1]: # if different size
-                    idx = cur_layer_num.index(int(splited[5]))
-                    splited[5] = str(target_layers[idx])
+                    idx = cur_layer_num.index(int(splited[layer_index]))
+                    splited[layer_index] = str(target_layers[idx])
                     new_target_key = '.'.join(splited)
                 else:
                     new_target_key = target_key
@@ -408,6 +404,7 @@ def fedBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, 
 
 def feddualBlockpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -434,7 +431,7 @@ def feddualBlockpq_load_state_dict(model, global_state_dict, local_state_dict_li
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             if 'Block2' in training_args.mode:
@@ -456,12 +453,12 @@ def feddualBlockpq_load_state_dict(model, global_state_dict, local_state_dict_li
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     block_num = len(set(layer_num)) // block_layer_num
                     target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
                     if cur_layer_num[-1] != target_layers[-1]: # if different size
-                        idx = cur_layer_num.index(int(splited[5]))
-                        splited[5] = str(target_layers[idx])
+                        idx = cur_layer_num.index(int(splited[layer_index]))
+                        splited[layer_index] = str(target_layers[idx])
                         new_target_key = '.'.join(splited)
                     else:
                         new_target_key = target_key
@@ -481,6 +478,7 @@ def feddualBlockpq_load_state_dict(model, global_state_dict, local_state_dict_li
 
 def fedMultipq_tv_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -504,7 +502,7 @@ def fedMultipq_tv_load_state_dict(model, global_state_dict, local_state_dict_lis
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             new_global_state_dict = {}
             for name in global_state_dict.keys():
@@ -515,153 +513,13 @@ def fedMultipq_tv_load_state_dict(model, global_state_dict, local_state_dict_lis
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = len(set(layer_num)) // 4
                 
                     target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                     if cur_layer_num[-1] != target_layers[-1]: # if different size
-                        if int(splited[5]) == cur_layer_num[0]: # mid layer
-                            splited[5] = str(target_layers[0])
-                        elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                            splited[5] = str(target_layers[1])
-                        elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                            splited[5] = str(target_layers[2])
-                        elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                            splited[5] = str(target_layers[3])
-                        new_target_key = '.'.join(splited)
-                    else:
-                        new_target_key = name
-                    new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
-                    
-                new_global_state_dict[name] = new_param
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-def fedMulti2pq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
-        
-        cur_layer_num = []
-        for k in global_state_dict.keys():
-            if 'layers.' in k:
-                cur_layer_num.append(int(k.split('.')[5]))
-        cur_layer_num = sorted(list(set(cur_layer_num)))
-        new_global_state_dict = {}
-        for name in global_state_dict.keys():
-            new_param = 0
-            target_key = name
-            
-            for id in range(training_args.num_clients):
-                # if layer number is different
-                splited = target_key.split('.')
-                # if layer number is different
-                layer_num = []
-                for k in local_state_dict_list[id].keys():
-                    if 'layers.' in k:
-                        layer_num.append(int(k.split('.')[5]))
-                layer_num = len(set(layer_num)) // 4
-                
-                target_layers = [layer_num*1 -2, layer_num*1 -1, layer_num*2 -2, layer_num*2 -1,
-                                 layer_num*3 -2, layer_num*3 -1, layer_num*4 -2, layer_num*4 -1]
-                if cur_layer_num[-1] != target_layers[-1]: # if different size
-                    if int(splited[5]) == cur_layer_num[0]: # mid layer
-                        splited[5] = str(target_layers[0])
-                    elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                        splited[5] = str(target_layers[1])
-                    elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                        splited[5] = str(target_layers[2])
-                    elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                        splited[5] = str(target_layers[3])
-                    elif int(splited[5]) == cur_layer_num[4]: # last layer 
-                        splited[5] = str(target_layers[4])
-                    elif int(splited[5]) == cur_layer_num[5]: # last layer 
-                        splited[5] = str(target_layers[5])
-                    elif int(splited[5]) == cur_layer_num[6]: # last layer 
-                        splited[5] = str(target_layers[6])
-                    elif int(splited[5]) == cur_layer_num[7]: # last layer 
-                        splited[5] = str(target_layers[7])
-                    new_target_key = '.'.join(splited)
-                else:
-                    new_target_key = target_key
-                new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
-                
-            new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        # else:
-        #     new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False)
-
-def fedMulti2pq_tv_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
-        
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            
-            weights = sim[client_id].clone()
-            
-            # weights[client_id] = -1e9
-            weights = (weights).softmax(dim=0)
-            
-            sim_sum = weights.sum() #- weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            cur_layer_num = []
-            for k in global_state_dict.keys():
-                if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
-            cur_layer_num = sorted(list(set(cur_layer_num)))
-            new_global_state_dict = {}
-            for name in global_state_dict.keys():
-                new_param = 0
-                for id in range(training_args.num_clients):
-                    # if layer number is different
-                    splited = name.split('.')
-                    layer_num = []
-                    for k in local_state_dict_list[id].keys():
-                        if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
-                    layer_num = len(set(layer_num)) // 4
-                
-                    target_layers = [layer_num*1 -2, layer_num*1 -1, layer_num*2 -2, layer_num*2 -1,
-                                     layer_num*3 -2, layer_num*3 -1, layer_num*4 -2, layer_num*4 -1]
-                    if cur_layer_num[-1] != target_layers[-1]: # if different size
-                        if int(splited[5]) == cur_layer_num[0]: # mid layer
-                            splited[5] = str(target_layers[0])
-                        elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                            splited[5] = str(target_layers[1])
-                        elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                            splited[5] = str(target_layers[2])
-                        elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                            splited[5] = str(target_layers[3])
-                        elif int(splited[5]) == cur_layer_num[4]: # last layer 
-                            splited[5] = str(target_layers[4])
-                        elif int(splited[5]) == cur_layer_num[5]: # last layer 
-                            splited[5] = str(target_layers[5])
-                        elif int(splited[5]) == cur_layer_num[6]: # last layer 
-                            splited[5] = str(target_layers[6])
-                        elif int(splited[5]) == cur_layer_num[7]: # last layer 
-                            splited[5] = str(target_layers[7])
+                        index = cur_layer_num.index(int(splited[layer_index]))
+                        splited[layer_index] = str(target_layers[index])
                         new_target_key = '.'.join(splited)
                     else:
                         new_target_key = name
@@ -697,7 +555,7 @@ def feddualpq_load_state_dict(model, global_state_dict, local_state_dict_list, c
             weights = sim[client_id].clone()
             
             weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() - weights[client_id]
             
@@ -732,6 +590,7 @@ def feddualpq_load_state_dict(model, global_state_dict, local_state_dict_list, c
 
 def fedduallastpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -752,7 +611,7 @@ def fedduallastpq_load_state_dict(model, global_state_dict, local_state_dict_lis
             weights = sim[client_id].clone()
             
             weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() - weights[client_id]
             
@@ -774,11 +633,11 @@ def fedduallastpq_load_state_dict(model, global_state_dict, local_state_dict_lis
                         layer_num = []
                         for k in local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[layer_index]))
                         layer_num = sorted(list(set(layer_num)))
                         splited = target_key.split('.')
-                        if int(splited[5]) != layer_num[-1]: # last layer
-                            splited[5] = str(layer_num[-1])
+                        if int(splited[layer_index]) != layer_num[-1]: # last layer
+                            splited[layer_index] = str(layer_num[-1])
                             target_key = '.'.join(splited)
                         new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
@@ -795,6 +654,7 @@ def fedduallastpq_load_state_dict(model, global_state_dict, local_state_dict_lis
 
 def feddualFLpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -815,7 +675,7 @@ def feddualFLpq_load_state_dict(model, global_state_dict, local_state_dict_list,
             weights = sim[client_id].clone()
             
             weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() - weights[client_id]
             
@@ -834,16 +694,16 @@ def feddualFLpq_load_state_dict(model, global_state_dict, local_state_dict_list,
                         continue
                     else:
                         splited = target_key.split('.')
-                        if int(splited[5]) != 0: # first layer
+                        if int(splited[layer_index]) != 0: # first layer
                             # if layer number is different
                             layer_num = []
                             for k in local_state_dict_list[id].keys():
                                 if 'layers.' in k:
-                                    layer_num.append(int(k.split('.')[5]))
+                                    layer_num.append(int(k.split('.')[layer_index]))
                             layer_num = sorted(list(set(layer_num)))
                             
-                            if int(splited[5]) != layer_num[-1]: # last layer
-                                splited[5] = str(layer_num[-1])
+                            if int(splited[layer_index]) != layer_num[-1]: # last layer
+                                splited[layer_index] = str(layer_num[-1])
                                 target_key = '.'.join(splited)
                         new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
@@ -860,6 +720,7 @@ def feddualFLpq_load_state_dict(model, global_state_dict, local_state_dict_list,
 
 def feddualFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -880,7 +741,7 @@ def feddualFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list
             weights = sim[client_id].clone()
             
             weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
+            weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() - weights[client_id]
             
@@ -889,7 +750,7 @@ def feddualFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             for name in global_state_dict.keys():
@@ -904,20 +765,20 @@ def feddualFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list
                         continue
                     else:
                         splited = target_key.split('.')
-                        if int(splited[5]) != 0: # first layer
+                        if int(splited[layer_index]) != 0: # first layer
                             # if layer number is different
                             layer_num = []
                             for k in local_state_dict_list[id].keys():
                                 if 'layers.' in k:
-                                    layer_num.append(int(k.split('.')[5]))
+                                    layer_num.append(int(k.split('.')[layer_index]))
                             layer_num = sorted(list(set(layer_num)))
                             
                             mid_layer = layer_num[int(len(layer_num)/2)] - 1
                             if cur_layer_num[-1] != layer_num[-1]: # if different size
-                                if int(splited[5]) == cur_layer_num[-2]: # mid layer
-                                    splited[5] = str(mid_layer)
-                                elif int(splited[5]) == cur_layer_num[-1]: # last layer 
-                                    splited[5] = str(layer_num[-1])
+                                if int(splited[layer_index]) == cur_layer_num[-2]: # mid layer
+                                    splited[layer_index] = str(mid_layer)
+                                elif int(splited[layer_index]) == cur_layer_num[-1]: # last layer 
+                                    splited[layer_index] = str(layer_num[-1])
                                 new_target_key = '.'.join(splited)
                             else:
                                 new_target_key = target_key
@@ -937,6 +798,7 @@ def feddualFMLpq_load_state_dict(model, global_state_dict, local_state_dict_list
             model.load_state_dict(new_global_state_dict, strict=False) 
 
 def feddualMultipq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     # first load loca model and then load global model
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
@@ -967,7 +829,7 @@ def feddualMultipq_load_state_dict(model, global_state_dict, local_state_dict_li
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             for name in global_state_dict.keys():
@@ -986,19 +848,13 @@ def feddualMultipq_load_state_dict(model, global_state_dict, local_state_dict_li
                         layer_num = []
                         for k in local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[layer_index]))
                         layer_num = len(set(layer_num)) // 4
                         
                         target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
-                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                splited[5] = str(target_layers[2])
-                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                splited[5] = str(target_layers[3])
+                            index = cur_layer_num.index(int(splited[layer_index]))
+                            splited[layer_index] = str(target_layers[index])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key
@@ -1018,6 +874,7 @@ def feddualMultipq_load_state_dict(model, global_state_dict, local_state_dict_li
 
 def feddualMultipq_include_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -1046,7 +903,7 @@ def feddualMultipq_include_load_state_dict(model, global_state_dict, local_state
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             for name in global_state_dict.keys():
@@ -1065,19 +922,13 @@ def feddualMultipq_include_load_state_dict(model, global_state_dict, local_state
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
                         if 'layers.' in k:
-                            layer_num.append(int(k.split('.')[5]))
+                            layer_num.append(int(k.split('.')[layer_index]))
                     layer_num = len(set(layer_num)) // 4
                     
                     target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                     if cur_layer_num[-1] != target_layers[-1]: # if different size
-                        if int(splited[5]) == cur_layer_num[0]: # mid layer
-                            splited[5] = str(target_layers[0])
-                        elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                            splited[5] = str(target_layers[1])
-                        elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                            splited[5] = str(target_layers[2])
-                        elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                            splited[5] = str(target_layers[3])
+                        index = cur_layer_num.index(int(splited[layer_index]))
+                        splited[layer_index] = str(target_layers[index])
                         new_target_key = '.'.join(splited)
                     else:
                         new_target_key = target_key
@@ -1095,6 +946,7 @@ def feddualMultipq_include_load_state_dict(model, global_state_dict, local_state
             model.load_state_dict(new_global_state_dict, strict=False) 
 
 def feddualMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     # first load loca model and then load global model
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
@@ -1125,7 +977,7 @@ def feddualMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             for name in global_state_dict.keys():
@@ -1144,16 +996,16 @@ def feddualMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_
                         layer_num = []
                         for k in local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[layer_index]))
                         layer_num = len(set(layer_num)) // 2
                         
                         target_layers = [layer_num*1 -1,layer_num*2 -1]
                         assert len(target_layers) == len(cur_layer_num)
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
+                            if int(splited[layer_index]) == cur_layer_num[0]: # mid layer
+                                splited[layer_index] = str(target_layers[0])
+                            elif int(splited[layer_index]) == cur_layer_num[1]: # last layer 
+                                splited[layer_index] = str(target_layers[1])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key
@@ -1169,100 +1021,10 @@ def feddualMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_
             load_deepspeed(new_global_state_dict, model, strict=False)
         else:
             model.load_state_dict(new_global_state_dict, strict=False) 
-
-
-def feddualMulti2pq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)
-            
-        new_global_state_dict = {}
-        for key in local_state_dict_list[client_id].keys():
-            if 'lora2' in key:
-                new_key = key.replace('lora2','lora1')
-                new_global_state_dict[new_key] = copy.deepcopy(local_state_dict_list[client_id][key])
-
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            
-            weights = sim[client_id].clone()
-            
-            weights[client_id] = -1e9
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            cur_layer_num = []
-            for k in global_state_dict.keys():
-                if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
-            cur_layer_num = sorted(list(set(cur_layer_num)))
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                
-                for id in range(training_args.num_clients):
-                    if id == client_id:
-                        continue
-                    else:
-                        splited = target_key.split('.')
-                        # if layer number is different
-                        layer_num = []
-                        for k in local_state_dict_list[id].keys():
-                            if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
-                        layer_num = len(set(layer_num)) // 4
-                        
-                        target_layers = [layer_num*1 -2, layer_num*1 -1, layer_num*2 -2, layer_num*2 -1,
-                                         layer_num*3 -2, layer_num*3 -1, layer_num*4 -2, layer_num*4 -1]
-                        if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
-                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                splited[5] = str(target_layers[2])
-                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                splited[5] = str(target_layers[3])
-                            elif int(splited[5]) == cur_layer_num[4]: # last layer 
-                                splited[5] = str(target_layers[4])
-                            elif int(splited[5]) == cur_layer_num[5]: # last layer 
-                                splited[5] = str(target_layers[5])
-                            elif int(splited[5]) == cur_layer_num[6]: # last layer 
-                                splited[5] = str(target_layers[6])
-                            elif int(splited[5]) == cur_layer_num[7]: # last layer 
-                                splited[5] = str(target_layers[7])
-                            new_target_key = '.'.join(splited)
-                        else:
-                            new_target_key = target_key
-                        new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
-                    
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        # else:
-        #     new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-
 
 def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -1308,7 +1070,7 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             cur_layer_num = len(set(cur_layer_num)) // 4     
             cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1,cur_layer_num*3 -1,cur_layer_num*4 -1]
@@ -1320,7 +1082,7 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
                 
                 splited = target_key.split('.')
-                if int(splited[5]) in cur_layer_num:
+                if int(splited[layer_index]) in cur_layer_num:
                     if 'lora2_P' not in target_key or 'lora2_Q' not in target_key:
                         continue
                     
@@ -1333,19 +1095,13 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
                             layer_num = []
                             for k in local_state_dict_list[id].keys():
                                 if 'layers.' in k:
-                                    layer_num.append(int(k.split('.')[5]))
+                                    layer_num.append(int(k.split('.')[layer_index]))
                             layer_num = len(set(layer_num)) // 4
                             
                             target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                             if cur_layer_num[-1] != target_layers[-1]: # if different size
-                                if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                    splited[5] = str(target_layers[0])
-                                elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                    splited[5] = str(target_layers[1])
-                                elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                    splited[5] = str(target_layers[2])
-                                elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                    splited[5] = str(target_layers[3])
+                                index = cur_layer_num.index(int(splited[layer_index]))
+                                splited[layer_index] = str(target_layers[index])
                                 new_target_key = '.'.join(splited)
                             else:
                                 new_target_key = target_key
@@ -1368,6 +1124,7 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
 
 def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -1413,7 +1170,7 @@ def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_sta
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             cur_layer_num = len(set(cur_layer_num)) // 2
             cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1]
@@ -1425,7 +1182,7 @@ def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_sta
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
                 
                 splited = target_key.split('.')
-                if int(splited[5]) in cur_layer_num:
+                if int(splited[layer_index]) in cur_layer_num:
                     if 'lora2_P' not in target_key or 'lora2_Q' not in target_key:
                         continue
                     
@@ -1438,15 +1195,15 @@ def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_sta
                             layer_num = []
                             for k in local_state_dict_list[id].keys():
                                 if 'layers.' in k:
-                                    layer_num.append(int(k.split('.')[5]))
+                                    layer_num.append(int(k.split('.')[layer_index]))
                             layer_num = len(set(layer_num)) // 2
                             
                             target_layers = [layer_num*1 -1,layer_num*2 -1]
                             if cur_layer_num[-1] != target_layers[-1]: # if different size
-                                if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                    splited[5] = str(target_layers[0])
-                                elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                    splited[5] = str(target_layers[1])
+                                if int(splited[layer_index]) == cur_layer_num[0]: # mid layer
+                                    splited[layer_index] = str(target_layers[0])
+                                elif int(splited[layer_index]) == cur_layer_num[1]: # last layer 
+                                    splited[layer_index] = str(target_layers[1])
                                 new_target_key = '.'.join(splited)
                             else:
                                 new_target_key = target_key
@@ -1468,6 +1225,7 @@ def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_sta
             model.load_state_dict(new_global_state_dict, strict=False) 
 
 def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     # first load loca model and then load global model
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
@@ -1514,7 +1272,7 @@ def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_s
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             cur_layer_num = len(set(cur_layer_num)) // 4     
             cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1,cur_layer_num*3 -1,cur_layer_num*4 -1]
@@ -1526,7 +1284,7 @@ def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_s
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
                 
                 splited = target_key.split('.')
-                if int(splited[5]) in cur_layer_num:
+                if int(splited[layer_index]) in cur_layer_num:
                     continue
                 else:
                     for id in homo_client_ids:
@@ -1546,6 +1304,7 @@ def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_s
 
 def feddualMulti05pq_homoAggOnly_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
@@ -1591,7 +1350,7 @@ def feddualMulti05pq_homoAggOnly_load_state_dict(model, global_state_dict, local
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             cur_layer_num = len(set(cur_layer_num)) // 2
             cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1]
@@ -1603,7 +1362,7 @@ def feddualMulti05pq_homoAggOnly_load_state_dict(model, global_state_dict, local
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
                 
                 splited = target_key.split('.')
-                if int(splited[5]) in cur_layer_num:
+                if int(splited[layer_index]) in cur_layer_num:
                     continue
                 else:
                     for id in homo_client_ids:
@@ -1622,6 +1381,7 @@ def feddualMulti05pq_homoAggOnly_load_state_dict(model, global_state_dict, local
             model.load_state_dict(new_global_state_dict, strict=False) 
 
 def feddualOptimalpq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
     # first load loca model and then load global model
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
@@ -1658,7 +1418,7 @@ def feddualOptimalpq_load_state_dict(model, global_state_dict, local_state_dict_
             cur_layer_num = []
             for k in global_state_dict.keys():
                 if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[5]))
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
             cur_layer_num = sorted(list(set(cur_layer_num)))
             
             for name in global_state_dict.keys():
@@ -1677,7 +1437,7 @@ def feddualOptimalpq_load_state_dict(model, global_state_dict, local_state_dict_
                         layer_num = []
                         for k in local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[layer_index]))
                         layer_num = len(set(layer_num))
                         if layer_num == 28: # llama3.2 3B
                             if 'Optimal8' in training_args.mode:
@@ -1695,8 +1455,8 @@ def feddualOptimalpq_load_state_dict(model, global_state_dict, local_state_dict_
                                 target_layers = [8,15]
                         
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            index = cur_layer_num.index(int(splited[5]))
-                            splited[5] = str(target_layers[index])
+                            index = cur_layer_num.index(int(splited[layer_index]))
+                            splited[layer_index] = str(target_layers[index])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key

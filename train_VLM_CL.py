@@ -20,8 +20,6 @@ import time
 import datetime
 import torch.nn.functional as F
 
-from models.coda_prompt import CodaPrompt
-
 os.environ["WANDB_DISABLED"] = "true"
 def main():    
     parser = transformers.HfArgumentParser(
@@ -80,6 +78,7 @@ def main():
     if training_args.gradient_checkpointing:
         training_args.gradient_checkpointing_kwargs = {'use_reentrant':False}
     
+    LAYER_INDEX = 5 if data_args.is_multimodal else 4
     
     model_ids = {}
     model_list = {}
@@ -95,7 +94,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
             global_state_dict = copy.deepcopy(model_list[model_id])
-            keys_to_del = get_keys_to_del(training_args, global_state_dict)
+            keys_to_del = get_keys_to_del(training_args, global_state_dict, data_args)
             for k in keys_to_del:
                 del global_state_dict[k]
             global_state_dict_list.append(global_state_dict)
@@ -123,7 +122,7 @@ def main():
                 )
                 state_dict.update(non_lora_state_dict)
                 
-                keys_to_del = get_keys_to_del(training_args, state_dict)
+                keys_to_del = get_keys_to_del(training_args, state_dict, data_args)
                 for k in keys_to_del:
                     del state_dict[k]
                 global_state_dict = state_dict
@@ -138,7 +137,7 @@ def main():
                 cur_layer_num = []
                 for k in global_state_dict.keys():
                     if 'layers.' in k:
-                        cur_layer_num.append(int(k.split('.')[5]))
+                        cur_layer_num.append(int(k.split('.')[LAYER_INDEX]))
                 cur_layer_num = sorted(list(set(cur_layer_num)))
                 
                 for name in global_state_dict.keys():
@@ -154,7 +153,7 @@ def main():
                         layer_num = []
                         for k in prev_local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[LAYER_INDEX]))
                         layer_num = len(set(layer_num)) // 4
                         
                         target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
@@ -193,7 +192,7 @@ def main():
             local_state_dict_list.append(copy.deepcopy(global_state_dict))
             old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
             new_global_state_dict=copy.deepcopy(global_state_dict)
-            keys_to_del = get_keys_to_del(training_args, new_global_state_dict)
+            keys_to_del = get_keys_to_del(training_args, new_global_state_dict, data_args)
             for k in keys_to_del:
                 del new_global_state_dict[k]
             global_state_dict_list.append(new_global_state_dict)
@@ -204,13 +203,20 @@ def main():
             
             model_ids[model_id] = [client_id]
     
-    if 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and training_args.use_task_vector and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
+    elif not data_args.is_multimodal and training_args.use_task_vector and 'meta-llama/Llama-3.2-1B' not in models.keys():
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
+        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['meta-llama/Llama-3.2-1B'] = model2
+    
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids}
+    extra_state_dict_dict['LAYER_INDEX'] = LAYER_INDEX
     
     if training_args.fedours:
         logger.info(f'load task vector {training_args.load_checkpoint}')
@@ -340,7 +346,7 @@ def main():
             extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
-           
+
             load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
             
@@ -370,7 +376,7 @@ def main():
                 cur_layer_num = []
                 for k in global_state_dict.keys():
                     if 'layers.' in k:
-                        cur_layer_num.append(int(k.split('.')[5]))
+                        cur_layer_num.append(int(k.split('.')[LAYER_INDEX]))
                 cur_layer_num = sorted(list(set(cur_layer_num)))
                 
                 for name in global_state_dict.keys():
@@ -389,7 +395,7 @@ def main():
                         layer_num = []
                         for k in prev_local_state_dict_list[id].keys():
                             if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[5]))
+                                layer_num.append(int(k.split('.')[LAYER_INDEX]))
                         layer_num = len(set(layer_num)) // 4
                         
                         target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
@@ -429,7 +435,7 @@ def main():
                 
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
-                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
+                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'] if data_args.is_multimodal else models['meta-llama/Llama-3.2-1B']
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
@@ -455,7 +461,10 @@ def main():
                 else:
                     task_vectors[client_id] = trainer.task_vector
                     
-                    models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                    if data_args.is_multimodal:
+                        models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                    else:
+                        models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")
@@ -483,7 +492,7 @@ def main():
             
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             
-            if (training_args.local_rank == 0 or training_args.local_rank == -1) and (curr_round+1)%(total_rounds/20) == 0:
+            if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(total_rounds/20) == 0:
                 torch.save(state_dict, output_dir)
             
             local_state_dict = getattr(trainer, 'global_weight', None)
@@ -508,7 +517,7 @@ def main():
             
     if training_args.use_task_vector:
         path = os.path.join(training_args.state_dir, f"round{curr_round+1}_task_vector_local_weights.pth")
-        tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': local_state_dict_list}
+        tv_weight = {'task_vectors': task_vectors}#, 'local_state_dict_list': local_state_dict_list}
         torch.save(tv_weight, path)
         
         # task_vector = F.normalize(torch.stack(task_vectors, dim=0), dim=-1)

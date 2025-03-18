@@ -70,51 +70,56 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, max_new_tokens,
     n_word_correct = 1
     cnt = 0
     with torch.no_grad():
-        # for i, (inputs, pixel_values, golds, prompts, img_files) in enumerate(tqdm(dataloader)):
         for i, batch in enumerate((dataloader)): #tqdm
-            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['pixel_values'], batch['gold'], batch['prompt'], batch['image_file']
+            inputs, golds, prompts = batch['input_ids'],  batch['gold'], batch['prompt']
             attention_mask = batch['attention_mask'].to(device=device)
             
             inputs = inputs.to(device=device, non_blocking=True)
-            if imgs is not None:
+            keyword_criteria = KeywordsStoppingCriteria(keywords, tokenizer, inputs)
+            stopping_criteria = StoppingCriteriaList([repeat_criteria, keyword_criteria])
+            
+            input_dict = {
+                'input_ids':inputs,
+                'attention_mask':attention_mask,
+                'do_sample': True if training_args.eval_temp > 0 else False,
+                'temperature':training_args.eval_temp,
+                'top_p':None,
+                'num_beams':1,
+                'max_new_tokens':max_new_tokens,
+                'use_cache':True,
+                'pad_token_id':tokenizer.eos_token_id,
+                'stopping_criteria':stopping_criteria
+            }
+            
+            if 'pixel_values' in batch.keys():
+                imgs = batch['pixel_values']
+                img_files = batch['image_file']
                 if isinstance(imgs, list):
                     imgs = [img.to(device=device, dtype=torch.bfloat16, non_blocking=True) for img in imgs]
                 else:
                     imgs = imgs.to(device=device, dtype=torch.bfloat16, non_blocking=True)
-                image_sizes = [x.shape[-2:] for x in imgs]
-            keyword_criteria = KeywordsStoppingCriteria(keywords, tokenizer, inputs)
-            stopping_criteria = StoppingCriteriaList([repeat_criteria, keyword_criteria])
+                input_dict['pixel_values'] = imgs
             with torch.inference_mode():
                 output_ids = model.generate(
-                    inputs,
-                    attention_mask=attention_mask,
-                    pixel_values=imgs,
-                    # image_sizes=image_sizes,
-                    do_sample= True if training_args.eval_temp > 0 else False,
-                    temperature=training_args.eval_temp,#args.temperature,
-                    top_p=None,#args.top_p,
-                    num_beams=1,#args.num_beams,
-                    max_new_tokens=max_new_tokens,#args.max_new_tokens,
-                    use_cache=True,
-                    pad_token_id=tokenizer.eos_token_id,
-                    stopping_criteria = stopping_criteria,
-                    # prompt=prompts if training_args.is_prompt else None,
+                    **input_dict
                 )
             # if 'vl' in model_args.model_name_or_path.lower():
             input_token_len = inputs.shape[1]
             output_ids = output_ids[:,input_token_len:]
             
             pred_sentences = tokenizer.batch_decode(output_ids, skip_special_tokens=True)#[0].strip()
-            for pred_sentence, gold, prompt, img_file in zip(pred_sentences, golds, prompts, img_files):
+            for batch_idx, (pred_sentence, gold, prompt) in enumerate(zip(pred_sentences, golds, prompts)):
                 pred_sentence = pred_sentence.strip()
                 input_label = tokenizer.encode(gold)
                 output_id = tokenizer.encode(pred_sentence)
                 n_word = len(set(input_label))
                 n_generated_word = len(set(output_id))
                 n_correct = matching_token_num(output_id, input_label)
-                # print(pred_sentence)
-                predictions.append({"image_file":img_file, "input":prompt, "sentence":pred_sentence, "gt_sentence":gold.strip()})
                 
+                pred_dict = {"input":prompt, "sentence":pred_sentence, "gt_sentence":gold.strip()}
+                if 'pixel_values' in batch.keys():
+                    pred_dict['image_file'] = img_files[batch_idx]
+                predictions.append(pred_dict)
                 
                 n_word_total += n_word
                 n_generated_word_total += n_generated_word
@@ -130,15 +135,15 @@ def evaluate(dataset, dataname, round, model, tokenizer, device, max_new_tokens,
     if client_id is not None:
         logger.info(f"Test (Client id {client_id}) | Data {dataname} | precision {scores['precision']:.4f} | recall {scores['recall']:.4f} | Bleu_1 {scores['Bleu_1']} | Bleu_2 {scores['Bleu_2']} | Bleu_3 {scores['Bleu_3']} |Bleu_4 {scores['Bleu_4']} | METEOR {scores['METEOR']} | ROUGE_L {scores['ROUGE_L']} | CIDEr {scores['CIDEr']} |")
         if training_args.eval_iter is not None:
-            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_iter{training_args.eval_iter}_{dataname}.json", 'w') as fp:
-                json.dump(predictions, fp, indent=4)
+            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_iter{training_args.eval_iter}_{dataname}.json", 'w', encoding='utf-8') as fp:
+                json.dump(predictions, fp, indent=4, ensure_ascii=False)
         else:
-            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_{dataname}.json", 'w') as fp:
-                json.dump(predictions, fp, indent=4)
+            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_{dataname}.json", 'w', encoding='utf-8') as fp:
+                json.dump(predictions, fp, indent=4, ensure_ascii=False)
     else:
         logger.info(f"Test (Server) | Data {dataname} | precision {scores['precision']:.4f} | recall {scores['recall']:.4f} | Bleu_1 {scores['Bleu_1']} | Bleu_2 {scores['Bleu_2']} | Bleu_3 {scores['Bleu_3']} |Bleu_4 {scores['Bleu_4']} | METEOR {scores['METEOR']} | ROUGE_L {scores['ROUGE_L']} | CIDEr {scores['CIDEr']} |")
-        with open(f"./eval_results/{training_args.mode}/{training_args.note}/server_round{round}_{dataname}.json", 'w') as fp:
-            json.dump(predictions, fp, indent=4)
+        with open(f"./eval_results/{training_args.mode}/{training_args.note}/server_round{round}_{dataname}.json", 'w', encoding='utf-8') as fp:
+            json.dump(predictions, fp, indent=4, ensure_ascii=False)
     torch.cuda.empty_cache()
     
     return scores
@@ -157,41 +162,45 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
     correct = 0
     total = 0
     with torch.no_grad():
-        # for i, (inputs, imgs, golds, prompts, img_files) in enumerate(tqdm(dataloader)):
         for i, batch in enumerate((dataloader)): #tqdm
-            inputs, imgs, golds, prompts, img_files = batch['input_ids'], batch['pixel_values'], batch['gold'], batch['prompt'], batch['image_file']
+            inputs, golds, prompts = batch['input_ids'], batch['gold'], batch['prompt']
             attention_mask = batch['attention_mask'].to(device=device)
-            
             inputs = inputs.to(device=device, non_blocking=True)
-            if imgs is not None:
+            keyword_criteria = KeywordsStoppingCriteria(keywords, tokenizer, inputs)
+            stopping_criteria = StoppingCriteriaList([repeat_criteria, keyword_criteria])
+            
+            input_dict = {
+                'input_ids':inputs,
+                'attention_mask':attention_mask,
+                'do_sample': True if training_args.eval_temp > 0 else False,
+                'temperature':training_args.eval_temp,
+                'top_p':None,
+                'num_beams':1,
+                'max_new_tokens':max_new_tokens,
+                'use_cache':True,
+                'pad_token_id':tokenizer.eos_token_id,
+                'stopping_criteria':stopping_criteria
+            }
+            
+            if 'pixel_values' in batch.keys():
+                imgs = batch['pixel_values']
+                img_files = batch['image_file']
                 if isinstance(imgs, list):
                     imgs = [img.to(device=device, dtype=torch.bfloat16, non_blocking=True) for img in imgs]
                 else:
                     imgs = imgs.to(device=device, dtype=torch.bfloat16, non_blocking=True)
-                image_sizes = [x.shape[-2:] for x in imgs]
-            keyword_criteria = KeywordsStoppingCriteria(keywords, tokenizer, inputs)
-            stopping_criteria = StoppingCriteriaList([repeat_criteria, keyword_criteria])
+                input_dict['pixel_values'] = imgs
+            
+            
             with torch.inference_mode():
                 output_ids = model.generate(
-                    inputs,
-                    attention_mask=attention_mask,
-                    pixel_values=imgs,
-                    # image_sizes=image_sizes,
-                    do_sample=True if training_args.eval_temp > 0 else False,
-                    temperature=training_args.eval_temp,#args.temperature,
-                    top_p=None,#args.top_p,
-                    num_beams=1,#args.num_beams,
-                    max_new_tokens=max_new_tokens,#args.max_new_tokens,
-                    use_cache=True,
-                    pad_token_id=tokenizer.eos_token_id,
-                    stopping_criteria = stopping_criteria,
-                    # prompt=prompts if training_args.is_prompt else None,
+                    **input_dict
                 )
             # if 'vl' in model_args.model_name_or_path.lower():
             input_token_len = inputs.shape[1]
             output_ids = output_ids[:,input_token_len:]
             pred_sentences = tokenizer.batch_decode(output_ids, skip_special_tokens=True)#[0].strip()
-            for pred_sentence, gold, prompt, img_file in zip(pred_sentences, golds, prompts, img_files):
+            for batch_idx, (pred_sentence, gold, prompt) in enumerate(zip(pred_sentences, golds, prompts)):
                 pred_sentence = pred_sentence.strip()
                 
                 choices = parse_choice_list(prompt)
@@ -208,7 +217,11 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
                 else:
                     status = 'unkown'
                 total += 1
-                predictions.append({"image_file":img_file, "input":prompt, "sentence":pred_sentence, "gt_sentence":gold.strip(), 'status':status})
+                
+                pred_dict = {"input":prompt, "sentence":pred_sentence, "gt_sentence":gold.strip(), 'status':status}
+                if 'pixel_values' in batch.keys():
+                    pred_dict['image_file'] = img_files[batch_idx]
+                predictions.append(pred_dict)
 
     scores = {'accuracy': correct/total}
     
@@ -217,15 +230,15 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
     if client_id is not None:
         logger.info(f"Test (Client id {client_id}) | Data {dataname} | accuracy {scores['accuracy']} |")
         if training_args.eval_iter is not None:
-            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_iter{training_args.eval_iter}_{dataname}.json", 'w') as fp:
-                json.dump(predictions, fp, indent=4)
+            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_iter{training_args.eval_iter}_{dataname}.json", 'w', encoding='utf-8') as fp:
+                json.dump(predictions, fp, indent=4, ensure_ascii=False)
         else:
-            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_{dataname}.json", 'w') as fp:
-                json.dump(predictions, fp, indent=4)
+            with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{round}_{dataname}.json", 'w', encoding='utf-8') as fp:
+                json.dump(predictions, fp, indent=4, ensure_ascii=False)
     else:
         logger.info(f"Test (Server) | Data {dataname} | accuracy {scores['accuracy']} |")
-        with open(f"./eval_results/{training_args.mode}/{training_args.note}/server_round{round}_{dataname}.json", 'w') as fp:
-            json.dump(predictions, fp, indent=4)
+        with open(f"./eval_results/{training_args.mode}/{training_args.note}/server_round{round}_{dataname}.json", 'w', encoding='utf-8') as fp:
+            json.dump(predictions, fp, indent=4, ensure_ascii=False)
     torch.cuda.empty_cache()
     
     return scores

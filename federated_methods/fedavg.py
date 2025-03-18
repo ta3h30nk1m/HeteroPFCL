@@ -187,8 +187,12 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                 self.input_penultimate.append(input)
             def hook_fn2(module, input, output):
                 self.hidden_states_before_norm.append(input)
-            self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
-            self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
+            if self.data_args.is_multimodal:
+                self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
+            else:
+                self.hooks.append(self.model2.base_model.model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.model.model.norm.register_forward_hook(hook_fn2))
         
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -639,12 +643,18 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                                 
                                 shift_labels = inputs['labels'][..., 1:]
                                 
-                                grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                            self.model2.base_model.language_model.lm_head.weight,
-                                                            self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                            self.model2.base_model.language_model.model.norm,
-                                                            self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                
+                                if self.data_args.is_multimodal:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.language_model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.language_model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                else:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
                                 # output.loss.backward()
                                 # grads = []
                                 # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
@@ -666,22 +676,22 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             #         p.requires_grad = False
                             
                             if args.mode == 'fedMultipqfullfreeze_ours':
-                                last_layer = len(self.model2.base_model.language_model.model.layers) // 4
-                                target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-                                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                                    if idx in target_layers:
-                                        for n, p in layer.named_parameters():
-                                            if 'lora_A' in n or 'lora_B' in n:
-                                                p.requires_grad = False
-                            elif args.mode == 'fedMulti2pqfullfreeze_ours':
-                                last_layer = len(self.model2.base_model.language_model.model.layers) // 4
-                                target_layers = [last_layer*1 -2,last_layer*1 -1,last_layer*2 -2,last_layer*2 -1,
-                                                 last_layer*3 -2,last_layer*3 -1,last_layer*4 -2,last_layer*4 -1]
-                                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                                    if idx in target_layers:
-                                        for n, p in layer.named_parameters():
-                                            if 'lora_A' in n or 'lora_B' in n:
-                                                p.requires_grad = False
+                                if self.data_args.is_multimodal:
+                                    last_layer = len(self.model2.base_model.language_model.model.layers) // 4
+                                    target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                                    for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
+                                        if idx in target_layers:
+                                            for n, p in layer.named_parameters():
+                                                if 'lora_A' in n or 'lora_B' in n:
+                                                    p.requires_grad = False
+                                else:
+                                    last_layer = len(self.model2.base_model.model.model.layers) // 4
+                                    target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                                    for idx, layer in enumerate(self.model2.base_model.model.model.layers):
+                                        if idx in target_layers:
+                                            for n, p in layer.named_parameters():
+                                                if 'lora_A' in n or 'lora_B' in n:
+                                                    p.requires_grad = False
                             self.model2.zero_grad()
                             model.zero_grad()
                             torch.cuda.empty_cache()

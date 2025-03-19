@@ -5,6 +5,9 @@ import numpy as np
 import random
 from collections import defaultdict
 
+
+ATTRIBUTE_KEYWORDS = ["color", "size", "shape", "type", "kind", "pattern", "style"]
+
 data_type = 'test'
 question_file_path = f"MultipleChoice_abstract_v002_{data_type}2015_questions.json"
 answer_file_path = f"abstract_v002_{data_type}2015_annotations.json"
@@ -57,20 +60,27 @@ for question_data, answer_data in zip(question_datas['questions'], answer_datas[
     new_data['image_id'] = question_data['image_id']
     new_data['image'] = os.path.join(data_path, "images", f"abstract_v002_{data_type}2015_{str(question_data['image_id']).zfill(12)}.png")
     if answer_data['answer_type'] == 'number':
+        answer_type = 'number'
         candidates = [x for x in question_data['multiple_choices'] if x.isdigit()]  
     elif answer_data['answer_type'] == 'yes/no':
         candidates = ['yes'] if new_data['answer']=='no' else ['no']
+        answer_type = 'yes/no'
     else:
         candidates = [x for x in question_data['multiple_choices'] if not x.isdigit()]
         if 'yes' in candidates:
             candidates.remove('yes')
         if 'no' in candidates:
             candidates.remove('no')
+        
+        answer_type = 'remaining'
+        for keyword in ATTRIBUTE_KEYWORDS:
+            if keyword in question_data['question']:
+                answer_type = 'attribute'
 
     sampled_candidates = [new_data['answer']] + random.sample(candidates, min(3, len(candidates)))
     random.shuffle(sampled_candidates)
     new_data['candidates'] = sampled_candidates
-    datalists[answer_data['answer_type']].append(new_data)
+    datalists[answer_type].append(new_data)
 
 '''
 os.makedirs(os.path.join(data_path, data_type), exist_ok=True)

@@ -1624,8 +1624,8 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
     iteration = 0
     datalist = []
     iter_ratio = num_iterations / len(sub_dataset)
-    T = 0.125
-    count_decay_ratio = 0.99
+    T = training_args.online_stream_T
+    count_decay_ratio = training_args.online_stream_count_decay_ratio
     
     if not training_args.is_streamonly:
         # memory-only

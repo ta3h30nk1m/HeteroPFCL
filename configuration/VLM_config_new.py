@@ -64,6 +64,8 @@ class TrainingConfig(transformers.TrainingArguments):
     memory_size: int = 100000
     is_streamonly: bool = True
     use_task_id: bool = False
+    online_stream_T: float = 0.125
+    online_stream_count_decay_ratio: float = 0.99
     
     # prompt tuning args
     prompt_num: int = field(default=100)

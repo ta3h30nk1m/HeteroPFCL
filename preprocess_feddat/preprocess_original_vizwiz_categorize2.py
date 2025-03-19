@@ -12,7 +12,7 @@ NUM_SECONDS_TO_SLEEP = 0.01
 NUM_PROCESSES = cpu_count()  # Use all available CPU cores
 
 client = OpenAI(
-    api_key="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"
+    api_key=""
 )
 
 random.seed(42)

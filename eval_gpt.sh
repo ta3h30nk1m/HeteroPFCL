@@ -17,19 +17,20 @@ dataset_map[7]="Fed-aya-70 Fed-aya-71 Fed-aya-72"
 dataset_map[8]="Fed-aya-80 Fed-aya-81 Fed-aya-82"
 dataset_map[9]="Fed-aya-90 Fed-aya-91 Fed-aya-92"
 
-round=15
+round=(2 5 7 10 12 15)
 
 # Iterate over the keys (integer values) in the associative array
-for i in "${!dataset_map[@]}"; do
-    datasets=(${dataset_map[$i]})
-    for dataset in "${datasets[@]}"; do
-        input_file="./eval_results/${base_dir}/client${i}_round${round}_${dataset}.json"
-        output_file="./eval_results_gpt/${base_dir}/client${i}_round${round}_${dataset}.jsonl"
-        
-        echo "Processing ${dataset} (client ${i})..."
-        OPENAI_API_KEY="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" \
-        python eval_gpt_aya.py -r "$input_file" -o "$output_file" --random_seed 42 > fedours_T05_bs4_100iter_fedaya_1b_gpteval.out 2>&1 &
+for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
+    for i in "${!dataset_map[@]}"; do
+        datasets=(${dataset_map[$i]})
+        for dataset in "${datasets[@]}"; do
+            input_file="./eval_results/${base_dir}/client${i}_round${ROUND_TO_EVALS[$index]}_${dataset}.json"
+            output_file="./eval_results_gpt/${base_dir}/client${i}_round${ROUND_TO_EVALS[$index]}_${dataset}.jsonl"
+            
+            echo "Processing ${dataset} (client ${i})..."
+            OPENAI_API_KEY="" \
+            python eval_gpt_aya.py -r "$input_file" -o "$output_file" --random_seed 42 > gpteval.out 2>&1 &
+        done
     done
 done
-
 echo "All datasets processed."

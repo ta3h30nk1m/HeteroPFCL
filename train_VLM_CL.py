@@ -265,7 +265,7 @@ def main():
         
         if curr_round > 0 and training_args.use_task_vector:
             path = os.path.join(training_args.state_dir, f"round{curr_round}_task_vector_local_weights.pth")
-            tv_weight = {'task_vectors': task_vectors, 'local_state_dict_list': old_local_state_dict_list}
+            tv_weight = {'task_vectors': task_vectors}#, 'local_state_dict_list': old_local_state_dict_list}
             torch.save(tv_weight, path)
             
             # task vector layerwise cosine sim

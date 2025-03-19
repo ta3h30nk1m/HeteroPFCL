@@ -4,6 +4,11 @@ import os
 import numpy as np
 import random
 from collections import defaultdict
+import openai
+from openai import OpenAI
+import time
+from multiprocessing import Process, Queue, Manager, Pool, cpu_count
+import math
 
 
 ATTRIBUTE_KEYWORDS = ["color", "size", "shape", "type", "kind", "pattern", "style", "hue", "shade", 
@@ -17,6 +22,70 @@ question_file_path = f"MultipleChoice_abstract_v002_{data_type}2015_questions.js
 answer_file_path = f"abstract_v002_{data_type}2015_annotations.json"
 data_path = "dataset/Abstract"
 max_num = 10000 if data_type == 'train' else 1000
+
+
+NUM_SECONDS_TO_SLEEP = 0.01
+NUM_PROCESSES = 10 #cpu_count()  # Use all available CPU cores
+
+# Set up OpenAI client
+client = OpenAI(
+    api_key=""
+    )
+
+rule = {
+    "role": "Assistant",
+    "prompt": "Please generate three answer choices for the given question asking about a image referring the given correct answer and the given candidates.\n"
+              "The possible answers are the variation of correct and wrong answers. You should use it to infer about the image.\n"
+              "You should:\n"
+              "1. Select valid choices from the given candidates. If fewer than three valid choices exist, generate additional choices to make a total of three.\n"
+              "2. NOT INCLUDE correct answer in the generated choices.\n"
+              "3. generate choices relevant to the question, but should not be confusing with the correct answer. Specifically, choices and answers should not be synonyms, nor should they have a relationship of inclusion.\n"
+              "You must return the choices by strictly following this format:\"[[Choice A | Choice B | Choice C]]\", for example: \"Choice list: [[red | blue | pink]]\"."
+}
+
+def get_eval(content: str, max_tokens: int):
+    user_content = [
+                        {"type":"text", "text":content['text']},
+                    ]
+    
+    while True:
+        try:
+            response = client.chat.completions.create(
+                messages=[{
+                    'role': 'system',
+                    'content': 'You are a helpful and precise assistant to generate a choice list.'
+                }, {
+                    'role': 'user',
+                    'content': user_content
+                }],
+                model="gpt-4o-mini-2024-07-18",
+                temperature=0.2,
+                max_tokens=max_tokens,
+            )
+            break
+        except openai.APIConnectionError as e:
+            print(f"Process {os.getpid()}: The server could not be reached")
+            print(e.__cause__)
+        except openai.RateLimitError as e:
+            print(f"Process {os.getpid()}: A 429 status code was received; backing off")
+            time.sleep(5)  # Back off for longer on rate limit errors
+        except openai.APIStatusError as e:
+            print(f"Process {os.getpid()}: Another non-200-range status code was received")
+            print(e.status_code)
+            print(e.response)
+        time.sleep(NUM_SECONDS_TO_SLEEP)
+    return response.choices[0].message.content
+
+def parse_score(review):
+    try:
+        score = review.split('[[')
+        assert len(score) == 2
+        score = score[-1].split(']]')[0]
+        return score
+    except Exception as e:
+        print(f"Process {os.getpid()}: Error parsing score: {e}")
+        print('error', review)
+        return -1
 
 def make_json_files(sampled_data):
     json_data = []
@@ -63,26 +132,41 @@ for question_data, answer_data in zip(question_datas['questions'], answer_datas[
     question_data['multiple_choices'].remove(new_data['answer'])
     new_data['image_id'] = question_data['image_id']
     new_data['image'] = os.path.join(data_path, "images", f"abstract_v002_{data_type}2015_{str(question_data['image_id']).zfill(12)}.png")
+
+
+    content = {
+        "text": (f"[Instruction]\n{rule['prompt']}\n\n"
+                f"[Question]\n{question}\n\n"
+                f"[Candidates]\n{question_data['multiple_choices']}\n\n"
+                f"[Correct Answer]\n{answer}\n")
+        "image":
+            base64_imgs
+        }
+    review = get_eval(content, 512)
+    sampled_candidates = parse_score(review).split(' | ')
+    sampled_candidates += [answer]
+    random.shuffle(sampled_candidates)
+
     if answer_data['answer_type'] == 'number':
         answer_type = 'number'
-        candidates = [x for x in question_data['multiple_choices'] if x.isdigit()]  
+        # candidates = [x for x in question_data['multiple_choices'] if x.isdigit()]  
     elif answer_data['answer_type'] == 'yes/no':
-        candidates = ['yes'] if new_data['answer']=='no' else ['no']
+        # candidates = ['yes'] if new_data['answer']=='no' else ['no']
         answer_type = 'yes/no'
     else:
-        candidates = [x for x in question_data['multiple_choices'] if not x.isdigit()]
-        if 'yes' in candidates:
-            candidates.remove('yes')
-        if 'no' in candidates:
-            candidates.remove('no')
+        # candidates = [x for x in question_data['multiple_choices'] if not x.isdigit()]
+        # if 'yes' in candidates:
+        #     candidates.remove('yes')
+        # if 'no' in candidates:
+        #     candidates.remove('no')
         
         answer_type = 'remaining'
         for keyword in ATTRIBUTE_KEYWORDS:
             if keyword in question_data['question']:
                 answer_type = 'attribute'
 
-    sampled_candidates = [new_data['answer']] + random.sample(candidates, min(3, len(candidates)))
-    random.shuffle(sampled_candidates)
+    # sampled_candidates = [new_data['answer']] + random.sample(candidates, min(3, len(candidates)))
+    # random.shuffle(sampled_candidates)
     new_data['candidates'] = sampled_candidates
     datalists[answer_type].append(new_data)
 

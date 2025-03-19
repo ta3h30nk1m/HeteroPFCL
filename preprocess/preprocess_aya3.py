@@ -314,7 +314,7 @@ for key, topic_datasets in language_per_topic.items():
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
         
         # client 2
-        language_codes = [0,2,61,60]
+        language_codes = [61,0,2,60]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -326,7 +326,7 @@ for key, topic_datasets in language_per_topic.items():
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
     elif key == "Humanities & Cultural Studies":
         # client 3
-        language_codes = [80,0,1,2]
+        language_codes = [80,2,1,0]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)

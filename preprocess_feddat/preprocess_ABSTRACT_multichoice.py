@@ -6,7 +6,11 @@ import random
 from collections import defaultdict
 
 
-ATTRIBUTE_KEYWORDS = ["color", "size", "shape", "type", "kind", "pattern", "style"]
+ATTRIBUTE_KEYWORDS = ["color", "size", "shape", "type", "kind", "pattern", "style", "hue", "shade", 
+    "tint", "big", "small", "large", "height", "width", "length", "depth", 
+    "form", "appearance", "contour", "outline", "texture", "material", "fabric", 
+    "surface", "design", "decoration", "print", "motif", "fashion", "aesthetic", 
+    "theme", "art style", "brightness", "contrast", "density", "opacity"]
 
 data_type = 'test'
 question_file_path = f"MultipleChoice_abstract_v002_{data_type}2015_questions.json"

@@ -1,3 +1,7 @@
+from tqdm import tqdm
+from PIL import Image
+import io
+import base64
 import random
 import numpy as np
 import json
@@ -10,24 +14,43 @@ from multiprocessing import Process, Queue, Manager, Pool, cpu_count
 import math
 
 data_dir = 'dataset/COCOQA'
-type_name = 'test'
+type_name = 'train'
 max_num = 10000 if type_name == 'train' else 1000
 os.makedirs(os.path.join(data_dir, type_name), exist_ok=True)
 os.makedirs(os.path.join(data_dir, 'images'), exist_ok=True)
 
 NUM_SECONDS_TO_SLEEP = 0.01
-NUM_PROCESSES = 6 #cpu_count()  # Use all available CPU cores
+NUM_PROCESSES = 10 #cpu_count()  # Use all available CPU cores
 
 # Set up OpenAI client
 client = OpenAI(
-    api_key="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"
-)
+    api_key="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"
+    )
+
+def resize_image(image_path, max_size):
+    with Image.open(image_path) as img:
+        img.thumbnail(max_size) 
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
+        return img_byte_arr
+
+def encode_image(image_path, max_size=(256, 256)):
+    img_byte_arr = resize_image(image_path, max_size)
+    return base64.b64encode(img_byte_arr.read()).decode('utf-8')
+
 
 def get_eval(content: str, max_tokens: int):
     user_content = [
-        {"type": "text", "text": content['text']},
-    ]
-
+                        {"type":"text", "text":content['text']},
+                    ]
+    for base64_image in content['image']:
+        user_content.append(
+            {"type": "image_url",
+             "image_url":{"url": f"data:image/jpeg;base64,{base64_image}"}
+            }
+        )
+    
     while True:
         try:
             response = client.chat.completions.create(
@@ -74,7 +97,7 @@ rule = {
               "You should:\n"
               "1. generate 3 choices.\n"
               "2. NOT INCLUDE correct answer in the generated choices.\n"
-              "3. generate choices relevant to the question, but not too similar to the correct answer.\n"
+              "3. generate choices relevant to the question, but should not be confusing with the correct answer. Specifically, choices and answers should not be synonyms, nor should they have a relationship of inclusion.\n"
               "You must return the choices by strictly following this format:\"[[Choice A | Choice B | Choice C]]\", for example: \"Choice list: [[red | blue | pink]]\"."
 }
 
@@ -82,51 +105,63 @@ rule = {
 def process_data_chunk(chunk_data):
     process_id = os.getpid()
     chunk_id = chunk_data['chunk_id']
-    data_chunk = chunk_data['data_chunk']
-    is_train = chunk_data['is_train']
     question_chunk = chunk_data['question_chunk']
     img_id_chunk = chunk_data['img_id_chunk']
     answer_chunk = chunk_data['answer_chunk']
     data_dir = chunk_data['data_dir']
     type_name = chunk_data['type_name']
     
-    print(f"Process {process_id} starting on chunk {chunk_id} with {len(data_chunk)} items")
+    print(f"Process {process_id} starting on chunk {chunk_id} with {len(question_chunk)}, {len(img_id_chunk)}, {len(answer_chunk)} items")
 
     datalist = []
-    for idx, (img_id, question, answer) in enumerate(zip(img_ids, questions, answers)):
+    review_file_path = f'{data_dir}/vizwiz_choice_list_{type_name}_process_{chunk_id}.jsonl'
+    
+    with open(review_file_path, 'w') as review_file:
+        for idx, (img_id, question, answer) in enumerate(zip(img_id_chunk, question_chunk, answer_chunk)):
+            print("chunk_id", chunk_id, "idx", idx)
+            try:
+                shutil.copy(f"dataset/coco_images/train/{img_id.zfill(12)}.jpg", f"{data_dir}/images/{img_id.zfill(12)}.jpg")
+            except:
+                shutil.copy(f"dataset/coco_images/val/{img_id.zfill(12)}.jpg", f"{data_dir}/images/{img_id.zfill(12)}.jpg")
 
-        content = {
-            "text": f"[Instruction]\n{rule['prompt']}\n\n"
-                    f"[Question]\n{question}\n\n"
-                    f"[Correct Answer]\n{answer}\n\"
-        }
-        review = get_eval(content, 512)
-        answer_candidate_list = parse_score(review).split(' | ')
-        answer_candidate_list += [answer]
-        random.shuffle(answer_candidate_list)
-        review_file.write(json.dumps({"question": question, "gpt_response": review, "answer": answer}) + "\n")
+            base64_imgs = []
+            image_paths = f"{data_dir}/images/{img_id.zfill(12)}.jpg"
+            if isinstance(image_paths, list):
+                for img_path in image_paths:
+                    base64_imgs.append(encode_image(img_path))
+            else:
+                base64_imgs.append(encode_image(image_paths))
 
-        entry = {
-            "id": idx,
-            "image": f"{data_dir}/images/{img_id.zfill(12)}.jpg",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": f"<image>\n Question: {question} \n Choice list:{answer_candidate_list} \n Your answer is:"
-                },
-                {
-                    "from": "gpt",
-                    "value": answer
+            content = {
+                "text": (f"[Instruction]\n{rule['prompt']}\n\n"
+                        f"[Question]\n{question}\n\n"
+                        f"[Correct Answer]\n{answer}\n"),
+                "image":
+                   base64_imgs
                 }
-            ]
-        }
 
-        datalist.append(entry)
-        img_ids.append(img_id)
-        try:
-            shutil.copy(f"dataset/coco_images/train/{img_id.zfill(12)}.jpg", f"{data_dir}/images/{img_id.zfill(12)}.jpg")
-        except:
-            shutil.copy(f"dataset/coco_images/val/{img_id.zfill(12)}.jpg", f"{data_dir}/images/{img_id.zfill(12)}.jpg")
+            review = get_eval(content, 512)
+            answer_candidate_list = parse_score(review).split(' | ')
+            answer_candidate_list += [answer]
+            random.shuffle(answer_candidate_list)
+            review_file.write(json.dumps({"question": question, "gpt_response": review, "answer": answer}) + "\n")
+            entry = {
+                "id": idx,
+                "image": f"{data_dir}/images/{img_id.zfill(12)}.jpg",
+                "conversations": [
+                    {
+                        "from": "human",
+                        "value": f"<image>\n Question: {question} \n Choice list:{answer_candidate_list} \n Your answer is:"
+                    },
+                    {
+                        "from": "gpt",
+                        "value": answer
+                    }
+                ]
+            }
+
+            datalist.append(entry)
+            img_ids.append(img_id)
 
     return {
         'chunk_id': chunk_id,
@@ -135,8 +170,6 @@ def process_data_chunk(chunk_data):
 
 
 def combine_results(results, task_num, out_json):
-    target_folder = train_folder
-    
     # Initialize combined data lists
     combined_datalist = []
     
@@ -144,10 +177,10 @@ def combine_results(results, task_num, out_json):
     for result in results:
         combined_datalist.extend(result['datalist'])
     
-    print(task_num, len(datalist))
+    print(task_num, len(combined_datalist))
 
     with open(out_json, "w", encoding="utf-8") as f:
-        json.dump(datalist, f, indent=4, ensure_ascii=False)
+        json.dump(combined_datalist, f, indent=4, ensure_ascii=False)
     
 
 for task_num in range(4):
@@ -156,7 +189,6 @@ for task_num in range(4):
     txt_answers = f"{data_dir}/{type_name}_annotations/type_{task_num}/answers.txt"
     out_json = f"{data_dir}/{type_name}/dataset-{task_num}.json"
 
-    # 파일 읽기
     with open(txt_questions, "r", encoding="utf-8") as f:
         questions = [line.strip() for line in f.readlines()]
 
@@ -171,7 +203,6 @@ for task_num in range(4):
     chunk_size = math.ceil(len(questions) / num_chunks)
     
     print(f"Processing {len(questions)} items using {num_chunks} processes")
-    
     # Prepare chunks for processing
     chunks = []
     for i in range(num_chunks):

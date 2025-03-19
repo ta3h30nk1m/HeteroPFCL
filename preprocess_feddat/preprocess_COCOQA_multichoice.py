@@ -24,7 +24,7 @@ NUM_PROCESSES = 10 #cpu_count()  # Use all available CPU cores
 
 # Set up OpenAI client
 client = OpenAI(
-    api_key="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"
+    api_key=
     )
 
 def resize_image(image_path, max_size):

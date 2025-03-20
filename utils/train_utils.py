@@ -1297,24 +1297,30 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
-                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    if '256' in training_args.mode:
-                        state_dict = torch.load('llava_1b_blockwise_pca_init_r256.pth', map_location='cpu')
-                    elif '512' in training_args.mode:
-                        state_dict = torch.load('llava_1b_blockwise_pca_init_r512.pth', map_location='cpu')
-                    elif '1024' in training_args.mode:
-                        state_dict = torch.load('llava_1b_blockwise_pca_init_r1024.pth', map_location='cpu')
-                    else:
-                        state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
-                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    if '256' in training_args.mode:
-                        state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')
-                    elif '512' in training_args.mode:
-                        state_dict = torch.load('llava_3b_blockwise_pca_init_r512.pth', map_location='cpu')
-                    elif '1024' in training_args.mode:
-                        state_dict = torch.load('llava_3b_blockwise_pca_init_r1024.pth', map_location='cpu')
-                    else:
-                        state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                if not data_args.is_multimodal:
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_1b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_3b_blockwise_pca_init.pth', map_location='cpu')
+                else:
+                    if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                        if '256' in training_args.mode:
+                            state_dict = torch.load('llava_1b_blockwise_pca_init_r256.pth', map_location='cpu')
+                        elif '512' in training_args.mode:
+                            state_dict = torch.load('llava_1b_blockwise_pca_init_r512.pth', map_location='cpu')
+                        elif '1024' in training_args.mode:
+                            state_dict = torch.load('llava_1b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                        if '256' in training_args.mode:
+                            state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')
+                        elif '512' in training_args.mode:
+                            state_dict = torch.load('llava_3b_blockwise_pca_init_r512.pth', map_location='cpu')
+                        elif '1024' in training_args.mode:
+                            state_dict = torch.load('llava_3b_blockwise_pca_init_r1024.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
             if 'freezeA' in training_args.mode:
                 new_state_dict = {}
                 for k, v in state_dict.items():

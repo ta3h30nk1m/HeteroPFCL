@@ -1357,9 +1357,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
                 if not data_args.is_multimodal:
-                    if 'llama3.2_1B' in model_args.model_name_or_path:
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
                         state_dict = torch.load('llama_1b_blockwise_pca_init.pth', map_location='cpu')
-                    elif 'llama3.2_3B' in model_args.model_name_or_path:
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
                         state_dict = torch.load('llama_3b_blockwise_pca_init.pth', map_location='cpu')
                 else:
                     if 'llama3.2_1B_vl' in model_args.model_name_or_path:

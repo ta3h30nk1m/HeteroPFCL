@@ -2,8 +2,8 @@
 
 ## Environment setting
 ```bash
-conda create -n fcl python=3.10
-conda activate fcl
+conda create -n fcl2 python=3.10
+conda activate fcl2
 pip install transformers==4.47.1
 pip install torch==2.3.0 torchvision --index-url https://download.pytorch.org/whl/cu118
 pip install flash-attn==2.5.8 --no-build-isolation
@@ -52,6 +52,12 @@ gdrive files download 1IZLEG2F1F2YiR-5QhwqldLnJvhup45Ao
 ```bash
 gdrive files download 1uDJ3eMnsbdHcfxqphpPL57ovk1HqKEOU
 gdrive files download 1ADtJlXtyMWNVDk_W9GWG5CLawj64tiQ6
+```
+
+    - llama - blockwise - PCA (R16)
+```bash
+gdrive files download 1lYofrpJhLfFdg4-ayZnQ73-qIZVSdBxk
+gdrive files download 1sygf0_hkyMYxMCbeX6RUmSjbfAZ3SZ3I
 ```
 
 ## New data instruction

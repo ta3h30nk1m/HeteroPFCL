@@ -2,6 +2,10 @@
 # mkdir Fed-aya
 # mv all_clients.json ./Fed-aya/
 
-gdrive files download 1XLglrYOFnsbs7YQtwBFTTSP-wctA21Et
-tar -xvf Fed-aya.tar
-rm Fed-aya.tar
+# gdrive files download 1XLglrYOFnsbs7YQtwBFTTSP-wctA21Et
+# tar -xvf Fed-aya.tar
+# rm Fed-aya.tar
+
+gdrive files download 16volnRzTp0BwCIL1E_PeiSij-5DgOeix
+tar -xvf Fed-aya_topic.tar
+rm Fed-aya_topic.tar

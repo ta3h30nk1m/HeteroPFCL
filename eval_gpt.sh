@@ -1,23 +1,20 @@
 #!/bin/bash
 
-# base_dir="fedours/fedours_T05_bs4_100iter_fedaya_1b"
-base_dir="fedavg/fedavg_bs4_100iter_fedaya_1b"
+base_dir="zeroshot/llama3_8b_fedaya_topic"
 
 # Associate each integer value with a list of corresponding dataset names
 declare -A dataset_map
 # List of datasets that are not multi-choice
-dataset_map[0]="Fed-aya-0 Fed-aya-1 Fed-aya-2"
-dataset_map[1]="Fed-aya-10 Fed-aya-11 Fed-aya-12"
-dataset_map[2]="Fed-aya-20 Fed-aya-21 Fed-aya-22"
-dataset_map[3]="Fed-aya-30 Fed-aya-31 Fed-aya-32"
-dataset_map[4]="Fed-aya-40 Fed-aya-41 Fed-aya-42"
-dataset_map[5]="Fed-aya-50 Fed-aya-51 Fed-aya-52"
-dataset_map[6]="Fed-aya-60 Fed-aya-61 Fed-aya-62"
-dataset_map[7]="Fed-aya-70 Fed-aya-71 Fed-aya-72"
-dataset_map[8]="Fed-aya-80 Fed-aya-81 Fed-aya-82"
-dataset_map[9]="Fed-aya-90 Fed-aya-91 Fed-aya-92"
+dataset_map[0]="Fed-aya_topic-0 Fed-aya_topic-1 Fed-aya_topic-2 Fed-aya_topic-3"
+dataset_map[1]="Fed-aya_topic-10 Fed-aya_topic-11 Fed-aya_topic-12 Fed-aya_topic-13"
+dataset_map[2]="Fed-aya_topic-20 Fed-aya_topic-21 Fed-aya_topic-22 Fed-aya_topic-23"
+dataset_map[3]="Fed-aya_topic-30 Fed-aya_topic-31 Fed-aya_topic-32 Fed-aya_topic-33"
+dataset_map[4]="Fed-aya_topic-40 Fed-aya_topic-41 Fed-aya_topic-42 Fed-aya_topic-43"
+dataset_map[5]="Fed-aya_topic-50 Fed-aya_topic-51 Fed-aya_topic-52 Fed-aya_topic-53"
+dataset_map[6]="Fed-aya_topic-60 Fed-aya_topic-61 Fed-aya_topic-62 Fed-aya_topic-63"
+dataset_map[7]="Fed-aya_topic-70 Fed-aya_topic-71 Fed-aya_topic-72 Fed-aya_topic-73"
 
-round=(2 5 7 10 12 15)
+ROUND_TO_EVALS=(20)
 
 # Iterate over the keys (integer values) in the associative array
 for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do

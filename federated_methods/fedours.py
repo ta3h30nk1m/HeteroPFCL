@@ -193,9 +193,15 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4
+                else: # lora3 or lora4 / lora5 or lora6
                     if training_args.share_ema:
-                        target_key = name
+                        if 'fedquad' in training_args.mode:
+                            target_key = name
+                        elif 'fedhexa' in training_args.mode:
+                            if 'lora5' in name:
+                                target_key = name.replace('lora5', 'lora3')
+                            elif 'lora6' in name:
+                                target_key = name.replace('lora6', 'lora4')
                     else:
                         new_global_state_dict[name] = local_state_dict_list[client_id][name]
                         continue
@@ -248,9 +254,15 @@ def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_l
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4
+                else: # lora3 or lora4 / lora5 or lora6
                     if training_args.share_ema:
-                        target_key = name
+                        if 'fedquad' in training_args.mode:
+                            target_key = name
+                        elif 'fedhexa' in training_args.mode:
+                            if 'lora5' in name:
+                                target_key = name.replace('lora5', 'lora3')
+                            elif 'lora6' in name:
+                                target_key = name.replace('lora6', 'lora4')
                     else:
                         new_global_state_dict[name] = local_state_dict_list[client_id][name]
                         continue

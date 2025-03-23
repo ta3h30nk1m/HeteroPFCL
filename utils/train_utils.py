@@ -141,6 +141,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['QUADMOELORA'] = QuadraMOELoraModel
             lora_config.peft_type = 'QUADMOELORA'
         
+        elif training_args.mode in ['fedhexa_grad', 'fedhexa_grad_include']:
+            from models.hexalora.hexaloramodel import HexaLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['HEXALORA'] = HexaLoraModel
+            lora_config.peft_type = 'HEXALORA'
+        elif training_args.mode in ['fedhexa_grad_moe','fedhexa_grad_include_moe']:
+            from models.hexalora_moe.hexamoeloramodel import HexaMOELoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['HexaMOELORA'] = HexaMOELoraModel
+            lora_config.peft_type = 'HexaMOELORA'
         elif training_args.mode in ['fedpq_sft', 'fedpq', 'fedlastpq', 'fedFLpq', 'fedFMLpq', 'fedlastpqfreeze', 'fedFLpqfreeze', 'fedMultipqfreezeA', 'fedMulti2pqfreezeA', 'fedMultipqfreezeA_sft', 'fedpqfreezeA_sft', 'fedpqfreezeA']:
             from models.pqlora.pqloramodel import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -1949,6 +1959,11 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
             or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
             or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k \
+            or 'lora_w_gate' in k or 'lora_w_noise' in k:
+                keys_to_del.append(k)
+    elif training_args.mode in ['fedhexa_grad', 'fedhexa_grad_include', 'fedhexa_grad_moe','fedhexa_grad_include_moe']:
+        for k in new_global_state_dict.keys():
+            if 'lora2' in k or 'lora3' in k or 'lora4' in k \
             or 'lora_w_gate' in k or 'lora_w_noise' in k:
                 keys_to_del.append(k)
     elif training_args.mode == 'fedpq' or training_args.mode == 'fedpq_sft':

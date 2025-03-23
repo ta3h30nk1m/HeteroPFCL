@@ -21,6 +21,8 @@ from models.quadralora.quadraloralayer import QuadraLoraLayer
 from models.quadralora_moe.quadramoeloralayer import QuadraMOELoraLayer
 from models.quadra_pqlora_freeze_full.quadra_pqloralayer_freeze_full import QuadraPQLoraFullFreezeLayer
 from models.quadra_pqlora_freeze_full_moe.quadra_pqloralayer_freeze_full_moe import QuadraPQMOELoraFullFreezeLayer
+from models.hexalora.hexaloralayer import HexaLoraLayer
+from models.hexalora_moe.hexamoeloralayer import HexaMOELoraLayer
 
 logger = logging.get_logger(__name__)
 
@@ -45,7 +47,8 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
                 or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
-                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer) \
+                or isinstance(module, HexaLoraLayer) or isinstance(module, HexaMOELoraLayer):
                 module.set_state(state)
 
     def activate_all(self):
@@ -53,7 +56,8 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
                 or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
-                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer) \
+                or isinstance(module, HexaLoraLayer) or isinstance(module, HexaMOELoraLayer):
                 module.activate_all()
 
     def activate_lora1(self):
@@ -61,7 +65,8 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
                 or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
-                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer) \
+                or isinstance(module, HexaLoraLayer) or isinstance(module, HexaMOELoraLayer):
                 module.activate_lora1()
     
     def activate_lora2(self):
@@ -69,7 +74,8 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
                 or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
-                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer) \
+                or isinstance(module, HexaLoraLayer) or isinstance(module, HexaMOELoraLayer):
                 module.activate_lora2()
         
     def forward(

@@ -32,10 +32,12 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode == 'fedsim_ours' or mode == 'fedsim_tv':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedsim_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
     elif mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train',
-                  'fedquad_grad', 'fedquad_excludemean','fedquad_grad_moe', 'fedquad_excludemean_moe']:
+                  'fedquad_grad', 'fedquad_excludemean','fedquad_grad_moe', 'fedquad_excludemean_moe',
+                  'fedhexa_grad', 'fedhexa_grad_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['fedours_include','fedours_tv_include','fedours_excludemean_include','fedours_include_moe', 'fedours_excludemean_include_moe',
-                  'fedquad_grad_include', 'fedquad_excludemean_include', 'fedquad_grad_include_moe', 'fedquad_excludemean_include_moe'] :
+                  'fedquad_grad_include', 'fedquad_excludemean_include', 'fedquad_grad_include_moe', 'fedquad_excludemean_include_moe',
+                  'fedhexa_grad_include', 'fedhexa_grad_include_moe'] :
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_include_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode == 'fedours_self':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_self_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict

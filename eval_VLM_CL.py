@@ -387,7 +387,7 @@ def main():
     
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
-    batch_size = 8 #if 'l2p' in training_args.mode or 'dap' in training_args.mode or 'LAE' in training_args.mode or 'fedsim' in training_args.mode else 4
+    batch_size = 4 #if 'l2p' in training_args.mode or 'dap' in training_args.mode or 'LAE' in training_args.mode or 'fedsim' in training_args.mode else 4
     
     logger.info(f'Evaluatiing clients and server at round {training_args.round_to_eval}')
     start_time = time.time()
@@ -434,13 +434,13 @@ def main():
         new_data_args = copy.deepcopy(data_args)
         new_data_args.model_name_for_dataarg = test_datalist[0]['model_id']
         model, tokenizer, processor, data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
-        
+        print(f"Model name: {test_datalist[0]['model_id']}")
         if training_args.eval_all:
             if not training_args.zeroshot:
                 model.load_state_dict(client_state_dict, strict=False)
                 model = model.to(torch.bfloat16)
                 model = model.to(device)
-            if 'fedours' in training_args.mode or 'dual' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode:
                 model.set_state('gate')
             
             for client_id_ in range(training_args.num_clients):
@@ -481,13 +481,14 @@ def main():
                     personal_global_state_dict = torch.load(f'./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth', map_location='cpu')
                     model.load_state_dict(personal_global_state_dict, strict=False)
             # model.load_state_dict(server_state_dict, strict=False)
-            if 'fedours' in training_args.mode or 'dual' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode:
                 # for name, module in model.named_modules():
                 #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                 #         module.set_state('lora2')
                 model.set_state('gate')
                 # model.base_model.model.model.mm_projector = model.base_model.model.model.local_mm_projector
             dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
+            
             if not training_args.eval_server:
                 # if training_args.mode not in ['fedsim', 'feddat']:
                 if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
@@ -504,7 +505,7 @@ def main():
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
-                if 'fedours' in training_args.mode or 'dual' in training_args.mode:
+                if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode:
                     # for name, module in model.named_modules():
                     #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                     #         module.set_state('lora1')

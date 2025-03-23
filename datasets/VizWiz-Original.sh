@@ -10,6 +10,6 @@
 # unzip Annotations.zip
 # rm ./*.zip
 
-gdrive files download 1yMtL_vDu3gewxYgHAvJz_Q0TcE5kCw00
+gdrive files download 1BpWLkzrdlBbyVKr-HaFZQEG8hmKtxcvS
 tar -xvf VizWiz-Original.tar
 rm VizWiz-Original.tar

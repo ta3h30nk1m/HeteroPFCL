@@ -1197,6 +1197,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                                or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
                                                                                                 or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                                 or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
@@ -1205,6 +1206,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                            or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
                                                                                             or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                             or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],

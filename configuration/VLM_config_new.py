@@ -141,3 +141,6 @@ class TrainingConfig(transformers.TrainingArguments):
     
     taskloss_weight: float = 0.1
     distill_weight: float = 0.1
+    
+    immediate_ema_update:bool = False
+    share_ema:bool = False

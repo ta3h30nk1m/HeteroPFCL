@@ -30,15 +30,22 @@ from peft.utils.other import transpose
 
 from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.dora import DoraConv2dLayer, DoraConv3dLayer, DoraEmbeddingLayer, DoraLinearLayer, _DoraConvNdLayer
+
 import copy
 
-from models.duallora_moe.dualmoeloralayer import moe_gating_weight, cv_squared
-
-class PQMOELoraFullFreezeLayer(BaseTunerLayer):
+class QuadraMOELoraLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
-    adapter_layer_names = ("lora1_A", "lora1_B", "lora1_embedding_A", "lora1_embedding_B", "lora1_P", "lora1_Q",
-                           "lora2_A", "lora2_B", "lora2_embedding_A", "lora2_embedding_B", "lora2_P", "lora2_Q",
+    adapter_layer_names = ("lora1_A", "lora1_B", "lora1_embedding_A", "lora1_embedding_B",
+                           "lora2_A", "lora2_B", "lora2_embedding_A", "lora2_embedding_B",
+                           "lora3_A", "lora3_B", "lora3_embedding_A", "lora3_embedding_B",
+                           "lora4_A", "lora4_B", "lora4_embedding_A", "lora4_embedding_B",
                            "lora_w_gate", "lora_w_noise")
+    
+    # lora1: global
+    # lora2: local
+    # lora3: ema 0.99
+    # lora4: ema 0.9
+    
     # All names of other parameters that may contain adapter-related parameters
     other_param_names = ("r", "lora_alpha", "scaling", "lora_dropout")
 
@@ -52,11 +59,10 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         self.lora1_B = nn.ModuleDict({})
         self.lora2_A = nn.ModuleDict({})
         self.lora2_B = nn.ModuleDict({})
-        
-        self.lora1_P = nn.ParameterDict({})
-        self.lora1_Q = nn.ParameterDict({})
-        self.lora2_P = nn.ParameterDict({})
-        self.lora2_Q = nn.ParameterDict({})
+        self.lora3_A = nn.ModuleDict({})
+        self.lora3_B = nn.ModuleDict({})
+        self.lora4_A = nn.ModuleDict({})
+        self.lora4_B = nn.ModuleDict({})
         
         self.lora_w_gate= nn.ParameterDict({})
         self.lora_w_noise= nn.ParameterDict({})
@@ -65,6 +71,10 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         self.lora1_embedding_B = nn.ParameterDict({})
         self.lora2_embedding_A = nn.ParameterDict({})
         self.lora2_embedding_B = nn.ParameterDict({})
+        self.lora3_embedding_A = nn.ParameterDict({})
+        self.lora3_embedding_B = nn.ParameterDict({})
+        self.lora4_embedding_A = nn.ParameterDict({})
+        self.lora4_embedding_B = nn.ParameterDict({})
         # Mark the weight as unmerged
         self._disable_adapters = False
         self.merged_adapters = []
@@ -120,10 +130,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         self.out_features = out_features
         
         self.active_state = 'gate'
-        self.use_pq = True
-        self.freeze_AB = False
 
-        self.moe_loss = 0
     def update_layer(
         self,
         adapter_name,
@@ -149,27 +156,26 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         self.lora_dropout.update(nn.ModuleDict({adapter_name: lora_dropout_layer}))
         # Actual trainable parameters
         self.lora1_A[adapter_name] = nn.Linear(self.in_features, r, bias=False)
-        self.lora1_B[adapter_name] = nn.Linear(r, self.out_features, bias=lora_bias)
+        self.lora1_B[adapter_name] = nn.Linear(r, self.out_features, bias=False)
         
-        self.lora2_A[adapter_name] = copy.deepcopy(self.lora1_A[adapter_name])
-        self.lora2_B[adapter_name] = copy.deepcopy(self.lora1_B[adapter_name])
+        self.lora2_A[adapter_name] = copy.deepcopy(self.lora1_A[adapter_name])#nn.Linear(self.in_features, r, bias=False)
+        self.lora2_B[adapter_name] = copy.deepcopy(self.lora1_B[adapter_name])#nn.Linear(r, self.out_features, bias=False)
+        
+        self.lora3_A[adapter_name] = copy.deepcopy(self.lora1_A[adapter_name])#nn.Linear(self.in_features, r, bias=False)
+        self.lora3_B[adapter_name] = copy.deepcopy(self.lora1_B[adapter_name])#nn.Linear(r, self.out_features, bias=False)
+        
+        self.lora4_A[adapter_name] = copy.deepcopy(self.lora1_A[adapter_name])#nn.Linear(self.in_features, r, bias=False)
+        self.lora4_B[adapter_name] = copy.deepcopy(self.lora1_B[adapter_name])#nn.Linear(r, self.out_features, bias=False)
         
         self.lora_bias[adapter_name] = lora_bias
-        
-        #FIXME: lora_P as r x r matrix or r x 1 vector
-        self.lora1_P[adapter_name] = nn.Parameter(torch.eye((r)))  # Initialized to 1
-        self.lora1_Q[adapter_name] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
-        self.lora2_P[adapter_name] = nn.Parameter(torch.eye((r)))  # Initialized to 1
-        self.lora2_Q[adapter_name] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
 
         if use_rslora:
             self.scaling[adapter_name] = lora_alpha / math.sqrt(r)
         else:
             self.scaling[adapter_name] = lora_alpha / r
 
-        self.lora_w_gate[adapter_name] = nn.Parameter(torch.zeros(self.in_features,1), requires_grad=True)
-        self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,1), requires_grad=True)
-
+        self.lora_w_gate[adapter_name] = nn.Parameter(torch.zeros(self.in_features,4), requires_grad=True)
+        self.lora_w_noise[adapter_name] = nn.Parameter(torch.zeros(self.in_features,4), requires_grad=True)
         # for inits that require access to the base weight, use gather_param_ctx so that the weight is gathered when using DeepSpeed
         if isinstance(init_lora_weights, str) and init_lora_weights.startswith("pissa"):
             with gather_params_ctx(self.get_base_layer().weight):
@@ -198,7 +204,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
     def reset_lora_parameters(self, adapter_name, init_lora_weights):
         if init_lora_weights is False:
             return
-            
+
         if adapter_name in self.lora1_A.keys():
             if init_lora_weights is True:
                 # initialize A the same way as the default for nn.Linear and B to zero
@@ -209,6 +215,8 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
                 # Assign the same values to both lora1 and lora2
                 self.lora1_A[adapter_name].weight.data.copy_(init_A)
                 self.lora2_A[adapter_name].weight.data.copy_(init_A)
+                self.lora3_A[adapter_name].weight.data.copy_(init_A)
+                self.lora4_A[adapter_name].weight.data.copy_(init_A)
                 
             elif init_lora_weights.lower() == "gaussian":
                 std = 1 / self.r[adapter_name]
@@ -217,29 +225,26 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
                 
                 self.lora1_A[adapter_name].weight.data.copy_(init_A)
                 self.lora2_A[adapter_name].weight.data.copy_(init_A)
+                self.lora3_A[adapter_name].weight.data.copy_(init_A)
+                self.lora4_A[adapter_name].weight.data.copy_(init_A)
             else:
                 raise ValueError(f"Unknown initialization {init_lora_weights=}")
             # Initialize B weights to zero for both lora1 and lora2
             nn.init.zeros_(self.lora1_B[adapter_name].weight)
             nn.init.zeros_(self.lora2_B[adapter_name].weight)
+            nn.init.zeros_(self.lora3_B[adapter_name].weight)
+            nn.init.zeros_(self.lora4_B[adapter_name].weight)
             if self.lora_bias[adapter_name]:
                 nn.init.zeros_(self.lora1_B[adapter_name].bias)
                 nn.init.zeros_(self.lora2_B[adapter_name].bias)
-                
-            nn.init.ones_(self.lora1_P[adapter_name])
-            nn.init.ones_(self.lora2_P[adapter_name])
-            init_Q = torch.empty_like(self.lora1_Q[adapter_name])
-            nn.init.kaiming_uniform_(init_Q, a=math.sqrt(5))
-            self.lora1_Q[adapter_name].data.copy_(init_Q)
-            self.lora2_Q[adapter_name].data.copy_(init_Q)
-            
-            nn.init.zeros_(self.lora_w_gate[adapter_name])
-            nn.init.zeros_(self.lora_w_noise[adapter_name])
-            
+                nn.init.zeros_(self.lora3_B[adapter_name].bias)
+                nn.init.zeros_(self.lora4_B[adapter_name].bias)
         if adapter_name in self.lora1_embedding_A.keys():
             # Initialize embedding A to zero for both lora1 and lora2
             nn.init.zeros_(self.lora1_embedding_A[adapter_name])
             nn.init.zeros_(self.lora2_embedding_A[adapter_name])
+            nn.init.zeros_(self.lora3_embedding_A[adapter_name])
+            nn.init.zeros_(self.lora4_embedding_A[adapter_name])
 
             # Generate initialization values once for embedding B
             init_B = torch.empty_like(self.lora1_embedding_B[adapter_name])
@@ -248,10 +253,14 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             # Assign the same values to both lora1 and lora2 embedding B
             self.lora1_embedding_B[adapter_name].data.copy_(init_B)
             self.lora2_embedding_B[adapter_name].data.copy_(init_B)
+            self.lora3_embedding_B[adapter_name].data.copy_(init_B)
+            self.lora4_embedding_B[adapter_name].data.copy_(init_B)
             if self.lora_bias[adapter_name]:
                 # embeddings are not supported at the moment, but still adding this for consistency
                 nn.init.zeros_(self.lora1_embedding_B[adapter_name].bias)
                 nn.init.zeros_(self.lora2_embedding_B[adapter_name].bias)
+                nn.init.zeros_(self.lora3_embedding_B[adapter_name].bias)
+                nn.init.zeros_(self.lora4_embedding_B[adapter_name].bias)
 
     def olora_init(self, adapter_name):
         base_layer = self.get_base_layer()
@@ -274,10 +283,19 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
 
         Qr, Rr = Q[:, :r], R[:r]
 
-        self.lora_A[adapter_name].weight.data = Rr.contiguous()
-        self.lora_B[adapter_name].weight.data = Qr.contiguous()
+        self.lora1_A[adapter_name].weight.data = Rr.contiguous()
+        self.lora1_B[adapter_name].weight.data = Qr.contiguous()
+        
+        self.lora2_A[adapter_name].weight.data = Rr.contiguous()
+        self.lora2_B[adapter_name].weight.data = Qr.contiguous()
+        
+        self.lora3_A[adapter_name].weight.data = Rr.contiguous()
+        self.lora3_B[adapter_name].weight.data = Qr.contiguous()
+        
+        self.lora4_A[adapter_name].weight.data = Rr.contiguous()
+        self.lora4_B[adapter_name].weight.data = Qr.contiguous()
 
-        weight_tensor.data -= scale_factor * self.lora_B[adapter_name].weight @ self.lora_A[adapter_name].weight
+        weight_tensor.data -= scale_factor * self.lora1_B[adapter_name].weight @ self.lora1_A[adapter_name].weight
         if bnb_param_type == "4bit":
             weight_tensor = orig_weight.__class__(
                 weight_tensor,
@@ -327,8 +345,14 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
 
         lora_A = torch.diag(torch.sqrt(Sr)) @ Uhr
         lora_B = Vr @ torch.diag(torch.sqrt(Sr))
-        self.lora_A[adapter_name].weight.data = lora_A
-        self.lora_B[adapter_name].weight.data = lora_B
+        self.lora1_A[adapter_name].weight.data = lora_A
+        self.lora1_B[adapter_name].weight.data = lora_B
+        self.lora2_A[adapter_name].weight.data = lora_A
+        self.lora2_B[adapter_name].weight.data = lora_B
+        self.lora3_A[adapter_name].weight.data = lora_A
+        self.lora3_B[adapter_name].weight.data = lora_B
+        self.lora4_A[adapter_name].weight.data = lora_A
+        self.lora4_B[adapter_name].weight.data = lora_B
         weight = weight.data - self.scaling[adapter_name] * lora_B @ lora_A
         weight = transpose(weight.to(dtype), self.fan_in_fan_out)
         self.get_base_layer().weight.data = weight
@@ -344,14 +368,26 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
         }
 
         qweight, lora_A, lora_B = loftq_init(weight, **kwargs)
-        if adapter_name in self.lora_A.keys():
+        if adapter_name in self.lora1_A.keys():
             # initialize A the same way as the default for nn.Linear and B to zero
-            self.lora_A[adapter_name].weight.data = lora_A
-            self.lora_B[adapter_name].weight.data = lora_B
-        if adapter_name in self.lora_embedding_A.keys():
+            self.lora1_A[adapter_name].weight.data = lora_A
+            self.lora1_B[adapter_name].weight.data = lora_B
+            self.lora2_A[adapter_name].weight.data = lora_A
+            self.lora2_B[adapter_name].weight.data = lora_B
+            self.lora3_A[adapter_name].weight.data = lora_A
+            self.lora3_B[adapter_name].weight.data = lora_B
+            self.lora4_A[adapter_name].weight.data = lora_A
+            self.lora4_B[adapter_name].weight.data = lora_B
+        if adapter_name in self.lora1_embedding_A.keys():
             # initialize a the same way as the default for nn.linear and b to zero
-            self.lora_embedding_A[adapter_name].weight.data = lora_A
-            self.lora_embedding_B[adapter_name].weight.data = lora_B
+            self.lora1_embedding_A[adapter_name].weight.data = lora_A
+            self.lora1_embedding_B[adapter_name].weight.data = lora_B
+            self.lora2_embedding_A[adapter_name].weight.data = lora_A
+            self.lora2_embedding_B[adapter_name].weight.data = lora_B
+            self.lora3_embedding_A[adapter_name].weight.data = lora_A
+            self.lora3_embedding_B[adapter_name].weight.data = lora_B
+            self.lora4_embedding_A[adapter_name].weight.data = lora_A
+            self.lora4_embedding_B[adapter_name].weight.data = lora_B
         self.get_base_layer().weight.data = qweight
 
     def dora_init(self, adapter_name: str) -> None:
@@ -360,8 +396,8 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             self.adapter_layer_names = self.adapter_layer_names[:] + ("lora_magnitude_vector",)
 
         dora_layer = DoraLinearLayer(fan_in_fan_out=getattr(self, "fan_in_fan_out", False))
-        lora_A = self.lora_A[adapter_name].weight
-        lora_B = self.lora_B[adapter_name].weight
+        lora_A = self.lora1_A[adapter_name].weight
+        lora_B = self.lora1_B[adapter_name].weight
         place_on_cpu = self.ephemeral_gpu_offload and (lora_A.device.type == "cpu" or lora_B.device.type == "cpu")
         if self.ephemeral_gpu_offload:
             if lora_A.device.type in ["cuda", "xpu"]:
@@ -397,14 +433,14 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             return
 
         for active_adapter in self.active_adapters:
-            if active_adapter not in self.lora_A.keys():
+            if active_adapter not in self.lora1_A.keys():
                 continue
 
             self.scaling[active_adapter] *= scale
 
     def unscale_layer(self, scale=None) -> None:
         for active_adapter in self.active_adapters:
-            if active_adapter not in self.lora_A.keys():
+            if active_adapter not in self.lora1_A.keys():
                 continue
 
             if scale is None:
@@ -462,11 +498,10 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             lora1_B = self.lora1_B[active_adapter]
             lora2_A = self.lora2_A[active_adapter]
             lora2_B = self.lora2_B[active_adapter]
-            
-            lora1_P = self.lora1_P[active_adapter]
-            lora1_Q = self.lora1_Q[active_adapter]
-            lora2_P = self.lora2_P[active_adapter]
-            lora2_Q = self.lora2_Q[active_adapter]
+            lora3_A = self.lora3_A[active_adapter]
+            lora3_B = self.lora3_B[active_adapter]
+            lora4_A = self.lora4_A[active_adapter]
+            lora4_B = self.lora4_B[active_adapter]
             dropout = self.lora_dropout[active_adapter]
             scaling = self.scaling[active_adapter]
 
@@ -474,65 +509,57 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             # layer output
             sub_batch = x[sub_batch_indices_list[i]].to(lora1_A.weight.dtype)
             if self.active_state == 'lora1':
-                lora_output = lora1_B(lora1_A(dropout(sub_batch))@lora1_P + lora1_Q) * scaling
+                lora_output = lora1_B(lora1_A(dropout(sub_batch))) * scaling
             elif self.active_state =='lora2':
-                lora_output = lora2_B(lora2_A(dropout(sub_batch))@lora2_P + lora2_Q) * scaling
+                lora_output = lora2_B(lora2_A(dropout(sub_batch))) * scaling
+            elif self.active_state =='lora3':
+                lora_output = lora3_B(lora3_A(dropout(sub_batch))) * scaling
+            elif self.active_state =='lora4':
+                lora_output = lora4_B(lora4_A(dropout(sub_batch))) * scaling
             elif self.active_state =='gate':
                 weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
-                # weights = self.lora_w_gate[active_adapter][0]
-                lora_output = weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(sub_batch))@lora1_P + lora1_Q) * scaling + (1-weights.unsqueeze(-1)) * lora2_B(lora2_A(dropout(sub_batch))@lora2_P + lora2_Q) * scaling
                 
-                # self.moe_loss = cv_squared(weights.sum(0))
+                lora_output = weights[:,0].unsqueeze(-1).unsqueeze(-1)*lora1_B(lora1_A(dropout(sub_batch)))*scaling + weights[:,1].unsqueeze(-1).unsqueeze(-1)*lora2_B(lora2_A(dropout(sub_batch)))*scaling + weights[:,2].unsqueeze(-1).unsqueeze(-1)*lora3_B(lora3_A(dropout(sub_batch)))*scaling + weights[:,3].unsqueeze(-1).unsqueeze(-1)*lora4_B(lora4_A(dropout(sub_batch)))*scaling
             result[sub_batch_indices_list[i]] += lora_output.to(torch_result_dtype)
 
         return result
 
     def set_state(self, state):
-        assert state in ['lora1', 'lora2', 'gate'], state
+        assert state in ['lora1', 'lora2','lora3','lora4', 'gate'], state
         self.active_state = state
         
     def activate_all(self):
-        if not self.freeze_AB:
-            for p in self.lora1_A.parameters():
-                p.requires_grad = True
-            for p in self.lora1_B.parameters():
-                p.requires_grad = True
-            for p in self.lora2_A.parameters():
-                p.requires_grad = True
-            for p in self.lora2_B.parameters():
-                p.requires_grad = True
-            for p in self.lora1_embedding_A.parameters():
-                p.requires_grad = True
-            for p in self.lora1_embedding_B.parameters():
-                p.requires_grad = True
-            for p in self.lora2_embedding_A.parameters():
-                p.requires_grad = True
-            for p in self.lora2_embedding_B.parameters():
-                p.requires_grad = True
-        else:
-            for p in self.lora1_A.parameters():
-                p.requires_grad = False
-            for p in self.lora1_B.parameters():
-                p.requires_grad = False
-            for p in self.lora2_A.parameters():
-                p.requires_grad = False
-            for p in self.lora2_B.parameters():
-                p.requires_grad = False
-            for p in self.lora1_embedding_A.parameters():
-                p.requires_grad = False
-            for p in self.lora1_embedding_B.parameters():
-                p.requires_grad = False
-            for p in self.lora2_embedding_A.parameters():
-                p.requires_grad = False
-            for p in self.lora2_embedding_B.parameters():
-                p.requires_grad = False
-        for p in self.lora1_P.parameters():
+        for p in self.lora1_A.parameters():
             p.requires_grad = True
-        for p in self.lora1_Q.parameters():
+        for p in self.lora1_B.parameters():
             p.requires_grad = True
-        for p in self.lora2_P.parameters():
+        for p in self.lora2_A.parameters():
             p.requires_grad = True
-        for p in self.lora2_Q.parameters():
+        for p in self.lora2_B.parameters():
+            p.requires_grad = True
+        for p in self.lora3_A.parameters():
+            p.requires_grad = True
+        for p in self.lora3_B.parameters():
+            p.requires_grad = True
+        for p in self.lora4_A.parameters():
+            p.requires_grad = True
+        for p in self.lora4_B.parameters():
+            p.requires_grad = True
+        for p in self.lora1_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora1_embedding_B.parameters():
+            p.requires_grad = True
+        for p in self.lora2_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora2_embedding_B.parameters():
+            p.requires_grad = True
+        for p in self.lora3_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora3_embedding_B.parameters():
+            p.requires_grad = True
+        for p in self.lora4_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora4_embedding_B.parameters():
             p.requires_grad = True
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
@@ -540,62 +567,76 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
             p.requires_grad = True
     
     def activate_lora1(self):
-        if not self.freeze_AB:
-            for p in self.lora1_A.parameters():
-                p.requires_grad = True
-            for p in self.lora1_B.parameters():
-                p.requires_grad = True
-            for p in self.lora2_A.parameters():
-                p.requires_grad = False
-            for p in self.lora2_B.parameters():
-                p.requires_grad = False
-            for p in self.lora1_embedding_A.parameters():
-                p.requires_grad = True
-            for p in self.lora1_embedding_B.parameters():
-                p.requires_grad = True
-            for p in self.lora2_embedding_A.parameters():
-                p.requires_grad = False
-            for p in self.lora2_embedding_B.parameters():
-                p.requires_grad = False
-        for p in self.lora1_P.parameters():
+        for p in self.lora1_A.parameters():
             p.requires_grad = True
-        for p in self.lora1_Q.parameters():
+        for p in self.lora1_B.parameters():
             p.requires_grad = True
-        for p in self.lora2_P.parameters():
+        for p in self.lora2_A.parameters():
             p.requires_grad = False
-        for p in self.lora2_Q.parameters():
+        for p in self.lora2_B.parameters():
+            p.requires_grad = False
+        for p in self.lora3_A.parameters():
+            p.requires_grad = False
+        for p in self.lora3_B.parameters():
+            p.requires_grad = False
+        for p in self.lora4_A.parameters():
+            p.requires_grad = False
+        for p in self.lora4_B.parameters():
+            p.requires_grad = False
+        for p in self.lora1_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora1_embedding_B.parameters():
+            p.requires_grad = True
+        for p in self.lora2_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora2_embedding_B.parameters():
+            p.requires_grad = False
+        for p in self.lora3_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora3_embedding_B.parameters():
+            p.requires_grad = False
+        for p in self.lora4_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora4_embedding_B.parameters():
             p.requires_grad = False
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
         for p in self.lora_w_noise.parameters():
             p.requires_grad = True
-
+    
     def activate_lora2(self):
-        if not self.freeze_AB:
-            for p in self.lora1_A.parameters():
-                p.requires_grad = False
-            for p in self.lora1_B.parameters():
-                p.requires_grad = False
-            for p in self.lora2_A.parameters():
-                p.requires_grad = True
-            for p in self.lora2_B.parameters():
-                p.requires_grad = True
-            for p in self.lora1_embedding_A.parameters():
-                p.requires_grad = False
-            for p in self.lora1_embedding_B.parameters():
-                p.requires_grad = False
-            for p in self.lora2_embedding_A.parameters():
-                p.requires_grad = True
-            for p in self.lora2_embedding_B.parameters():
-                p.requires_grad = True
-        for p in self.lora1_P.parameters():
+        for p in self.lora1_A.parameters():
             p.requires_grad = False
-        for p in self.lora1_Q.parameters():
+        for p in self.lora1_B.parameters():
             p.requires_grad = False
-        for p in self.lora2_P.parameters():
+        for p in self.lora2_A.parameters():
             p.requires_grad = True
-        for p in self.lora2_Q.parameters():
+        for p in self.lora2_B.parameters():
             p.requires_grad = True
+        for p in self.lora3_A.parameters():
+            p.requires_grad = False
+        for p in self.lora3_B.parameters():
+            p.requires_grad = False
+        for p in self.lora4_A.parameters():
+            p.requires_grad = False
+        for p in self.lora4_B.parameters():
+            p.requires_grad = False
+        for p in self.lora1_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora1_embedding_B.parameters():
+            p.requires_grad = False
+        for p in self.lora2_embedding_A.parameters():
+            p.requires_grad = True
+        for p in self.lora2_embedding_B.parameters():
+            p.requires_grad = True
+        for p in self.lora3_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora3_embedding_B.parameters():
+            p.requires_grad = False
+        for p in self.lora4_embedding_A.parameters():
+            p.requires_grad = False
+        for p in self.lora4_embedding_B.parameters():
+            p.requires_grad = False
         for p in self.lora_w_gate.parameters():
             p.requires_grad = True
         for p in self.lora_w_noise.parameters():
@@ -610,7 +651,7 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
 #  ------------------------------------------------------------------------------------------
 
 
-class Linear(nn.Module, PQMOELoraFullFreezeLayer):
+class Linear(nn.Module, QuadraMOELoraLayer):
     # Lora implemented in a dense layer
     def __init__(
         self,
@@ -628,7 +669,7 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQMOELoraFullFreezeLayer.__init__(self, base_layer, **kwargs)
+        QuadraMOELoraLayer.__init__(self, base_layer, **kwargs)
         self.fan_in_fan_out = fan_in_fan_out
 
         self._active_adapter = adapter_name
@@ -663,7 +704,7 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
             return
 
         for active_adapter in adapter_names:
-            if active_adapter in self.lora_A.keys():
+            if active_adapter in self.lora1_A.keys():
                 base_layer = self.get_base_layer()
                 if safe_merge:
                     # Note that safe_merge will be slower than the normal merge
@@ -728,7 +769,7 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
 
                     if self.lora_bias[active_adapter]:
                         base_layer.bias.data += self.lora_B[active_adapter].bias
-                    base_layer.bias.data += (self.lora_B[active_adapter].weight @ self.lora_Q[active_adapter].T).flatten()
+
                 self.merged_adapters.append(active_adapter)
 
     def unmerge(self) -> None:
@@ -740,7 +781,7 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
             return
         while len(self.merged_adapters) > 0:
             active_adapter = self.merged_adapters.pop()
-            if active_adapter in self.lora_A.keys():
+            if active_adapter in self.lora1_A.keys():
                 weight = self.get_base_layer().weight
                 delta_weight = self.get_delta_weight(active_adapter)
                 if not self.use_dora[active_adapter]:
@@ -753,7 +794,6 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
 
                 if self.lora_bias[active_adapter]:
                     self.get_base_layer().bias.data -= self.lora_B[active_adapter].bias
-                self.get_base_layer().bias.data -= (self.lora_B[active_adapter].weight @ self.lora_Q[active_adapter].T).flatten()
 
     def get_delta_weight(self, adapter) -> torch.Tensor:
         """
@@ -763,33 +803,99 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
             adapter (str):
                 The name of the adapter for which the delta weight should be computed.
         """
-        device = self.lora_B[adapter].weight.device
-        dtype = self.lora_B[adapter].weight.dtype
+        device = self.lora1_B[adapter].weight.device
+        dtype = self.lora1_B[adapter].weight.dtype
 
         # In case users wants to merge the adapter weights that are in
-        # (b)float16 while being on CPU, we need to cast the weights to float32, perform the merge and then cast back to
-        # (b)float16 because some CPUs have slow bf16/fp16 matmuls.
-        cast_to_fp32 = device.type == "cpu" and (dtype == torch.float16 or dtype == torch.bfloat16)
+        # float16 while being on CPU, we need to cast the weights to float32, perform the merge and then cast back to
+        # float16 because the `@` and matmul operation in general is not supported in torch + cpu + fp16.
+        cast_to_fp32 = device.type == "cpu" and dtype == torch.float16
+        
+        weight1_A = self.lora1_A[adapter].weight
+        weight1_B = self.lora1_B[adapter].weight
+        weight2_A = self.lora2_A[adapter].weight
+        weight2_B = self.lora2_B[adapter].weight
+        weight3_A = self.lora3_A[adapter].weight
+        weight3_B = self.lora3_B[adapter].weight
+        weight4_A = self.lora4_A[adapter].weight
+        weight4_B = self.lora4_B[adapter].weight
+        if self.active_state == 'lora1':
+            if cast_to_fp32:
+                weight1_A = weight1_A.float()
+                weight1_B = weight1_B.float()
 
-        weight_A = self.lora_A[adapter].weight
-        weight_B = self.lora_B[adapter].weight
-        weight_P = self.lora_P[adapter]
-        # weight_Q = self.lora_Q[adapter]
+            output_tensor = transpose(weight1_B @ weight1_A, self.fan_in_fan_out) * self.scaling[adapter]
 
-        if cast_to_fp32:
-            weight_A = weight_A.float()
-            weight_B = weight_B.float()
-            weight_P = weight_P.float()
+            if cast_to_fp32:
+                output_tensor = output_tensor.to(dtype=dtype)
 
-        output_tensor = transpose(weight_B @ torch.diag(weight_P) @ weight_A, self.fan_in_fan_out) * self.scaling[adapter]
+                # cast back the weights
+                self.lora1_A[adapter].weight.data = weight1_A.to(dtype)
+                self.lora1_B[adapter].weight.data = weight1_B.to(dtype)
+        elif self.active_state == 'lora2':
+            if cast_to_fp32:
+                weight2_A = weight2_A.float()
+                weight2_B = weight2_B.float()
 
-        if cast_to_fp32:
-            output_tensor = output_tensor.to(dtype=dtype)
+            output_tensor = transpose(weight2_B @ weight2_A, self.fan_in_fan_out) * self.scaling[adapter]
 
-            # cast back the weights
-            self.lora_A[adapter].weight.data = weight_A.to(dtype)
-            self.lora_B[adapter].weight.data = weight_B.to(dtype)
-            self.lora_P[adapter].weight.data = weight_P.to(dtype)
+            if cast_to_fp32:
+                output_tensor = output_tensor.to(dtype=dtype)
+
+                # cast back the weights
+                self.lora2_A[adapter].weight.data = weight2_A.to(dtype)
+                self.lora2_B[adapter].weight.data = weight2_B.to(dtype)
+        elif self.active_state == 'lora3':
+            if cast_to_fp32:
+                weight3_A = weight3_A.float()
+                weight3_B = weight3_B.float()
+
+            output_tensor = transpose(weight3_B @ weight3_A, self.fan_in_fan_out) * self.scaling[adapter]
+
+            if cast_to_fp32:
+                output_tensor = output_tensor.to(dtype=dtype)
+
+                # cast back the weights
+                self.lora3_A[adapter].weight.data = weight3_A.to(dtype)
+                self.lora3_B[adapter].weight.data = weight3_B.to(dtype)
+        elif self.active_state == 'lora4':
+            if cast_to_fp32:
+                weight4_A = weight4_A.float()
+                weight4_B = weight4_B.float()
+
+            output_tensor = transpose(weight4_B @ weight4_A, self.fan_in_fan_out) * self.scaling[adapter]
+
+            if cast_to_fp32:
+                output_tensor = output_tensor.to(dtype=dtype)
+
+                # cast back the weights
+                self.lora4_A[adapter].weight.data = weight4_A.to(dtype)
+                self.lora4_B[adapter].weight.data = weight4_B.to(dtype)
+        if self.active_state == 'gate':
+            if cast_to_fp32:
+                weight1_A = weight1_A.float()
+                weight1_B = weight1_B.float()
+                weight2_A = weight2_A.float()
+                weight2_B = weight2_B.float()
+                weight3_A = weight3_A.float()
+                weight3_B = weight3_B.float()
+                weight4_A = weight4_A.float()
+                weight4_B = weight4_B.float()
+
+            output_tensor = (transpose(weight1_B @ weight1_A, self.fan_in_fan_out)+transpose(weight2_B @ weight2_A, self.fan_in_fan_out)+transpose(weight3_B @ weight3_A, self.fan_in_fan_out)+transpose(weight4_B @ weight4_A, self.fan_in_fan_out)) * self.scaling[adapter] / 4
+
+            if cast_to_fp32:
+                output_tensor = output_tensor.to(dtype=dtype)
+
+                # cast back the weights
+                self.lora1_A[adapter].weight.data = weight1_A.to(dtype)
+                self.lora1_B[adapter].weight.data = weight1_B.to(dtype)
+                self.lora2_A[adapter].weight.data = weight2_A.to(dtype)
+                self.lora2_B[adapter].weight.data = weight2_B.to(dtype)
+                self.lora3_A[adapter].weight.data = weight3_A.to(dtype)
+                self.lora3_B[adapter].weight.data = weight3_B.to(dtype)
+                self.lora4_A[adapter].weight.data = weight4_A.to(dtype)
+                self.lora4_B[adapter].weight.data = weight4_B.to(dtype)
 
         return output_tensor
 
@@ -815,54 +921,129 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
                 lora1_B = self.lora1_B[active_adapter]
                 lora2_A = self.lora2_A[active_adapter]
                 lora2_B = self.lora2_B[active_adapter]
-                lora1_P = self.lora1_P[active_adapter]
-                lora1_Q = self.lora1_Q[active_adapter]
-                lora2_P = self.lora2_P[active_adapter]
-                lora2_Q = self.lora2_Q[active_adapter]
+                lora3_A = self.lora3_A[active_adapter]
+                lora3_B = self.lora3_B[active_adapter]
+                lora4_A = self.lora4_A[active_adapter]
+                lora4_B = self.lora4_B[active_adapter]
                 dropout = self.lora_dropout[active_adapter]
                 scaling = self.scaling[active_adapter]
                 x = x.to(lora1_A.weight.dtype)
 
-                if not self.use_dora[active_adapter]:
-                    if self.use_pq:
-                        if self.active_state == 'lora1':
-                            result = result + lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling
-                        elif self.active_state == 'lora2':
-                            result = result + lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
-                        elif self.active_state == 'gate':
-                            weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
-                            # weights = self.lora_w_gate[active_adapter][0]
-                            result = result + weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling + (1-weights.unsqueeze(-1))* lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
-                            # self.moe_loss = cv_squared(weights.sum(0))
+                
+                if self.active_state == 'lora1':
+                    if not self.use_dora[active_adapter]:
+                        result = result + lora1_B(lora1_A(dropout(x))) * scaling
                     else:
-                        if self.active_state == 'lora1':
-                            result = result + lora1_B(lora1_A(dropout(x))) * scaling
-                        elif self.active_state == 'lora2':
-                            result = result + lora2_B(lora2_A(dropout(x))) * scaling
-                        elif self.active_state == 'gate':
-                            # result = result + (lora1_B(lora1_A(dropout(x))) + lora2_B(lora2_A(dropout(x)))) * scaling / 2
-                            weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
-                            # weights = self.lora_w_gate[active_adapter][0]
-                            result = result + weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights.unsqueeze(-1)) * lora2_B(lora2_A(dropout(x))) * scaling
-                            
-                            # self.moe_loss = cv_squared(weights.sum(0))
-                else:
-                    raise ValueError("only support vanilla lora")
-                    if isinstance(dropout, nn.Identity) or not self.training:
-                        base_result = result
+                        if isinstance(dropout, nn.Identity) or not self.training:
+                            base_result = result
+                        else:
+                            x = dropout(x)
+                            base_result = None
+
+                        result = result + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora1_A,
+                            lora_B=lora1_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        )
+                elif self.active_state == 'lora2':
+                    if not self.use_dora[active_adapter]:
+                        result = result + lora2_B(lora2_A(dropout(x))) * scaling
                     else:
-                        x = dropout(x)
-                        base_result = None
+                        if isinstance(dropout, nn.Identity) or not self.training:
+                            base_result = result
+                        else:
+                            x = dropout(x)
+                            base_result = None
 
-                    result = result + self.lora_magnitude_vector[active_adapter](
-                        x,
-                        lora_A=lora_A,
-                        lora_B=lora_B,
-                        scaling=scaling,
-                        base_layer=self.get_base_layer(),
-                        base_result=base_result,
-                    )
+                        result = result + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora2_A,
+                            lora_B=lora2_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        )
+                elif self.active_state == 'lora3':
+                    if not self.use_dora[active_adapter]:
+                        result = result + lora3_B(lora3_A(dropout(x))) * scaling
+                    else:
+                        if isinstance(dropout, nn.Identity) or not self.training:
+                            base_result = result
+                        else:
+                            x = dropout(x)
+                            base_result = None
 
+                        result = result + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora3_A,
+                            lora_B=lora3_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        )
+                elif self.active_state == 'lora4':
+                    if not self.use_dora[active_adapter]:
+                        result = result + lora4_B(lora4_A(dropout(x))) * scaling
+                    else:
+                        if isinstance(dropout, nn.Identity) or not self.training:
+                            base_result = result
+                        else:
+                            x = dropout(x)
+                            base_result = None
+
+                        result = result + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora4_A,
+                            lora_B=lora4_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        )
+                elif self.active_state == 'gate':
+                    if not self.use_dora[active_adapter]:
+                        weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
+                        result = result + weights[:,0].unsqueeze(-1).unsqueeze(-1)*lora1_B(lora1_A(dropout(x))) * scaling + weights[:,1].unsqueeze(-1).unsqueeze(-1)*lora2_B(lora2_A(dropout(x))) * scaling + weights[:,2].unsqueeze(-1).unsqueeze(-1)*lora3_B(lora3_A(dropout(x))) * scaling + weights[:,3].unsqueeze(-1).unsqueeze(-1)*lora4_B(lora4_A(dropout(x))) * scaling
+                    else:
+                        if isinstance(dropout, nn.Identity) or not self.training:
+                            base_result = result
+                        else:
+                            x = dropout(x)
+                            base_result = None
+                        
+                        
+                        result = result + (self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora1_A,
+                            lora_B=lora1_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        ) + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora2_A,
+                            lora_B=lora2_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        ) + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora3_A,
+                            lora_B=lora3_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        ) + self.lora_magnitude_vector[active_adapter](
+                            x,
+                            lora_A=lora4_A,
+                            lora_B=lora4_B,
+                            scaling=scaling,
+                            base_layer=self.get_base_layer(),
+                            base_result=base_result,
+                        )
+                        )/4
             result = result.to(torch_result_dtype)
 
         return result
@@ -871,8 +1052,43 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
         rep = super().__repr__()
         return "lora." + rep
 
+def moe_gating_weight(x, w_gate, w_noise, train=True, noise_epsilon=1e-5):
+    clean_logits = x @ w_gate
+    if train:
+        with torch.no_grad():
+            noise_stddev = ((nn.Softplus()(x @ w_noise) + noise_epsilon))
+        noisy_logits = clean_logits + (torch.randn_like(clean_logits) * noise_stddev)
+        logits = noisy_logits
+    else:
+        logits = clean_logits
+        
+    # FIXME: Do mean or not
+    logits = logits.mean(dim=1)
+    
+    logits = nn.Softmax(1)(logits)
+    # logits = torch.sigmoid(logits)
+    # if not train:
+    # print(f"weights: [{logits.mean()}]")
+    return logits
 
-class Embedding(nn.Module, PQMOELoraFullFreezeLayer):
+def cv_squared(x):
+    """The squared coefficient of variation of a sample.
+    Useful as a loss to encourage a positive distribution to be more uniform.
+    Epsilons added for numerical stability.
+    Returns 0 for an empty Tensor.
+    Args:
+    x: a `Tensor`.
+    Returns:
+    a `Scalar`.
+    """
+    eps = 1e-10
+    # if only num_experts = 1
+
+    if x.shape[0] == 1:
+        return torch.tensor([0], device=x.device, dtype=x.dtype)
+    return x.float().var() / (x.float().mean()**2 + eps)
+
+class Embedding(nn.Module, QuadraMOELoraLayer):
     # LoRA implemented in a Embedding layer
     def __init__(
         self,
@@ -892,7 +1108,7 @@ class Embedding(nn.Module, PQMOELoraFullFreezeLayer):
             raise ValueError(f"lora_bias={lora_bias} is not supported for {self.__class__.__name__}.")
 
         super().__init__()
-        PQMOELoraFullFreezeLayer.__init__(self, base_layer)
+        QuadraMOELoraLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self.update_layer(
@@ -1132,7 +1348,7 @@ class Embedding(nn.Module, PQMOELoraFullFreezeLayer):
         return "lora." + rep
 
 
-class _ConvNd(nn.Module, PQMOELoraFullFreezeLayer):
+class _ConvNd(nn.Module, QuadraMOELoraLayer):
     # Lora implemented in a conv(2,3)d layer
     def __init__(
         self,
@@ -1148,7 +1364,7 @@ class _ConvNd(nn.Module, PQMOELoraFullFreezeLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQMOELoraFullFreezeLayer.__init__(self, base_layer)
+        QuadraMOELoraLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self._kernel_dim = base_layer.weight.dim()

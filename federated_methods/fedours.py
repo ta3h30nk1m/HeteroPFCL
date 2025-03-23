@@ -193,6 +193,12 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                else: # lora3 or lora4
+                    if training_args.share_ema:
+                        target_key = name
+                    else:
+                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
+                        continue
                 
                 for id in range(training_args.num_clients):
                     if id == client_id:
@@ -242,6 +248,12 @@ def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_l
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                else: # lora3 or lora4
+                    if training_args.share_ema:
+                        target_key = name
+                    else:
+                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
+                        continue
                 
                 for id in range(training_args.num_clients):
                     # if id == client_id:
@@ -485,6 +497,10 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             else:
                 self.hooks.append(self.model2.base_model.model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
                 self.hooks.append(self.model2.base_model.model.model.norm.register_forward_hook(hook_fn2))
+    
+        if 'fedquad' in self.args.mode:
+            self.ema_module1 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora3' in k}
+            self.ema_module2 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora4' in k}
     
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # if self.curr_round > 0:
@@ -1027,6 +1043,18 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         #         cur_weights = {k: t for k, t in self.model.named_parameters() if t.requires_grad}
                         #         for name, param in self.old_weights.items():
                         #             self.old_weights[name].copy_(self.ema_ratio*param + (1-self.ema_ratio)*cur_weights[name])
+                        if optimizer_was_run and 'fedquad' in self.args.mode:
+                            with torch.no_grad():
+                                cur_weights = {k: t for k, t in self.model.named_parameters() if t.requires_grad}
+                                for name, param in self.ema_module1.items():
+                                    new_name = name.replace('lora3', 'lora2')
+                                    self.ema_module1[name].copy_(0.99*param + (1-0.99)*cur_weights[new_name])
+                                for name, param in self.ema_module2.items():
+                                    new_name = name.replace('lora4', 'lora2')
+                                    self.ema_module2[name].copy_(0.9*param + (1-0.9)*cur_weights[new_name])
+                                if self.args.immediate_ema_update:
+                                    self.model.load_state_dict(self.ema_module1, strict=False)
+                                    self.model.load_state_dict(self.ema_module2, strict=False)
                         ##############################################################################################################
                         
                         self._maybe_log_save_evaluate(

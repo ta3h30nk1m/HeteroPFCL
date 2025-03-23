@@ -16,6 +16,12 @@ from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import 
 from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
 from models.dual_pqlora_LIL_freeze_full.dual_pqloraLILlayer_freeze_full import PQLoraLILFullFreezeLayer
 from models.dual_plora_freeze_full.dual_ploralayer_freeze_full import PLoraFullFreezeLayer
+
+from models.quadralora.quadraloralayer import QuadraLoraLayer
+from models.quadralora_moe.quadramoeloralayer import QuadraMOELoraLayer
+from models.quadra_pqlora_freeze_full.quadra_pqloralayer_freeze_full import QuadraPQLoraFullFreezeLayer
+from models.quadra_pqlora_freeze_full_moe.quadra_pqloralayer_freeze_full_moe import QuadraPQMOELoraFullFreezeLayer
+
 logger = logging.get_logger(__name__)
 
 class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
@@ -38,28 +44,32 @@ class LlavaMultiForConditionalGeneration(LlavaForConditionalGeneration):
         for name, module in self.named_modules():
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
-                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer):
+                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
                 module.set_state(state)
 
     def activate_all(self):
         for name, module in self.named_modules():
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
-                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer):
+                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
                 module.activate_all()
 
     def activate_lora1(self):
         for name, module in self.named_modules():
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
-                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer):
+                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
                 module.activate_lora1()
     
     def activate_lora2(self):
         for name, module in self.named_modules():
             if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer) or isinstance(module, DualMOELoraLayer) \
                 or isinstance(module, PQLoraLayer) or isinstance(module, PQLoraFreezeLayer) or isinstance(module, PQLoraFreezeALayer) or isinstance(module, PQLoraLILFullFreezeLayer) \
-                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer):
+                or isinstance(module, PQLoraFullFreezeLayer) or isinstance(module, PQLoraFullFreezeALayer) or isinstance(module, PQMOELoraFullFreezeLayer) or isinstance(module, PLoraFullFreezeLayer) \
+                or isinstance(module, QuadraLoraLayer) or isinstance(module, QuadraMOELoraLayer) or isinstance(module, QuadraPQLoraFullFreezeLayer) or isinstance(module, QuadraPQMOELoraFullFreezeLayer):
                 module.activate_lora2()
         
     def forward(

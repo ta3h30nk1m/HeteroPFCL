@@ -490,14 +490,20 @@ def main():
             #             square_matrix = state_dict[k].to(torch.float32)
             #             print(k, torch.det(square_matrix))
             
-            local_state_dict_list[client_id] = copy.deepcopy(state_dict)
-            
             if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(total_rounds/20) == 0:
                 torch.save(state_dict, output_dir)
             
-            local_state_dict = getattr(trainer, 'global_weight', None)
-            if local_state_dict is not None:
-                local_state_dict_list[client_id] = copy.deepcopy(local_state_dict)
+            if 'fedquad' in training_args.mode and not training_args.immediate_ema_update:
+                for k, v in trainer.ema_module1.items():
+                    state_dict[k] = v.detach().cpu()
+                for k, v in trainer.ema_module2.items():
+                    state_dict[k] = v.detach().cpu()
+            
+            local_state_dict_list[client_id] = copy.deepcopy(state_dict)
+            
+            # local_state_dict = getattr(trainer, 'global_weight', None)
+            # if local_state_dict is not None:
+            #     local_state_dict_list[client_id] = copy.deepcopy(local_state_dict)
             
             trainer.deepspeed.empty_partition_cache()
             trainer.accelerator.free_memory()

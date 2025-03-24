@@ -213,7 +213,8 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
                     #     breakpoint()
                     # else:
                     new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                if isinstance(new_param, int)
+                if isinstance(new_param, int):
+                    continue
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")

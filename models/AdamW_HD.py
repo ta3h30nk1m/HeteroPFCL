@@ -118,7 +118,6 @@ class AdamW_HD(AdamW):
                 if p.grad is None:
                     continue
                 grad = p.grad.data
-                
                 state = self.state[p]
                 if state['step'] > 1:
                     exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
@@ -126,7 +125,8 @@ class AdamW_HD(AdamW):
                     prev_bias_correction1 = 1 - beta1 ** (state['step'] - 1)
                     prev_bias_correction2 = 1 - beta2 ** (state['step'] - 1)
                     # Hypergradient for Adam:
-                    h = torch.dot(grad.view(-1), torch.div(exp_avg, exp_avg_sq.sqrt().add_(group['eps'])).view(-1)) * math.sqrt(prev_bias_correction2) / prev_bias_correction1
+                    with torch.no_grad():
+                        h = torch.dot(grad.view(-1), torch.div(exp_avg, exp_avg_sq.sqrt().add_(group['eps'])).view(-1)) * math.sqrt(prev_bias_correction2) / prev_bias_correction1
                     # Hypergradient descent of the learning rate:
                     group['lr'] += group['hypergrad_lr'] * h.item()
             print(f"learning rate (group {group_id}): ", state['step'], group['lr'])

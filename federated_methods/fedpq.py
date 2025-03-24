@@ -865,7 +865,8 @@ def feddualMultipq_load_state_dict(model, global_state_dict, local_state_dict_li
                         else:
                             new_target_key = target_key
                         new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
-                    
+                if isinstance(new_param, int):
+                    continue
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
@@ -1022,7 +1023,8 @@ def feddualMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_
                         else:
                             new_target_key = target_key
                         new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
-                    
+                if isinstance(new_param, int):
+                    continue
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
@@ -1209,6 +1211,8 @@ def feddualMultipq_homoAgg_load_state_dict(model, global_state_dict, local_state
                         if id == client_id:
                             continue
                         new_param += homo_weights[id]*local_state_dict_list[id][target_key] / homo_sim_sum
+                if isinstance(new_param, int):
+                    continue
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
@@ -1416,6 +1420,9 @@ def feddualMulti05pq_homoAgg_load_state_dict(model, global_state_dict, local_sta
                         if id == client_id:
                             continue
                         new_param += homo_weights[id]*local_state_dict_list[id][target_key] / homo_sim_sum
+                
+                if isinstance(new_param, int):
+                    continue
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")

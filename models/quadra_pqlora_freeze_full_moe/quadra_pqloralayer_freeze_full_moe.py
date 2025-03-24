@@ -673,6 +673,39 @@ class QuadraPQMOELoraFullFreezeLayer(BaseTunerLayer):
                 p.requires_grad = False
             for p in self.lora4_embedding_B.parameters():
                 p.requires_grad = False
+        else:
+            for p in self.lora1_A.parameters():
+                p.requires_grad = False
+            for p in self.lora1_B.parameters():
+                p.requires_grad = False
+            for p in self.lora2_A.parameters():
+                p.requires_grad = False
+            for p in self.lora2_B.parameters():
+                p.requires_grad = False
+            for p in self.lora3_A.parameters():
+                p.requires_grad = False
+            for p in self.lora3_B.parameters():
+                p.requires_grad = False
+            for p in self.lora4_A.parameters():
+                p.requires_grad = False
+            for p in self.lora4_B.parameters():
+                p.requires_grad = False
+            for p in self.lora1_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora1_embedding_B.parameters():
+                p.requires_grad = False
+            for p in self.lora2_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora2_embedding_B.parameters():
+                p.requires_grad = False
+            for p in self.lora3_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora3_embedding_B.parameters():
+                p.requires_grad = False
+            for p in self.lora4_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora4_embedding_B.parameters():
+                p.requires_grad = False
         for p in self.lora1_P.parameters():
             p.requires_grad = True
         for p in self.lora1_Q.parameters():
@@ -716,6 +749,39 @@ class QuadraPQMOELoraFullFreezeLayer(BaseTunerLayer):
                 p.requires_grad = True
             for p in self.lora2_embedding_B.parameters():
                 p.requires_grad = True
+            for p in self.lora3_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora3_embedding_B.parameters():
+                p.requires_grad = False
+            for p in self.lora4_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora4_embedding_B.parameters():
+                p.requires_grad = False
+        else:
+            for p in self.lora1_A.parameters():
+                p.requires_grad = False
+            for p in self.lora1_B.parameters():
+                p.requires_grad = False
+            for p in self.lora2_A.parameters():
+                p.requires_grad = False
+            for p in self.lora2_B.parameters():
+                p.requires_grad = False
+            for p in self.lora3_A.parameters():
+                p.requires_grad = False
+            for p in self.lora3_B.parameters():
+                p.requires_grad = False
+            for p in self.lora4_A.parameters():
+                p.requires_grad = False
+            for p in self.lora4_B.parameters():
+                p.requires_grad = False
+            for p in self.lora1_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora1_embedding_B.parameters():
+                p.requires_grad = False
+            for p in self.lora2_embedding_A.parameters():
+                p.requires_grad = False
+            for p in self.lora2_embedding_B.parameters():
+                p.requires_grad = False
             for p in self.lora3_embedding_A.parameters():
                 p.requires_grad = False
             for p in self.lora3_embedding_B.parameters():

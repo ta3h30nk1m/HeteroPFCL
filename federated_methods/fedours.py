@@ -1227,7 +1227,12 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 },
             ]
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-
+            
+            if self.args.use_hypergradient:
+                from models.AdamW_HD import AdamW_HD
+                optimizer_cls = AdamW_HD
+                optimizer_kwargs['hypergrad_lr'] = self.args.hypergrad_lr
+            
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":
                 import bitsandbytes

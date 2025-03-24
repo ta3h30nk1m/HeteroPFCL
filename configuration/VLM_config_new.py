@@ -144,3 +144,7 @@ class TrainingConfig(transformers.TrainingArguments):
     
     immediate_ema_update:bool = False
     share_ema:bool = False
+    
+    # hypergradient
+    use_hypergradient:bool = False
+    hypergrad_lr:float = 1e-8

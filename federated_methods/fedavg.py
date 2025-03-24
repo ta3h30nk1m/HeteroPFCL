@@ -857,23 +857,31 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
             optimizer_grouped_parameters = [
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n 
-                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                                or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
+                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                                or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "weight_decay": self.args.weight_decay,
                 },
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                                                                                            or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
+                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                            or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
                     "weight_decay": self.args.weight_decay,
                 },
             ]
-            
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-
+            
+            if self.args.use_hypergradient:
+                from models.AdamW_HD import AdamW_HD
+                optimizer_cls = AdamW_HD
+                optimizer_kwargs['hypergrad_lr'] = self.args.hypergrad_lr
+            
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":
                 import bitsandbytes

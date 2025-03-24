@@ -18,11 +18,12 @@ import math
 
 
 NUM_SECONDS_TO_SLEEP = 0.01
-NUM_PROCESSES = 10 #cpu_count()  # Use all available CPU cores
+NUM_PROCESSES = 20 #cpu_count()  # Use all available CPU cores
 
 # Set up OpenAI client
 client = OpenAI(
-    api_key="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"
+    api_key="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"
+    #"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"
     )
 
 rule = {
@@ -312,7 +313,7 @@ def process_data_chunk(chunk_data):
     }
  
 
-def preprocess_data(input_file, max_num, task_key=None, top_keys=None):
+def preprocess_data(input_file, max_num, task_key=None, top_keys=None, preprocess_require=True):
     with open(input_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
@@ -362,29 +363,33 @@ def preprocess_data(input_file, max_num, task_key=None, top_keys=None):
     if task_key is None:
         task_key = extract_key(input_file)
         top_keys = top_4_keys_by_items(task_datasets)
-     
-    for task_id, dataset in task_datasets.items():
-        if task_id not in top_keys:
-            continue
+    
+    if preprocess_require:
 
-        # Subsampling to a maximum of 10000 samples
-        sampled_dataset = random.sample(dataset, min(len(dataset), max_num))
+        for task_id, dataset in task_datasets.items():
+            if task_id not in top_keys:
+                continue
 
-        # Save dataset to file
-        # output_file = f"dataset-{task_id//4}{task_id%4}.json"
-        random.shuffle(sampled_dataset)
-        new_task_datasets[task_id] = sampled_dataset
+            # Subsampling to a maximum of 10000 samples
+            sampled_dataset = random.sample(dataset, min(len(dataset), max_num))
 
-        print("task_id", task_id, "whole", len(dataset), "sampled", len(sampled_dataset))
-        # Copy selected images to target directory
-        for item in sampled_dataset:
-            source_path = item["image"].replace('images', 'raw_images')
-            target_path = item["image"]
-            if os.path.exists(source_path):
-                shutil.copy(source_path, target_path)
-                pass
-            else:
-                print(source_path)    
+            # Save dataset to file
+            # output_file = f"dataset-{task_id//4}{task_id%4}.json"
+            random.shuffle(sampled_dataset)
+            new_task_datasets[task_id] = sampled_dataset
+
+            print("task_id", task_id, "whole", len(dataset), "sampled", len(sampled_dataset))
+            # Copy selected images to target directory
+            for item in sampled_dataset:
+                source_path = item["image"].replace('images', 'raw_images')
+                if not os.path.exists(source_path):
+                    source_path = source_path.replace('raw_images', 'raw_images2')
+                target_path = item["image"]
+                if os.path.exists(source_path):
+                    shutil.copy(source_path, target_path)
+                    pass
+                else:
+                    print(source_path)    
     return new_task_datasets, task_key, top_keys
 
 
@@ -417,9 +422,6 @@ task_subtask = defaultdict()
 preprocessed_datalists = defaultdict()
 
 for task_idx, input_file in enumerate(json_dirs):
-    if os.path.exists(file_path):
-        print("file exists", file_path)
-        continue
     if 'train' in input_file:
         dir_type = 'train'
     else:
@@ -428,14 +430,23 @@ for task_idx, input_file in enumerate(json_dirs):
     max_num = max_num_dic[dir_type]
     
     print(input_file)
+
+    preprocess_require = True
+    if os.path.exists(os.path.join(base_dir, dir_type, f"dataset-{task_idx}{3}.json")):
+        preprocess_require = False
+
     if dir_type == 'train':
-        datalists, task_key, top_keys = preprocess_data(input_file, max_num)
+        datalists, task_key, top_keys = preprocess_data(input_file, max_num, preprocess_require=preprocess_require)
         task_subtask[task_key] = top_keys
     else:
         task_key = extract_key(input_file)
         top_keys = task_subtask[task_key]
-        datalists, _, _ = preprocess_data(input_file, max_num, task_key, top_keys)
-     
+        datalists, _, _ = preprocess_data(input_file, max_num, task_key, top_keys, preprocess_require=preprocess_require)
+
+    if not preprocess_require:
+        print("file exists", input_file)
+        continue
+
     ### Preprocessing per task ###
     for task_num, task in enumerate(sorted(list(datalists.keys()))):
         num_chunks = min(NUM_PROCESSES, len(datalists[task]))

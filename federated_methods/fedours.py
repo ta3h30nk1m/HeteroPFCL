@@ -972,6 +972,11 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
+                        
+                        if self.args.use_hypergradient:
+                            # update self.lr_scheduler.base_lrs
+                            for param_id, param_group in enumerate(self.optimizer.param_groups):
+                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
 
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
@@ -1213,6 +1218,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                                                                                                 or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                                 or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
+                    "lr": self.args.learning_rate,
                     "weight_decay": self.args.weight_decay,
                 },
                 {

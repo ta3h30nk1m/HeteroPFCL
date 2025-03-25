@@ -7,7 +7,7 @@
             {"dataset": "GQA","subset_id": 12, "type":"multi-choice"},
             {"dataset": "GQA","subset_id": 13, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 1,
@@ -17,7 +17,7 @@
             {"dataset": "GQA","subset_id": 22, "type":"multi-choice"},
             {"dataset": "GQA","subset_id": 23, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 2,
@@ -27,7 +27,7 @@
             {"dataset": "GQA","subset_id": 32, "type":"multi-choice"},
             {"dataset": "GQA","subset_id": 33, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 3,
@@ -37,7 +37,7 @@
             {"dataset": "Abstract","subset_id": 2, "type":"multi-choice"},
             {"dataset": "Abstract","subset_id": 3,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 4,
@@ -47,7 +47,7 @@
             {"dataset": "SNLI-VE","subset_id": 2, "type":"multi-choice"},
             {"dataset": "SNLI-VE","subset_id": 3,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 5,
@@ -57,7 +57,7 @@
             {"dataset": "COCOQA","subset_id": 2, "type":"multi-choice"},
             {"dataset": "COCOQA","subset_id": 3,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 6,
@@ -67,7 +67,7 @@
             {"dataset": "NLVR2_feddat","subset_id": 2, "type":"multi-choice"},
             {"dataset": "NLVR2_feddat","subset_id": 3,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 7,
@@ -77,7 +77,7 @@
             {"dataset": "VizWiz-Original","subset_id": 2, "type":"multi-choice"},
             {"dataset": "VizWiz-Original","subset_id": 3,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 8,
@@ -87,7 +87,7 @@
             {"dataset": "AQUA","subset_id": 102,"type":"multi-choice"},
             {"dataset": "AQUA","subset_id": 103,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 9,
@@ -97,7 +97,7 @@
             {"dataset": "CLVQA","subset_id": 12,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 13,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 10,
@@ -107,7 +107,7 @@
             {"dataset": "CLVQA","subset_id": 22,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 23,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 11,
@@ -117,7 +117,7 @@
             {"dataset": "CLVQA","subset_id": 32,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 33,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 12,
@@ -127,7 +127,7 @@
             {"dataset": "CLVQA","subset_id": 42,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 43,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 13,
@@ -137,7 +137,7 @@
             {"dataset": "CLVQA","subset_id": 52,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 53,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 14,
@@ -147,7 +147,7 @@
             {"dataset": "CLVQA","subset_id": 62,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 63,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 15,
@@ -157,7 +157,7 @@
             {"dataset": "CLVQA","subset_id": 72,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 73,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 16,
@@ -167,7 +167,7 @@
             {"dataset": "CLVQA","subset_id": 82,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 83,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 17,
@@ -177,7 +177,7 @@
             {"dataset": "CLVQA","subset_id": 92,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 93,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 18,
@@ -187,7 +187,7 @@
             {"dataset": "CLVQA","subset_id": 102,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 103,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 19,
@@ -197,7 +197,7 @@
             {"dataset": "CLVQA","subset_id": 112,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 113,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     },
     {
         "client_id": 20,
@@ -207,6 +207,6 @@
             {"dataset": "CLVQA","subset_id": 122,"type":"multi-choice"},
             {"dataset": "CLVQA","subset_id": 123,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/llama3.2_1B_vl"
     }
 ]

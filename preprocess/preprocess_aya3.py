@@ -255,7 +255,8 @@ def topic_analyze(split):
     # print(tasks)
     return tasks
 
-splits = [0, 1, 2, 10, 11,51, 60, 61, 72, 80, 90, 91]
+# splits = [0, 1, 2, 10, 11,51, 60, 61, 72, 80, 90, 91]
+splits = [0,1,10,11,60,61,71,72,90,91,100,101]
 
 lang_task = {}
 language_per_topic = {}
@@ -288,6 +289,10 @@ for key, value in language_per_topic.items():
 80 yoruba
 90 chinese
 91 vietnamese
+
+71 spanish
+100 kyrgyz
+101 turkish
 '''
 random.seed(42)
 
@@ -302,7 +307,7 @@ if not os.path.exists(test_folder):
 for key, topic_datasets in language_per_topic.items():
     if key == "Sciences & Formal Knowledge":
         # client 1
-        language_codes = [10,11,90,91]
+        language_codes = [10,91,72,90]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -314,7 +319,7 @@ for key, topic_datasets in language_per_topic.items():
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
         
         # client 2
-        language_codes = [61,0,2,60]
+        language_codes = [61,0,100,60]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -326,7 +331,7 @@ for key, topic_datasets in language_per_topic.items():
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
     elif key == "Humanities & Cultural Studies":
         # client 3
-        language_codes = [80,2,1,0]
+        language_codes = [1,100,0,101]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -348,7 +353,7 @@ for key, topic_datasets in language_per_topic.items():
             with open(os.path.join(test_folder, f'dataset-3{i}.json'),'w', encoding='utf-8') as fp:
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
         # client 5
-        language_codes = [72,61,60,51]
+        language_codes = [72,61,60,71]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -361,7 +366,7 @@ for key, topic_datasets in language_per_topic.items():
     
     elif key == "Society & Governance":
         # client 6
-        language_codes = [91,60,80,10]
+        language_codes = [91,60,11,10]
         for i, code in enumerate(language_codes):
             datalist = topic_datasets[code]
             random.shuffle(datalist)
@@ -386,7 +391,7 @@ for key, topic_datasets in language_per_topic.items():
                 json.dump(test_set, fp, ensure_ascii=False, indent=4)
         
         # client 8
-        language_codes = [2,80,11,0]
+        language_codes = [100,101,11,0]
         for i, code in enumerate(language_codes):
             if code == 11: continue
             datalist = topic_datasets[code]

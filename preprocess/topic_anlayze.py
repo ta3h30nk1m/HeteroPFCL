@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 def topic_analyze(split):
 
-    datalist = json.load(open(f'dataset/Fed-aya2/train/dataset-{split}_category.json','r'))
+    datalist = json.load(open(f'dataset/Fed-aya_preprocessed/train/dataset-{split}_category.json','r'))
     # datalist = json.load(open(f'dataset/Fed-aya2/train/dataset-{split}.json','r'))
     print(len(datalist))
 
@@ -252,7 +252,7 @@ def topic_analyze(split):
     print(tasks)
     return tasks
 
-splits = [0, 1, 2, 10, 11,51, 60, 61, 72, 80, 90, 91]
+splits = [0, 1, 10, 11, 60, 61, 71, 72, 90, 91, 100, 101]
 
 lang_task = {}
 language_per_topic = {}

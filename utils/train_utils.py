@@ -53,26 +53,30 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
                 model_args.model_name_or_path,
                 torch_dtype=compute_dtype,
-                use_flash_attention_2=True
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
             )
         else:
             model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
                 model_args.model_name_or_path,
                 torch_dtype=compute_dtype,
-                use_flash_attention_2=True
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
             )
     else:
         if 'llama' in model_args.model_name_or_path.lower():
             model = CustomLlamaForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
                 torch_dtype=compute_dtype,
-                use_flash_attention_2=True
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
             )
         else:
             model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
                 torch_dtype=compute_dtype,
-                use_flash_attention_2=True
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
             )
     model.config.use_cache = False
     if getattr(model, 'vision_tower', None) is not None:

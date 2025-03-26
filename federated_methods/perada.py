@@ -103,7 +103,7 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
         self.task_id = task_id
         self.ema_ratio = ema_ratio
         # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-        self.global_model_weights = {k:t.detach().clone() for k, t in self.model.named_parameters() if 'lora1' in k}
+        self.global_model_weights = {k:t.detach().clone().cuda() for k, t in self.model.named_parameters() if 'lora1' in k}
         self.mu = 0.1
         
         self.prompt_ema_ratio = 0.99

@@ -59,95 +59,17 @@ import warnings
 
 logger = logging.get_logger(__name__)
 
-def OURS_set_state_dict(model, global_state_dict, local_state_dict_list, training_args):
-    # personalized layer = 'lora2'
-    # shard layer = 'lora1', 'lora3'
-    keys_to_del = []
-    for k in global_state_dict.keys():
-        if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
-        or 'lang_prompt_dap_key_embeddings_2' in k or 'lang_prompt_downsample_2' in k or 'lang_prompt_norm_2' in k \
-        or 'lang_prompt_downsample_kv_2' in k or 'lang_prompt_downsample_mlp_2' in k\
-        or 'lora_w_gate' in k or 'lora_w_noise' in k:
-            keys_to_del.append(k)
-    for k in keys_to_del:
-        del global_state_dict[k]
-    
-    # local_keys_to_del = []
-    # for k in local_state_dict_list[0].keys():
-    #     # if 'lora1' in k or 'lora3' in k:
-    #     if 'lora1' in k or 'ia3_l_1' in k or 'ia3_generator_1' in k or 'lang_prompt_dap_key_embeddings_1' in k:
-    #         local_keys_to_del.append(k)
-    # for client_id in range(training_args.num_clients):
-    #     for k in local_keys_to_del:
-    #         del local_state_dict_list[client_id][k]
-    # for name, module in model.named_modules():
-    #     if isinstance(module, TripleLoraLayer):
-    #         module.deactivate_lora3()
-    return {'global_state':global_state_dict}
-
-@torch.no_grad()
-def OURS_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
-    if training_args.is_hetero_model:
-        return
-    global_state_dict = global_state_dict_list[0]
-    for key in global_state_dict.keys():
-        # global_state_dict[key] = sum([local_state_dict_list[client][key] * sample_num_list[client] / sample_this_round for client in selected_ids])
-        
-        # simple averaging
-        if 'lora1' in key:
-            target_key = key.replace('lora1', 'lora2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids])
-        elif 'ia3_l_1' in key:
-            target_key = key.replace('ia3_l_1', 'ia3_l_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids])
-        elif 'ia3_generator_1' in key:
-            target_key = key.replace('ia3_generator_1', 'ia3_generator_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids])
-        elif 'lang_prompt_dap_key_embeddings_1' in key:
-            target_key = key.replace('lang_prompt_dap_key_embeddings_1', 'lang_prompt_dap_key_embeddings_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids])
-        elif 'lang_prompt_downsample_1' in key:
-            target_key = key.replace('lang_prompt_downsample_1', 'lang_prompt_downsample_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids])
-        elif 'lang_prompt_norm_1' in key:
-            target_key = key.replace('lang_prompt_norm_1', 'lang_prompt_norm_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids]) 
-        elif 'lang_prompt_ia3_pool_1' in key:
-            target_key = key.replace('lang_prompt_ia3_pool_1', 'lang_prompt_ia3_pool_2')
-            global_state_dict[key] = sum([local_state_dict_list[client][target_key] / num_selection for client in selected_ids]) 
-    
-    for i in range(len(global_state_dict_list)):
-        global_state_dict_list[i] = global_state_dict
-
-@torch.no_grad()
-def OURS_memefficient_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
-    if training_args.is_hetero_model:
-        return
-    global_state_dict = torch.load(global_state_dict_list[0])
-    for key in global_state_dict.keys():
-        global_state_dict[key] = torch.zeros_like(global_state_dict[key])
-    
-    for client in selected_ids:
-        local_state_dict = torch.load(local_state_dict_list[client])
-        for key in global_state_dict.keys():
-            # simple averaging
-            if 'lora1' in key:
-                target_key = key.replace('lora1', 'lora2')
-            elif 'ia3_l_1' in key:
-                target_key = key.replace('ia3_l_1', 'ia3_l_2')
-            global_state_dict[key] += local_state_dict[target_key] / num_selection
-
-    for i in range(len(global_state_dict_list)):
-        torch.save(global_state_dict, global_state_dict_list[i])
-
-def fedours_ema_distill_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
+def feddat_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
     ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
-    trainer = LLaVATrainerOURS(model=model,
+    # feddat do two steps per batch
+    new_training_args = copy.deepcopy(training_args)
+    new_training_args.gradient_accumulation_steps *= 2
+    trainer = LLaVATrainerFEDDAT(model=model,
         tokenizer=tokenizer,
-        args=training_args,
+        args=new_training_args,
         client_id = extra_state_dict_dict['client_id'],
         curr_round = extra_state_dict_dict['curr_round'],
         test_datalist=extra_state_dict_dict['test_datalist'],
@@ -163,132 +85,7 @@ def fedours_ema_distill_create_trainer(model, tokenizer, training_args, data_mod
         )
     return trainer
 
-def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            weights[client_id] = -1e9
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4 / lora5 or lora6
-                    if training_args.share_ema:
-                        if 'fedquad' in training_args.mode:
-                            target_key = name
-                        elif 'fedhexa' in training_args.mode:
-                            if 'lora5' in name:
-                                target_key = name.replace('lora5', 'lora3')
-                            elif 'lora6' in name:
-                                target_key = name.replace('lora6', 'lora4')
-                    else:
-                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
-                        continue
-                
-                for id in range(training_args.num_clients):
-                    if id == client_id:
-                        continue
-                    # if training_args.is_hetero_model:
-                    #     breakpoint()
-                    # else:
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                if isinstance(new_param, int):
-                    continue
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() #- weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4 / lora5 or lora6
-                    if training_args.share_ema:
-                        if 'fedquad' in training_args.mode:
-                            target_key = name
-                        elif 'fedhexa' in training_args.mode:
-                            if 'lora5' in name:
-                                target_key = name.replace('lora5', 'lora3')
-                            elif 'lora6' in name:
-                                target_key = name.replace('lora6', 'lora4')
-                    else:
-                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
-                        continue
-                
-                for id in range(training_args.num_clients):
-                    # if id == client_id:
-                    #     continue
-                    # if training_args.is_hetero_model:
-                    #     breakpoint()
-                    # else:
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                    
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-
-def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+def feddat_hetero_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
     # first load loca model and then load global model
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
@@ -303,38 +100,18 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
                 homo_client_ids = homo_ids
         
         # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            for id in range(training_args.num_clients):
-                if id not in homo_client_ids:
-                    weights[id] = -1e9
-            
-            weights[client_id] = -1e9
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
+        if extra_state_dict_dict['curr_round'] > 0:       
+            new_global_state_dict = {}     
             for name in global_state_dict.keys():
                 new_param = 0
                 if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    target_key = name.replace('lora1', 'lora3')
                 
                 for id in homo_client_ids:
-                    if id == client_id:
-                        continue
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    new_param += local_state_dict_list[id][name] / len(homo_client_ids)
                     
                 new_global_state_dict[name] = new_param
+                new_global_state_dict[target_key] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):
             #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
             #     torch.save(new_global_state_dict, output_dir)
@@ -345,128 +122,8 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
         else:
             model.load_state_dict(new_global_state_dict, strict=False) 
 
-def fedours_self_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # old local -> current global
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                
-                new_global_state_dict[name] = local_state_dict_list[client_id][target_key]
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-
-def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() #- weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                target_key = name
-                
-                for id in range(training_args.num_clients):
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                    
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-
-def fedours_memefficient_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    local_state_dict = torch.load(local_state_dict_list[client_id])
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict, strict=False)  
-            
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            weights[client_id] = -1e9
-            weights = (weights/0.2).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            model_to_load = torch.load(global_state_dict)
-            for name in model_to_load.keys():
-                new_global_state_dict[name] = torch.zeros_like(model_to_load[name])
-            for id in range(training_args.num_clients):
-                if id == client_id:
-                    continue
-                local_state_dict = torch.load(local_state_dict_list[id])
-                for name in model_to_load.keys():
-                    if 'lora1' in name:
-                        target_key = name.replace('lora1', 'lora2')
-                    elif 'ia3_l_1' in name:
-                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                    
-                    new_global_state_dict[name] += weights[id]*local_state_dict[target_key] / sim_sum
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = model_to_load
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
+def feddat_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    return
 
 def kl_loss(output, target, temp=2):
     if output.shape[-1]>3000:
@@ -480,9 +137,9 @@ def kl_loss(output, target, temp=2):
     l_kl = l_kl * temp**2
     return l_kl
 
-class LLaVATrainerOURS(LLaVATrainerFEDAVG):
+class LLaVATrainerFEDDAT(LLaVATrainerFEDAVG):
     def __init__(self, task_id, ema_ratio=0.996, task_vector=None, fisher_old=None, fisher_freq=5, model2=None,**kwargs):
-        super(LLaVATrainerOURS, self).__init__(**kwargs)
+        super(LLaVATrainerFEDDAT, self).__init__(**kwargs)
         self.task_id = task_id
         self.ema_ratio = ema_ratio
         # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
@@ -494,59 +151,94 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         self.fisher_cur = 0
         self.fisher_cnt = 0
         self.fisher_freq = fisher_freq
-        if model2 is not None:
-            self.model2 = model2.cuda()
-            self.input_penultimate = []
-            self.hidden_states_before_norm = []
-            self.hooks = []
-            def hook_fn(module, input, output):
-                self.input_penultimate.append(input)
-            def hook_fn2(module, input, output):
-                self.hidden_states_before_norm.append(input)
-            
-            if self.data_args.is_multimodal:
-                self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
-                self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
+        
+    def training_step(
+        self, model: nn.Module, inputs: dict[str, Union[torch.Tensor, Any]], num_items_in_batch=None, update_adapter='lora1',
+    ) -> torch.Tensor:
+        model.train()
+        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
+            self.optimizer.train()
+
+        inputs = self._prepare_inputs(inputs)
+        if is_sagemaker_mp_enabled():
+            loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)
+            return loss_mb.reduce_mean().detach().to(self.args.device)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch,update_adapter=update_adapter)
+
+        del inputs
+        if (
+            self.args.torch_empty_cache_steps is not None
+            and self.state.global_step % self.args.torch_empty_cache_steps == 0
+        ):
+            if is_torch_xpu_available():
+                torch.xpu.empty_cache()
+            elif is_torch_mlu_available():
+                torch.mlu.empty_cache()
+            elif is_torch_musa_available():
+                torch.musa.empty_cache()
+            elif is_torch_npu_available():
+                torch.npu.empty_cache()
+            elif is_torch_mps_available(min_version="2.0"):
+                torch.mps.empty_cache()
+            elif is_torch_hpu_available():
+                logger.warning(
+                    "`torch_empty_cache_steps` is set but HPU device/backend does not support empty_cache()."
+                )
             else:
-                self.hooks.append(self.model2.base_model.model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
-                self.hooks.append(self.model2.base_model.model.model.norm.register_forward_hook(hook_fn2))
-    
-        if 'fedquad' in self.args.mode:
-            self.ema_module1 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora3' in k}
-            self.ema_module2 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora4' in k}
-    
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        # if self.curr_round > 0:
-        #     curr_weights = {k: t.detach().clone() for k, t in model.module.named_parameters() if t.requires_grad}
-        #     with torch.no_grad():
-        #         model.module.load_state_dict(self.old_weights, strict=False)
-        #         # model.module.set_state('lora2')
-        #         _, outputs = super(LLaVATrainerOURS, self).compute_loss(
-        #                 model, inputs, return_outputs=True
-        #             )
-        #         outputs_target = outputs['logits'][..., :-1, :][model.module.labels[..., 1:] != -100].detach()
-        #         model.module.load_state_dict(curr_weights, strict=False)
-        #     #     model.module.set_state('gate')
+                torch.cuda.empty_cache()
+
+        kwargs = {}
+
+        # For LOMO optimizers you need to explicitly use the learnign rate
+        # if self.args.optim in [OptimizerNames.LOMO, OptimizerNames.ADALOMO]:
+        #     kwargs["learning_rate"] = self._get_learning_rate()
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+        if self.use_apex:
+            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                scaled_loss.backward()
+        else:
+            # Finally we need to normalize the loss for reporting
+            if not self.model_accepts_loss_kwargs and self.compute_loss_func is None:
+                loss = loss / (self.args.gradient_accumulation_steps//2)
+
+            # Turning off loss scaling w.r.t. gradient accumulation when DeepSpeed is enabled
+            # https://github.com/huggingface/transformers/pull/35808
+            if self.accelerator.distributed_type == DistributedType.DEEPSPEED:
+                kwargs["scale_wrt_gas"] = False
+
+            self.accelerator.backward(loss, **kwargs)
+
+            return loss.detach()
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None,update_adapter='lora1'):
+        labels = inputs['labels']
+        if update_adapter=='lora1':
+            with torch.no_grad():
+                model.module.set_state('gate')
+                _, outputs = super(LLaVATrainerFEDDAT, self).compute_loss(
+                        model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch
+                    )
+                outputs_target = outputs['logits'][..., :-1, :][labels[..., 1:] != -100].detach()
+            model.module.set_state('lora1')
+            model.module.activate_lora1()
+        elif update_adapter=='lora2':
+            outputs_target = self.output_lora1
             
-            # with torch.no_grad():
-            #     model.module.set_state('lora1')
-            #     _, outputs = super(LLaVATrainerOURS, self).compute_loss(
-            #             model, inputs, return_outputs=True
-            #         )
-            #     outputs_target = outputs['logits']
-            #     model.module.set_state('lora2')
-        loss, outputs = super(LLaVATrainerOURS, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+            model.module.set_state('gate')
+            model.module.activate_lora2()
         
-        # moe loss
-        # if 'moe' in self.args.mode:
-        #     from models.duallora_moe.dualmoelora import DualMOELoraLayer
-        #     moe_loss = []
-        #     for n, m in model.module.named_modules():
-        #         if isinstance(m, DualMOELoraLayer):
-        #             moe_loss.append(m.moe_loss)
-        #     moe_loss = sum(moe_loss) / len(moe_loss)
-        #     loss += 0.1*moe_loss
+        loss, outputs = super(LLaVATrainerFEDDAT, self).compute_loss(model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch)
+        shift_logits = outputs['logits'][..., :-1, :].contiguous()
+        loss_kl_1 = kl_loss(shift_logits[labels[..., 1:] != -100], outputs_target.detach())
         
+        loss = (loss + loss_kl_1) / 2
+        
+        self.output_lora1 = outputs['logits'][..., :-1, :][labels[..., 1:] != -100].detach()
         return (loss, outputs) if return_outputs else loss
     
     def _inner_training_loop(
@@ -579,13 +271,13 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         # number of training epochs: num_train_epochs
         # number of training steps per epoch: num_update_steps_per_epoch
         # total number of training steps to execute: max_steps
-        total_train_batch_size = self._train_batch_size * args.gradient_accumulation_steps * args.world_size
+        total_train_batch_size = self._train_batch_size * (args.gradient_accumulation_steps//2) * args.world_size
 
         len_dataloader = None
         num_train_tokens = None
         if has_length(train_dataloader):
             len_dataloader = len(train_dataloader)
-            num_update_steps_per_epoch = len_dataloader // args.gradient_accumulation_steps
+            num_update_steps_per_epoch = len_dataloader // (args.gradient_accumulation_steps//2)
             num_update_steps_per_epoch = max(num_update_steps_per_epoch, 1)
             num_examples = self.num_examples(train_dataloader)
             if args.max_steps > 0:
@@ -598,7 +290,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                 num_train_samples = args.max_steps * total_train_batch_size
                 if args.include_tokens_per_second:
                     num_train_tokens = (
-                        self.num_tokens(train_dataloader, args.max_steps) * args.gradient_accumulation_steps
+                        self.num_tokens(train_dataloader, args.max_steps) * (args.gradient_accumulation_steps//2)
                     )
             else:
                 max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
@@ -614,7 +306,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             num_examples = total_train_batch_size * args.max_steps
             num_train_samples = args.max_steps * total_train_batch_size
             if args.include_tokens_per_second:
-                num_train_tokens = self.num_tokens(train_dataloader, args.max_steps) * args.gradient_accumulation_steps
+                num_train_tokens = self.num_tokens(train_dataloader, args.max_steps) * (args.gradient_accumulation_steps//2)
         else:
             raise ValueError(
                 "args.max_steps must be set to a positive value if dataloader does not have a length, was"
@@ -635,7 +327,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         # ##############################################################################################################
         # OURS:
         self.model.set_state('gate')
-        self.model.activate_lora2()
+        self.model.activate_all()
         # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
         # ##############################################################################################################
         
@@ -782,7 +474,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             epochs_trained = self.state.global_step // num_update_steps_per_epoch
             if not args.ignore_data_skip:
                 steps_trained_in_current_epoch = self.state.global_step % (num_update_steps_per_epoch)
-                steps_trained_in_current_epoch *= args.gradient_accumulation_steps
+                steps_trained_in_current_epoch *= (args.gradient_accumulation_steps//2)
             else:
                 steps_trained_in_current_epoch = 0
 
@@ -839,7 +531,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             steps_in_epoch = (
                 len(epoch_dataloader)
                 if len_dataloader is not None
-                else args.max_steps * args.gradient_accumulation_steps
+                else args.max_steps * (args.gradient_accumulation_steps//2)
             )
             self.control = self.callback_handler.on_epoch_begin(args, self.state, self.control)
 
@@ -857,18 +549,18 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             step = -1
             epoch_iterator = iter(epoch_dataloader)
             # We chunkify the epoch iterator into gradient accumulation steps `n` batches
-            remainder = num_examples % args.gradient_accumulation_steps
+            remainder = num_examples % (args.gradient_accumulation_steps//2)
             if remainder == 0:
-                remainder = args.gradient_accumulation_steps
+                remainder = args.gradient_accumulation_steps//2
             update_step = -1
-            total_updates = steps_in_epoch // args.gradient_accumulation_steps + 1
+            total_updates = steps_in_epoch // (args.gradient_accumulation_steps//2) + 1
             for _ in range(total_updates):
                 update_step += 1
-                num_batches = args.gradient_accumulation_steps if update_step != (total_updates - 1) else remainder
+                num_batches = (args.gradient_accumulation_steps//2) if update_step != (total_updates - 1) else remainder
                 batch_samples, num_items_in_batch = self.get_batch_samples(epoch_iterator, num_batches)
                 for i, inputs in enumerate(batch_samples):
                     step += 1
-                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
+                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 #or (step + 1) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
                     if not do_sync_step:
                         self.accelerator.gradient_state._set_sync_gradients(False)
@@ -915,9 +607,9 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         and self.accelerator.distributed_type != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
                     )
-                    
+                    ################################## lora1 ####################################
                     with context():
-                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch//2, update_adapter="lora1")
 
                     if (
                         args.logging_nan_inf_filter
@@ -974,6 +666,75 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
+                        model.zero_grad()
+                    
+                    ############### lora2  ###############
+                    step += 1
+                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0
+                    
+                    if step % args.gradient_accumulation_steps == 0:
+                        self.control = self.callback_handler.on_step_begin(args, self.state, self.control)
+                    
+                    with context():
+                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch//2, update_adapter="lora2")
+
+                    if (
+                        args.logging_nan_inf_filter
+                        and not is_torch_xla_available()
+                        and (torch.isnan(tr_loss_step) or torch.isinf(tr_loss_step))
+                    ):
+                        # if loss is nan or inf simply add the average of previous logged losses
+                        tr_loss = tr_loss + tr_loss / (1 + self.state.global_step - self._globalstep_last_logged)
+                    else:
+                        if tr_loss.device != tr_loss_step.device:
+                            raise ValueError(
+                                f"Calculated loss must be on the original device: {tr_loss.device} but device in use is {tr_loss_step.device}"
+                            )
+                        tr_loss = tr_loss + tr_loss_step
+
+                    self.current_flos += float(self.floating_point_ops(inputs))
+
+                    
+                    if do_sync_step:
+                        print('sync', step)
+                        # Since we perform prefetching, we need to manually set sync_gradients to True
+                        self.accelerator.gradient_state._set_sync_gradients(True)
+
+                        # Gradient clipping
+                        if args.max_grad_norm is not None and args.max_grad_norm > 0:
+                            # deepspeed does its own clipping
+
+                            if is_sagemaker_mp_enabled() and args.fp16:
+                                _grad_norm = self.optimizer.clip_master_grads(args.max_grad_norm)
+                            elif self.use_apex:
+                                # Revert to normal clipping otherwise, handling Apex or full precision
+                                _grad_norm = nn.utils.clip_grad_norm_(
+                                    amp.master_params(self.optimizer),
+                                    args.max_grad_norm,
+                                )
+                            else:
+                                _grad_norm = self.accelerator.clip_grad_norm_(
+                                    model.parameters(),
+                                    args.max_grad_norm,
+                                )
+
+                            if (
+                                is_accelerate_available()
+                                and self.accelerator.distributed_type == DistributedType.DEEPSPEED
+                            ):
+                                grad_norm = model.get_global_grad_norm()
+                                # In some cases the grad norm may not return a float
+                                if hasattr(grad_norm, "item"):
+                                    grad_norm = grad_norm.item()
+                            else:
+                                grad_norm = _grad_norm
+
+                        self.control = self.callback_handler.on_pre_optimizer_step(args, self.state, self.control)
+
+                        self.optimizer.step()
+                        
+                        self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
+                        
                         if self.args.use_hypergradient:
                             # update self.lr_scheduler.base_lrs
                             for param_id, param_group in enumerate(self.optimizer.param_groups):
@@ -987,93 +748,9 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
 
                         model.zero_grad()
                         ##############################################################################################################
-                        # compute fisher online
-                        # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
-                        # if step % self.fisher_freq == 0:
-                        self.input_penultimate = []
-                        self.hidden_states_before_norm = []
-                        if 'tv' not in args.mode and 'excludemean' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = True
-                            
-                            with self.model2.disable_adapter():
-                                inputs = self._prepare_inputs(inputs)
-                                with torch.no_grad():
-                                    output = self.model2(**inputs)#.loss
-                                shift_labels = inputs['labels'][..., 1:]
-                                
-                                if self.data_args.is_multimodal:
-                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                                self.model2.base_model.language_model.lm_head.weight,
-                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                                self.model2.base_model.language_model.model.norm,
-                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                else:
-                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                                self.model2.base_model.model.lm_head.weight,
-                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                                self.model2.base_model.model.model.norm,
-                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                # grads = []
-                                # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                #     grads.append(p.grad)
-                                    # grads.append(p.grad[:,self.grad_subsample_idx])
-                                # for layer in self.model.base_model.model.model.layers:
-                                #     for p in layer.mlp.down_proj.base_layer.parameters():
-                                #         grads.append(p.grad[:,self.grad_subsample_idx])
-                                
-                                # grads = torch.cat(grads, dim=1)
-                                # grads = torch.cat(grads)
-                            self.fisher_cur += (grads).detach()
-                            self.fisher_cnt += 1
-                            
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = False
-                            # for layer in self.model.base_model.model.model.layers:
-                            #     for p in layer.mlp.down_proj.base_layer.parameters():
-                            #         p.requires_grad = False
-                            self.model2.zero_grad()
-                            # model.zero_grad()
-                            torch.cuda.empty_cache()
-                        ##############################################################################################################
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
-                        
-                        ##############################################################################################################
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-                        # save client model
-                        # if step % 5 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        #     self.model.activate_all()
-                        #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-                            
-                        #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                        #         torch.save(state_dict, output_dir)
-                            
-                        #     self.model.activate_lora2()
-                        
-                        # # ema update
-                        # if optimizer_was_run and self.curr_round > 0:
-                        #     with torch.no_grad():
-                        #         cur_weights = {k: t for k, t in self.model.named_parameters() if t.requires_grad}
-                        #         for name, param in self.old_weights.items():
-                        #             self.old_weights[name].copy_(self.ema_ratio*param + (1-self.ema_ratio)*cur_weights[name])
-                        if optimizer_was_run and 'fedquad' in self.args.mode:
-                            with torch.no_grad():
-                                cur_weights = {k: t for k, t in self.model.named_parameters() if t.requires_grad}
-                                for name, param in self.ema_module1.items():
-                                    new_name = name.replace('lora3', 'lora2')
-                                    self.ema_module1[name].copy_(0.99*param + (1-0.99)*cur_weights[new_name])
-                                for name, param in self.ema_module2.items():
-                                    new_name = name.replace('lora4', 'lora2')
-                                    self.ema_module2[name].copy_(0.9*param + (1-0.9)*cur_weights[new_name])
-                                if self.args.immediate_ema_update:
-                                    self.model.load_state_dict(self.ema_module1, strict=False)
-                                    self.model.load_state_dict(self.ema_module2, strict=False)
-                        ##############################################################################################################
                         
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
@@ -1187,12 +864,12 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
 
-        if 'tv' not in args.mode and 'excludemean' not in args.mode:
-            self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
-            self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
+        # if 'tv' not in args.mode and 'excludemean' not in args.mode:
+        #     self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
+        #     self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
 
-        for hook in self.hooks:
-            hook.remove()
+        # for hook in self.hooks:
+            # hook.remove()
         self.model.activate_all()
 
         return TrainOutput(self.state.global_step, train_loss, metrics)

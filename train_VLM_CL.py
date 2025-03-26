@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del, make_supervised_data_module
 
 from federated_methods.method_manager import select_method
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
@@ -215,7 +215,7 @@ def main():
         models['meta-llama/Llama-3.2-1B'] = model2
     
     del model_list
-    extra_state_dict_dict = {'model_ids':model_ids}
+    extra_state_dict_dict = {'model_ids':model_ids, 'models':models}
     extra_state_dict_dict['LAYER_INDEX'] = LAYER_INDEX
     
     if training_args.fedours:
@@ -344,6 +344,7 @@ def main():
             extra_state_dict_dict['test_datalist'] = test_datalist
             extra_state_dict_dict['processor'] = processor
             extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
+            extra_state_dict_dict['tokenizer'] = tokenizer
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
 
@@ -547,15 +548,6 @@ def main():
         # for client_id in range(training_args.num_clients):
         #     load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict)
     logger.info("total done\n")
-
-def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
-                                data_args) -> Dict:
-    """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor)
-    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
-    return dict(train_dataset=train_dataset,
-                eval_dataset=None,
-                data_collator=data_collator)
 
 def get_datalists(args, scenario_num):
     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:

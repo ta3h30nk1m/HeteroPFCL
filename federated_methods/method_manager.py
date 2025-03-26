@@ -20,6 +20,9 @@ from federated_methods.fedavg_layerwiseloss import fedavg_layerwise_create_train
 from federated_methods.fedours_layerwiseloss import fedours_layerwise_create_trainer
 from federated_methods.fedours_pqgrad import fedours_pqgrad_create_trainer
 
+from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict
+from federated_methods.feddistill import Distillation_aggregate_state_dict
+
 def dummy_function(*args):
     return {}
 
@@ -45,6 +48,13 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, sft_layerwise_create_trainer, fedavg_aggregate_state_dict
     elif 'sft' in mode:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, fedavg_aggregate_state_dict
+    
+    elif mode in ['feddistill']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, Distillation_aggregate_state_dict
+    
+    elif mode in ['feddat']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict
+    
     elif mode in ['feddualpq','feddualpqfullfreeze','feddualpqfullfreeze_tv','feddualpqfreezeA','feddualpqfullfreezeA']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedpqfullfreeze' or mode == 'fedpqfullfreezeA' or mode == 'fedpqfreezeA':
@@ -94,7 +104,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         
     elif mode == 'fedavg_hetero':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fedavg_heterosimple_aggregate_state_dict
-    elif mode == 'fedours_excludemean_hetero' or mode == 'fedours_hetero':
+    elif mode == 'fedours_excludemean_hetero' or mode == 'fedours_hetero' or mode == 'fedours_hetero_moe':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_hetero_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMulti05pqfullfreeze_homoAggOnly']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti05pq_homoAggOnly_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict

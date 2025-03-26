@@ -83,10 +83,7 @@ bash MultiVQA_small.sh
 ```
 
 2. Run the following preprocessing python codes:
-- Fashion
-```bash
-python ./preprocess/preprocess_Fashion200K.py
-```
+
 - HRVQA
 ```bash
 cd ./dataset/HRVQA/jsons

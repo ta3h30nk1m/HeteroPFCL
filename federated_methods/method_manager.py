@@ -106,9 +106,9 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fedavg_heterosimple_aggregate_state_dict
     elif mode == 'fedours_excludemean_hetero' or mode == 'fedours_hetero' or mode == 'fedours_hetero_moe':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_hetero_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode in ['feddualMulti05pqfullfreeze_homoAggOnly']:
+    elif mode in ['feddualMulti05pqfullfreeze_homoAggOnly','feddualMulti05pqfullfreeze_homoAggOnly_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti05pq_homoAggOnly_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode in ['feddualMultipqfullfreeze_homoAggOnly']:
+    elif mode in ['feddualMultipqfullfreeze_homoAggOnly','feddualMultipqfullfreeze_homoAggOnly_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAggOnly_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['fedMultipqfullfreeze_distill', 'fedMultipqfullfreeze_Taskloss', 'fedMultipqfullfreeze_distillTaskloss',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMultipq_load_state_dict, fedavg_layerwise_create_trainer, OURS_aggregate_state_dict

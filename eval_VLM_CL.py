@@ -277,6 +277,22 @@ def parse_choice_list(input_string):
         elif all(choice.startswith("Image 1") for choice in choices):
             choices = [re.match(r'(Image [1-8])', choice).group(1) for choice in choices]
         return choices
+
+    match = re.search(r'Choice list: \[(.*?)\]', input_string)
+    if match:
+        # comics_dialogue & textcloze
+        choices = [choice.strip() for choice in match.group(1).split('|')]
+        if len(choices) > 2:
+            return ALPHABET[:len(choices)]
+        
+        # Split the choices and strip whitespace
+        choices = [choice.strip() for choice in match.group(1).split(',')]
+        # If choices start with "Image", only keep the "Image X" part
+        if all(choice.startswith("Image A") for choice in choices):
+            choices = [re.match(r'(Image [A-D])', choice).group(1) for choice in choices]
+        elif all(choice.startswith("Image 1") for choice in choices):
+            choices = [re.match(r'(Image [1-8])', choice).group(1) for choice in choices]
+        return choices
     
     match = re.search(r'Choice List: \[(.*?)\]', input_string)
     if match:

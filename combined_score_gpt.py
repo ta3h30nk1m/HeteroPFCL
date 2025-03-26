@@ -4,13 +4,13 @@ import csv
 from collections import defaultdict
 import os
 
-mode = 'sft'
-Method='sft_bs4_100iter_fedaya_1b'
+mode = 'fedours_include'
+Method='fedours_include_T1_bs8_saveoptim_lr2e-5_sc215_4tasks_5rounds_fixitr50_T025_decay09'
 # Method='llama3_3b_2'
-num_rounds = [2,5,7,10,12,15]
+num_rounds = [20]
 is_client = True
 
-scenario_num = 205
+scenario_num = 215
 with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
     scenario = json.load(fp)
 

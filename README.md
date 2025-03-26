@@ -84,13 +84,6 @@ bash MultiVQA_small.sh
 
 2. Run the following preprocessing python codes:
 
-- HRVQA
-```bash
-cd ./dataset/HRVQA/jsons
-python task_split.py
-cd ../../..
-python ./preprocess/preprocess_HRVQA.py
-```
 - Pair_TF
 ```bash
 python ./preprocess/preprocess_NLVR2.py

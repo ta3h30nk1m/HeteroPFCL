@@ -124,12 +124,19 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         )
         
         if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
-                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero', 'feddat']:
+                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero']:
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
             lora_config.peft_type = 'DUALLORA'
-        elif training_args.mode in ['fedours_moe', 'fedours_include_moe','fedours_excludemean_include_moe']:
+        
+        elif training_args.mode in ['feddat']:
+            from models.triplelora.tripleloramodel import TripleLoraModel
+            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
+            PEFT_TYPE_TO_MODEL_MAPPING['TRILORA'] = TripleLoraModel
+            lora_config.peft_type = 'TRILORA'
+        
+        elif training_args.mode in ['fedours_moe', 'fedours_include_moe','fedours_excludemean_include_moe', 'fedours_hetero_moe']:
             from models.duallora_moe.dualmoeloramodel import DualMOELoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALMOELORA'] = DualMOELoraModel
@@ -225,8 +232,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPFullFreezeLORA'] = Dual_PLorafreezeModel
             lora_config.peft_type = 'DUALPFullFreezeLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe',
-                                    'feddualMulti05pqfullfreeze_moe', 'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe',]:
+        elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
+                                    'feddualMulti05pqfullfreeze_moe', 'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe',]:
             from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = Dual_PQMOELorafreezeModel
@@ -286,7 +293,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         )
         
         # create pool
-        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours'] or training_args.mode =='feddat':
+        if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours']:
             from models.dual_ia3.dual_ia3_model import DualIA3Model
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALIA3'] = DualIA3Model
@@ -907,7 +914,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullFreezeLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe']:
+    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe',]:
         from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -1052,7 +1059,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PLoraFullFreezeLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAggOnly',]:
+    elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAggOnly','feddualMulti05pqfullfreeze_homoAggOnly_moe',]:
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         last_layer = len(total_layers) // 2
         target_layers = [last_layer*1 -1,last_layer*2 -1]
@@ -1581,7 +1588,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
                                     'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean',
                                     'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean',
-                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe',
+                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
                                     'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
                                     'feddualMultipqfullfreeze256_tv','feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv'
                                     'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly','feddualMulti05pqfullfreeze_homoAggOnly',
@@ -1950,9 +1957,9 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
 def get_keys_to_del(training_args, new_global_state_dict, data_args):
     keys_to_del = []
     layer_index = 5 if data_args.is_multimodal else 4
-    if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero',
-                              'fedours_moe','fedours_include_moe','fedours_excludemean_include_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly',
-                              'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','fedours_self','feddualMulti05pqfullfreeze_homoAggOnly',
+    if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero', 'feddat',
+                              'fedours_moe','fedours_include_moe','fedours_excludemean_include_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'fedours_hetero_moe', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly',
+                              'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','fedours_self','feddualMulti05pqfullfreeze_homoAggOnly','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
                               'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_homoAgg_moe',
                               'fedquad_grad', 'fedquad_grad_include', 'fedquad_excludemean', 'fedquad_excludemean_include',
                               'fedquad_grad_moe', 'fedquad_grad_include_moe', 'fedquad_excludemean_moe', 'fedquad_excludemean_include_moe',
@@ -2272,6 +2279,17 @@ def orthonormal_kaiming_uniform_init(m):
         # Optional: Initialize biases to zero
         if m.bias is not None:
             m.bias.data.zero_()
+
+from typing import Dict
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
+                                data_args) -> Dict:
+    """Make dataset and collator for supervised fine-tuning."""
+    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor)
+    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
+    return dict(train_dataset=train_dataset,
+                eval_dataset=None,
+                data_collator=data_collator)
 
 import random
 from federated_methods.fedours import fedours_ema_distill_create_trainer

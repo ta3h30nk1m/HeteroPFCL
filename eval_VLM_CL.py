@@ -205,7 +205,7 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
                 
                 choices = parse_choice_list(prompt)
                 choices = [choice.strip() for choice in choices]
-                if "'" in choices[0] and "'" not in gold:
+                if len(choices) > 0 and "'" in choices[0] and "'" not in gold:
                     choices = [choice.strip("'") for choice in choices]
                 pred_option = can_infer(pred_sentence, choices)
                 if isinstance(pred_option, str):

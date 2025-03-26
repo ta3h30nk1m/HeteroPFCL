@@ -124,7 +124,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         )
         
         if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
-                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero']:
+                                  'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero',
+                                  'perada',]:
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
@@ -1965,6 +1966,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'fedquad_grad_moe', 'fedquad_grad_include_moe', 'fedquad_excludemean_moe', 'fedquad_excludemean_include_moe',
                               'fedquadMultipqfullfreeze_homoAgg','fedquadMultipqfullfreeze_include_homoAgg','fedquadMulti05pqfullfreeze_homoAgg','fedquadMulti05pqfullfreeze_include_homoAgg',
                               'fedquadMultipqfullfreeze_homoAgg_moe','fedquadMultipqfullfreeze_include_homoAgg_moe','fedquadMulti05pqfullfreeze_homoAgg_moe','fedquadMulti05pqfullfreeze_include_homoAgg_moe',
+                              'perada',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

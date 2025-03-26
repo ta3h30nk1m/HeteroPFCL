@@ -59,142 +59,148 @@ import warnings
 
 logger = logging.get_logger(__name__)
 
-from utils.train_utils import make_supervised_data_module, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3
-import json
-import random
-import gc
-
-def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
-    model_ids = kwargs['model_ids']
-    models = kwargs['models']
-    
-    # get public dataset
-    data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
-    # data_path = 'chatbotIT.json'
-    public_datalist = json.load(open(data_path, "r"))
-    random.shuffle(public_datalist)
-
-    for model_id, homo_client_ids in model_ids.items():
-        print(f"Aggregate model {model_id}")
-        model = models[model_id]
-        global_state_dict = global_state_dict_list[homo_client_ids[0]]
-        
-        # FIXME: Handle case with dual module
-        with torch.no_grad():
-            if 'zero3' in training_args.deepspeed:
-                load_deepspeed(global_state_dict, model, strict=False)
-            else:
-                model.load_state_dict(global_state_dict, strict=False)  
-        
-        data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
-                                                data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = feddistill_create_trainer(model, kwargs['tokenizer'], training_args, data_module, models, model_ids, local_state_dict_list, model_id, kwargs)
-        results = trainer.train()
-        
-        state_dict = get_peft_state_maybe_zero_3(
-            model.named_parameters(), training_args.lora_bias
-        )
-        non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-            model.named_parameters()
-        )
-        state_dict.update(non_lora_state_dict)
-        for k in global_state_dict.keys():
-            global_state_dict[k] = state_dict[k]
-        for i in homo_client_ids:
-            global_state_dict_list[i] = global_state_dict
-
-        trainer.deepspeed.empty_partition_cache()
-        trainer.accelerator.free_memory()
-        del trainer
-        model = model.cpu()
-        gc.collect()
-        torch.cuda.empty_cache()
-
-def feddistill_create_trainer(model, tokenizer, training_args, data_module, models, model_ids, local_state_dict_list, cur_model_id, extra_state_dict_dict):
+def perada_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
     ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
-    trainer = LLaVATrainerDistill(model=model,
+    # PERADA do two steps per batch
+    new_training_args = copy.deepcopy(training_args)
+    new_training_args.gradient_accumulation_steps *= 2
+    trainer = LLaVATrainerPERADA(model=model,
         tokenizer=tokenizer,
-        args=training_args,
+        args=new_training_args,
         client_id = extra_state_dict_dict['client_id'],
         curr_round = extra_state_dict_dict['curr_round'],
         test_datalist=extra_state_dict_dict['test_datalist'],
         processor=extra_state_dict_dict['processor'],
         data_args=extra_state_dict_dict['data_args'],
-        
-        models=models,
-        model_ids=model_ids,
-        local_state_dict_list=local_state_dict_list,
-        cur_model_id=cur_model_id,
-        
+        task_id = task_id,
+        ema_ratio=ema_ratio,
+        task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
+        fisher_old=extra_state_dict_dict['fisher_old'] if 'fisher_old' in extra_state_dict_dict else None,
+        fisher_freq=extra_state_dict_dict['fisher_freq'] if 'fisher_freq' in extra_state_dict_dict else 5,
+        model2=extra_state_dict_dict['model2'] if 'model2' in extra_state_dict_dict else None,
         **data_module,
         )
     return trainer
 
 def kl_loss(output, target, temp=2):
-    # if output.shape[-1]>3000:
-    #     p = F.log_softmax(output / temp, dim=-1)
-    #     q = F.softmax(target / temp, dim=-1)
-    # else:
-    p = F.log_softmax(output / temp, dim=1)
-    q = F.softmax(target / temp, dim=1)
+    if output.shape[-1]>3000:
+        p = F.log_softmax(output / temp, dim=-1)
+        q = F.softmax(target / temp, dim=-1)
+    else:
+        p = F.log_softmax(output / temp, dim=1)
+        q = F.softmax(target / temp, dim=1)
 
     l_kl = F.kl_div(p, q, reduction="batchmean") #FIXME
-    # l_kl = l_kl * temp**2
+    l_kl = l_kl * temp**2
     return l_kl
 
-class LLaVATrainerDistill(LLaVATrainerFEDAVG):
-    def __init__(self, models,model_ids,local_state_dict_list,cur_model_id,**kwargs):
-        super(LLaVATrainerDistill, self).__init__(**kwargs)
+class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
+    def __init__(self, task_id, ema_ratio=0.996, task_vector=None, fisher_old=None, fisher_freq=5, model2=None,**kwargs):
+        super(LLaVATrainerPERADA, self).__init__(**kwargs)
+        self.task_id = task_id
+        self.ema_ratio = ema_ratio
+        # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+        self.global_model_weights = {k:t.detach().clone().cuda() for k, t in self.model.named_parameters() if 'lora1' in k}
+        self.mu = 0.1
         
-        self.models = models
-        self.model_ids = model_ids
-        self.local_state_dict_list = local_state_dict_list
-        self.cur_model_id=cur_model_id
+        self.prompt_ema_ratio = 0.99
+        self.task_vector=task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
+        self.fisher_old = fisher_old #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
+        self.fisher_cur = 0
+        self.fisher_cnt = 0
+        self.fisher_freq = fisher_freq
         
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        target_logits = 0
-        with torch.no_grad():
-            cur_state_dict = get_peft_state_maybe_zero_3(model.module.named_parameters(), self.args.lora_bias)
-            
-            for client_id, local_state_dict in enumerate(self.local_state_dict_list):
-                for model_id, homo_client_ids in self.model_ids.items():
-                    if client_id in homo_client_ids:
-                        if model_id == self.cur_model_id:
-                            model.module.load_state_dict(local_state_dict, strict=False)
-                            
-                            _, outputs = super(LLaVATrainerDistill, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-                            target_logits += outputs.logits / len(self.local_state_dict_list)
-                        else:
-                            model2 = self.models[model_id].cuda()
-                            model2.load_state_dict(local_state_dict, strict=False)
-                            _, outputs = super(LLaVATrainerDistill, self).compute_loss(model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-                            target_logits += outputs.logits / len(self.local_state_dict_list)
-                            self.models[model_id] = model2.cpu()
+    def training_step(
+        self, model: nn.Module, inputs: dict[str, Union[torch.Tensor, Any]], num_items_in_batch=None, update_adapter='lora1',
+    ) -> torch.Tensor:
+        model.train()
+        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
+            self.optimizer.train()
 
-            model.module.load_state_dict(cur_state_dict, strict=False)
-            if hasattr(model.module, 'set_state'):
-                model.module.set_state('lora1')
-        
-        _, outputs = super(LLaVATrainerDistill, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-        
-        pred_logits = outputs.logits
-        
+        inputs = self._prepare_inputs(inputs)
+        if is_sagemaker_mp_enabled():
+            loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)
+            return loss_mb.reduce_mean().detach().to(self.args.device)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch,update_adapter=update_adapter)
+
+        del inputs
+        if (
+            self.args.torch_empty_cache_steps is not None
+            and self.state.global_step % self.args.torch_empty_cache_steps == 0
+        ):
+            if is_torch_xpu_available():
+                torch.xpu.empty_cache()
+            elif is_torch_mlu_available():
+                torch.mlu.empty_cache()
+            elif is_torch_musa_available():
+                torch.musa.empty_cache()
+            elif is_torch_npu_available():
+                torch.npu.empty_cache()
+            elif is_torch_mps_available(min_version="2.0"):
+                torch.mps.empty_cache()
+            elif is_torch_hpu_available():
+                logger.warning(
+                    "`torch_empty_cache_steps` is set but HPU device/backend does not support empty_cache()."
+                )
+            else:
+                torch.cuda.empty_cache()
+
+        kwargs = {}
+
+        # For LOMO optimizers you need to explicitly use the learnign rate
+        # if self.args.optim in [OptimizerNames.LOMO, OptimizerNames.ADALOMO]:
+        #     kwargs["learning_rate"] = self._get_learning_rate()
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+        if self.use_apex:
+            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                scaled_loss.backward()
+        else:
+            # Finally we need to normalize the loss for reporting
+            if not self.model_accepts_loss_kwargs and self.compute_loss_func is None:
+                loss = loss / (self.args.gradient_accumulation_steps//2)
+
+            # Turning off loss scaling w.r.t. gradient accumulation when DeepSpeed is enabled
+            # https://github.com/huggingface/transformers/pull/35808
+            if self.accelerator.distributed_type == DistributedType.DEEPSPEED:
+                kwargs["scale_wrt_gas"] = False
+
+            self.accelerator.backward(loss, **kwargs)
+
+            return loss.detach()
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None,update_adapter='lora1'):
         labels = inputs['labels']
+        if update_adapter=='lora1':
+            with torch.no_grad():
+                model.module.set_state('lora1')
+                model.module.activate_lora1()
+                
+            loss, outputs = super(LLaVATrainerPERADA, self).compute_loss(model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch)
+        elif update_adapter=='lora2':
+            with torch.no_grad():
+                model.module.set_state('lora2')
+                model.module.activate_lora2()
         
-        shift_logits = pred_logits[..., :-1, :].contiguous()
-        target_logits = target_logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous()
+            loss, outputs = super(LLaVATrainerPERADA, self).compute_loss(model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch)
+            
+            # regularization
+            reg_loss = 0
+            for n, p in model.module.named_parameters():
+                if 'lora2' in n:
+                    target_n = n.replace('lora2', 'lora1')
+                    reg_loss += torch.norm(p.reshape(-1) - self.global_model_weights[target_n].reshape(-1)) **2
 
-        pred = shift_logits[shift_labels != -100]
-        target = target_logits[shift_labels != -100].detach()
-        
-        loss = kl_loss(pred, target)
-        
+            # coefficient 1 or 0.1 in original paper 
+            loss += 0.1*reg_loss
+            
         return (loss, outputs) if return_outputs else loss
     
     def _inner_training_loop(
@@ -227,13 +233,13 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
         # number of training epochs: num_train_epochs
         # number of training steps per epoch: num_update_steps_per_epoch
         # total number of training steps to execute: max_steps
-        total_train_batch_size = self._train_batch_size * args.gradient_accumulation_steps * args.world_size
+        total_train_batch_size = self._train_batch_size * (args.gradient_accumulation_steps//2) * args.world_size
 
         len_dataloader = None
         num_train_tokens = None
         if has_length(train_dataloader):
             len_dataloader = len(train_dataloader)
-            num_update_steps_per_epoch = len_dataloader // args.gradient_accumulation_steps
+            num_update_steps_per_epoch = len_dataloader // (args.gradient_accumulation_steps//2)
             num_update_steps_per_epoch = max(num_update_steps_per_epoch, 1)
             num_examples = self.num_examples(train_dataloader)
             if args.max_steps > 0:
@@ -246,7 +252,7 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
                 num_train_samples = args.max_steps * total_train_batch_size
                 if args.include_tokens_per_second:
                     num_train_tokens = (
-                        self.num_tokens(train_dataloader, args.max_steps) * args.gradient_accumulation_steps
+                        self.num_tokens(train_dataloader, args.max_steps) * (args.gradient_accumulation_steps//2)
                     )
             else:
                 max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
@@ -262,7 +268,7 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
             num_examples = total_train_batch_size * args.max_steps
             num_train_samples = args.max_steps * total_train_batch_size
             if args.include_tokens_per_second:
-                num_train_tokens = self.num_tokens(train_dataloader, args.max_steps) * args.gradient_accumulation_steps
+                num_train_tokens = self.num_tokens(train_dataloader, args.max_steps) * (args.gradient_accumulation_steps//2)
         else:
             raise ValueError(
                 "args.max_steps must be set to a positive value if dataloader does not have a length, was"
@@ -282,9 +288,9 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
 
         # ##############################################################################################################
         # OURS:
-        if hasattr(self.model, 'set_state'):
-            self.model.set_state('lora1')
-            self.model.activate_lora1()
+        self.model.set_state('lora2')
+        self.model.activate_all()
+        # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
         # ##############################################################################################################
         
         delay_optimizer_creation = is_sagemaker_mp_enabled() or self.is_fsdp_xla_enabled or self.is_fsdp_enabled
@@ -393,9 +399,9 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
         #############################################################################################################
 
-        # if self.args.save_optim and self.curr_round > 0:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._load_optimizer_and_scheduler(output_dir)
+        if self.args.save_optim and self.curr_round > 0:
+            output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
+            self._load_optimizer_and_scheduler(output_dir)
             
         ##############################################################################################################
         # important: at this point:
@@ -430,7 +436,7 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
             epochs_trained = self.state.global_step // num_update_steps_per_epoch
             if not args.ignore_data_skip:
                 steps_trained_in_current_epoch = self.state.global_step % (num_update_steps_per_epoch)
-                steps_trained_in_current_epoch *= args.gradient_accumulation_steps
+                steps_trained_in_current_epoch *= (args.gradient_accumulation_steps//2)
             else:
                 steps_trained_in_current_epoch = 0
 
@@ -487,7 +493,7 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
             steps_in_epoch = (
                 len(epoch_dataloader)
                 if len_dataloader is not None
-                else args.max_steps * args.gradient_accumulation_steps
+                else args.max_steps * (args.gradient_accumulation_steps//2)
             )
             self.control = self.callback_handler.on_epoch_begin(args, self.state, self.control)
 
@@ -505,18 +511,18 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
             step = -1
             epoch_iterator = iter(epoch_dataloader)
             # We chunkify the epoch iterator into gradient accumulation steps `n` batches
-            remainder = num_examples % args.gradient_accumulation_steps
+            remainder = num_examples % (args.gradient_accumulation_steps//2)
             if remainder == 0:
-                remainder = args.gradient_accumulation_steps
+                remainder = args.gradient_accumulation_steps//2
             update_step = -1
-            total_updates = steps_in_epoch // args.gradient_accumulation_steps + 1
+            total_updates = steps_in_epoch // (args.gradient_accumulation_steps//2) + 1
             for _ in range(total_updates):
                 update_step += 1
-                num_batches = args.gradient_accumulation_steps if update_step != (total_updates - 1) else remainder
+                num_batches = (args.gradient_accumulation_steps//2) if update_step != (total_updates - 1) else remainder
                 batch_samples, num_items_in_batch = self.get_batch_samples(epoch_iterator, num_batches)
                 for i, inputs in enumerate(batch_samples):
                     step += 1
-                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
+                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 #or (step + 1) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
                     if not do_sync_step:
                         self.accelerator.gradient_state._set_sync_gradients(False)
@@ -563,9 +569,9 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
                         and self.accelerator.distributed_type != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
                     )
-                    
+                    ################################## lora1 ####################################
                     with context():
-                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch//2, update_adapter="lora1")
 
                     if (
                         args.logging_nan_inf_filter
@@ -622,6 +628,75 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
+                        model.zero_grad()
+                    
+                    ############### lora2  ###############
+                    step += 1
+                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0
+                    
+                    if step % args.gradient_accumulation_steps == 0:
+                        self.control = self.callback_handler.on_step_begin(args, self.state, self.control)
+                    
+                    with context():
+                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch//2, update_adapter="lora2")
+
+                    if (
+                        args.logging_nan_inf_filter
+                        and not is_torch_xla_available()
+                        and (torch.isnan(tr_loss_step) or torch.isinf(tr_loss_step))
+                    ):
+                        # if loss is nan or inf simply add the average of previous logged losses
+                        tr_loss = tr_loss + tr_loss / (1 + self.state.global_step - self._globalstep_last_logged)
+                    else:
+                        if tr_loss.device != tr_loss_step.device:
+                            raise ValueError(
+                                f"Calculated loss must be on the original device: {tr_loss.device} but device in use is {tr_loss_step.device}"
+                            )
+                        tr_loss = tr_loss + tr_loss_step
+
+                    self.current_flos += float(self.floating_point_ops(inputs))
+
+                    
+                    if do_sync_step:
+                        print('sync', step)
+                        # Since we perform prefetching, we need to manually set sync_gradients to True
+                        self.accelerator.gradient_state._set_sync_gradients(True)
+
+                        # Gradient clipping
+                        if args.max_grad_norm is not None and args.max_grad_norm > 0:
+                            # deepspeed does its own clipping
+
+                            if is_sagemaker_mp_enabled() and args.fp16:
+                                _grad_norm = self.optimizer.clip_master_grads(args.max_grad_norm)
+                            elif self.use_apex:
+                                # Revert to normal clipping otherwise, handling Apex or full precision
+                                _grad_norm = nn.utils.clip_grad_norm_(
+                                    amp.master_params(self.optimizer),
+                                    args.max_grad_norm,
+                                )
+                            else:
+                                _grad_norm = self.accelerator.clip_grad_norm_(
+                                    model.parameters(),
+                                    args.max_grad_norm,
+                                )
+
+                            if (
+                                is_accelerate_available()
+                                and self.accelerator.distributed_type == DistributedType.DEEPSPEED
+                            ):
+                                grad_norm = model.get_global_grad_norm()
+                                # In some cases the grad norm may not return a float
+                                if hasattr(grad_norm, "item"):
+                                    grad_norm = grad_norm.item()
+                            else:
+                                grad_norm = _grad_norm
+
+                        self.control = self.callback_handler.on_pre_optimizer_step(args, self.state, self.control)
+
+                        self.optimizer.step()
+                        
+                        self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
+                        
                         if self.args.use_hypergradient:
                             # update self.lr_scheduler.base_lrs
                             for param_id, param_group in enumerate(self.optimizer.param_groups):
@@ -638,8 +713,6 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
-                        
-                        ##############################################################################################################
                         
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
@@ -740,11 +813,85 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
         if self.neftune_noise_alpha is not None:
             self._deactivate_neftune(self.model)
 
+        # remove momentum for l2p before saving
+        if 'L2P' in self.args.mode and self.task_id is not None:
+            for key in self.optimizer.state.keys():
+                if 'exp_avg' not in self.optimizer.state[key]:
+                    continue
+                self.optimizer.state[key]['exp_avg'][self.optimizer.state[key]['exp_avg']!=0] = 0.0
+                self.optimizer.state[key]['exp_avg_sq'][self.optimizer.state[key]['exp_avg_sq']!=0] = 0.0
 
-        # if self.args.save_optim:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._save_optimizer_and_scheduler(output_dir)
-        if hasattr(self.model, 'set_state'):
-            self.model.activate_all()
+
+        if self.args.save_optim:
+            output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
+            self._save_optimizer_and_scheduler(output_dir)
+
+        # if 'tv' not in args.mode and 'excludemean' not in args.mode:
+        #     self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
+        #     self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
+
+        # for hook in self.hooks:
+            # hook.remove()
+        self.model.activate_all()
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
+    
+    def create_optimizer(self):
+        """
+        Setup the optimizer.
+
+        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
+        """
+        if is_sagemaker_mp_enabled():
+            return super().create_optimizer()
+
+        opt_model = self.model
+
+        if self.optimizer is None:
+            # decay_parameters = [name for name in decay_parameters if "bias" not in name]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                                or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
+                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                                or 'lora_w_weight' in n or 'lora_w_noise' in n))
+                    ],
+                    "lr": self.args.learning_rate,
+                    "weight_decay": self.args.weight_decay,
+                },
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                            or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
+                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
+                                                                                            or 'lora_w_weight' in n or 'lora_w_noise' in n))
+                    ],
+                    "lr": self.args.mm_projector_lr,
+                    "weight_decay": self.args.weight_decay,
+                },
+            ]
+            optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+            
+            if self.args.use_hypergradient:
+                from models.AdamW_HD import AdamW_HD
+                optimizer_cls = AdamW_HD
+                optimizer_kwargs['hypergrad_lr'] = self.args.hypergrad_lr
+            
+            self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+            if optimizer_cls.__name__ == "Adam8bit":
+                import bitsandbytes
+
+                manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+
+                skipped = 0
+                for module in opt_model.modules():
+                    if isinstance(module, nn.Embedding):
+                        skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
+                        logger.info(f"skipped {module}: {skipped/2**20}M params")
+                        manager.register_module_override(module, "weight", {"optim_bits": 32})
+                        logger.debug(f"bitsandbytes: will optimize {module} in fp32")
+                logger.info(f"skipped: {skipped/2**20}M params")
+
+        return self.optimizer

@@ -204,9 +204,10 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
                 pred_sentence = pred_sentence.strip()
                 
                 choices = parse_choice_list(prompt)
-                
+                choices = [choice.strip() for choice in choices]
+                if "'" in choices[0] and "'" not in gold:
+                    choices = [choice.strip("'") for choice in choices]
                 pred_option = can_infer(pred_sentence, choices)
-            
                 if isinstance(pred_option, str):
                     # if gold == pred_option:
                     if gold.lower() == pred_option.lower():
@@ -246,6 +247,22 @@ def evaluate_choices(dataset, dataname, round, model, tokenizer, device, max_new
 def parse_choice_list(input_string):
     # Try to find the choice list in the format "Choice list:[...]"
     match = re.search(r'Choice list:\[(.*?)\]', input_string)
+    if match:
+        # comics_dialogue & textcloze
+        choices = [choice.strip() for choice in match.group(1).split('|')]
+        if len(choices) > 2:
+            return ALPHABET[:len(choices)]
+        
+        # Split the choices and strip whitespace
+        choices = [choice.strip() for choice in match.group(1).split(',')]
+        # If choices start with "Image", only keep the "Image X" part
+        if all(choice.startswith("Image A") for choice in choices):
+            choices = [re.match(r'(Image [A-D])', choice).group(1) for choice in choices]
+        elif all(choice.startswith("Image 1") for choice in choices):
+            choices = [re.match(r'(Image [1-8])', choice).group(1) for choice in choices]
+        return choices
+
+    match = re.search(r'Choice lists: \[(.*?)\]', input_string)
     if match:
         # comics_dialogue & textcloze
         choices = [choice.strip() for choice in match.group(1).split('|')]

@@ -633,7 +633,10 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                     ############### lora2  ###############
                     step += 1
                     do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0
-                    
+                    if not do_sync_step:
+                        self.accelerator.gradient_state._set_sync_gradients(False)
+                    else:
+                        self.accelerator.gradient_state._set_sync_gradients(True)
                     if step % args.gradient_accumulation_steps == 0:
                         self.control = self.callback_handler.on_step_begin(args, self.state, self.control)
                     

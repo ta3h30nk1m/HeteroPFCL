@@ -41,7 +41,8 @@ def main():
                 bnb_4bit_quant_type=training_args.quant_type # {'fp4', 'nf4'}
             )
         ))
-    
+    if training_args.mode in ['perada', 'feddat']:
+        training_args.gradient_accumulation_steps = training_args.gradient_accumulation_steps//2
     # Fix the random seeds
     torch.manual_seed(training_args.seed)
     torch.backends.cudnn.deterministic = True

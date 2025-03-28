@@ -27,6 +27,16 @@ gdrive files download 1iQYOO5VNRTA282JZCsNlSWLF4x4n6R5c
 gdrive files download 194GaXFFlz3-T7rQQpnzQI1sp6FgIKA0D
 gdrive files download 1wnh1gelZrf810q2hSMHg0K_j_FZKp1jU
 ```
+    - blockwise (8 layers, back) - PCA
+```bash
+gdrive files download 13wGqVnjsTJh1hV0Jl4lG9KKE_OrAfFP4
+gdrive files download 1BrwJHL3jcfS5ULgKdbahD3X3QOMgEP4G
+```
+    - blockwise (8 layers, front) - PCA
+```bash
+gdrive files download 1KPbBjo_VaBjuXefgMYu6WtbNJbT0uPhd
+gdrive files download 1fp1PlRmnrX3rz2QPvCnkKQfCl7TGjcwy
+```
 
     - blockwise Optimal (2 layers) - PCA
 ```bash

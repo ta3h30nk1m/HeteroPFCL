@@ -5,13 +5,15 @@ from collections import defaultdict
 import os
 import numpy as np
 
-mode = 'fedMultipqfullfreeze_tv'
-Method='tv_pq_blockwise_scenario72'
+client_num = 21
+mode = 'fedours'
+Method= 'feddat_fedours_iter50_round5_homo_1B'
+#'feddat_sft_iter50_round5_homo_3B'
 
 num_rounds = [2, 5, 7, 10, 12, 15, 17, 20]
 is_client = True
 
-scenario_num = 72
+scenario_num = 301
 with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
     scenario = json.load(fp)
 scores = defaultdict(list)
@@ -63,7 +65,7 @@ for i, (avg_score, client_avg_scores) in enumerate(zip(avg_scores, client_avg_sc
 
 # Prepare header
 header = ['method', 'final score']
-header.extend([f'client {i}' for i in range(10)])
+header.extend([f'client {i}' for i in range(client_num)])
 header.extend(scores.keys())
 
 # Write to CSV

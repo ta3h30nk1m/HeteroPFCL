@@ -6,8 +6,8 @@ import os
 import numpy as np
 
 client_num = 21
-mode = 'fedours'
-Method= 'feddat_fedours_iter50_round5_homo_1B'
+mode = 'fedavg'
+Method= 'feddat_fedavg_iter100_round5_homo_1B'
 #'feddat_sft_iter50_round5_homo_3B'
 
 num_rounds = [2, 5, 7, 10, 12, 15, 17, 20]
@@ -59,7 +59,7 @@ client_avg_scores_per_round = [{id: sum(scores) / len(scores) for id, scores in 
 csv_datas = []
 for i, (avg_score, client_avg_scores) in enumerate(zip(avg_scores, client_avg_scores_per_round)):
     csv_data = [Method, avg_score]
-    csv_data.extend([client_avg_scores.get(i, '') for i in range(10)])  # Assuming client IDs are 1-10
+    csv_data.extend([client_avg_scores.get(i, '') for i in range(client_num)])  # Assuming client IDs are 1-10
     csv_data.extend(scores_per_round[:, i])
     csv_datas.append(csv_data)
 

@@ -1970,6 +1970,8 @@ def feddualMulti2pq_homoAgg_load_state_dict(model, global_state_dict, local_stat
                             new_param += weights[id]*local_state_dict_list[id][new_target_key] / sim_sum
                 else:
                     for id in homo_client_ids:
+                        if id == client_id:
+                            continue
                         new_param += homo_weights[id]*local_state_dict_list[id][target_key] / homo_sim_sum
                 new_global_state_dict[name] = new_param
             # if (training_args.local_rank == 0 or training_args.local_rank == -1):

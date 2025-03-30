@@ -1923,11 +1923,10 @@ def feddualMulti2pq_homoAgg_load_state_dict(model, global_state_dict, local_stat
                 if cur_layer_num == 16:
                     cur_layer_num = [1,3,5,7,9,11,13,15]
                 elif cur_layer_num == 28:
-                    if 'back' in training_args.mode:
-                        if 'front' in training_args.mode:
-                            cur_layer_num = [6,9,12,15,18,21,24,27]
-                        elif 'back' in training_args.mode:
-                            cur_layer_num = [2,5,8,11,14,17,20,27]
+                    if 'front' in training_args.mode:
+                        cur_layer_num = [6,9,12,15,18,21,24,27]
+                    elif 'back' in training_args.mode:
+                        cur_layer_num = [2,5,8,11,14,17,20,27]
             
             for name in global_state_dict.keys():
                 new_param = 0

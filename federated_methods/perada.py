@@ -103,7 +103,7 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
         self.task_id = task_id
         self.ema_ratio = ema_ratio
         # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-        self.global_model_weights = {k:t.detach().clone().cuda() for k, t in self.model.named_parameters() if 'lora1' in k}
+        self.global_model_weights = {k:t.detach().clone().cuda() for k, t in self.model.named_parameters() if 'lora1' in k and t.requires_grad}
         self.mu = 0.1
         
         self.prompt_ema_ratio = 0.99
@@ -199,7 +199,7 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                     reg_loss += torch.norm(p.reshape(-1) - self.global_model_weights[target_n].reshape(-1)) **2
 
             # coefficient 1 or 0.1 in original paper 
-            loss += 0.1*reg_loss
+            loss += 0.001*reg_loss
             
         return (loss, outputs) if return_outputs else loss
     

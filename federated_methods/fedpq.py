@@ -269,12 +269,15 @@ def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dic
             if 'layers.' in k:
                 cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
+        cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1,]
         new_global_state_dict = {}
         for name in global_state_dict.keys():
             new_param = 0
             target_key = name
             splited = target_key.split('.')
             if int(splited[layer_index]) in cur_layer_num:
+                if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                    continue
                 for id in range(training_args.num_clients):
                     # if layer number is different
                     layer_num = []
@@ -327,6 +330,160 @@ def fedMultipq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state
             if 'layers.' in k:
                 cur_layer_num.append(int(k.split('.')[layer_index]))
         cur_layer_num = sorted(list(set(cur_layer_num)))
+        cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1,]
+        new_global_state_dict = {}
+        for name in global_state_dict.keys():
+            new_param = 0
+            target_key = name
+            splited = target_key.split('.')
+            if int(splited[layer_index]) in cur_layer_num:
+                continue
+            else:
+                for id in homo_client_ids:
+                    new_param += local_state_dict_list[id][target_key] / len(homo_client_ids)
+                
+            new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        # else:
+        #     new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False)
+
+def fedMulti05pq_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
+        
+        cur_layer_num = []
+        for k in global_state_dict.keys():
+            if 'layers.' in k:
+                cur_layer_num.append(int(k.split('.')[layer_index]))
+        cur_layer_num = sorted(list(set(cur_layer_num)))
+        new_global_state_dict = {}
+        for name in global_state_dict.keys():
+            new_param = 0
+            target_key = name
+            
+            for id in range(training_args.num_clients):
+                # if layer number is different
+                splited = target_key.split('.')
+                # if layer number is different
+                layer_num = []
+                for k in local_state_dict_list[id].keys():
+                    if 'layers.' in k:
+                        layer_num.append(int(k.split('.')[layer_index]))
+                layer_num = len(set(layer_num)) // 2
+                
+                target_layers = [layer_num*1 -1,layer_num*2 -1]
+                if cur_layer_num[-1] != target_layers[-1]: # if different size
+                    target_idx = cur_layer_num.index(int(splited[layer_index]))
+                    splited[layer_index] = str(target_layers[target_idx])
+                    new_target_key = '.'.join(splited)
+                else:
+                    new_target_key = target_key
+                new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
+                
+            new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        # else:
+        #     new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False)
+
+def fedMulti05pq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
+        
+        model_ids = extra_state_dict_dict['model_ids']
+        
+        for model_id, homo_ids in model_ids.items():
+            if client_id in homo_ids:
+                homo_client_ids = homo_ids  
+        
+        cur_layer_num = []
+        for k in global_state_dict.keys():
+            if 'layers.' in k:
+                cur_layer_num.append(int(k.split('.')[layer_index]))
+        cur_layer_num = sorted(list(set(cur_layer_num)))
+        cur_layer_num = [len(cur_layer_num)//2 -1,len(cur_layer_num) -1]
+        new_global_state_dict = {}
+        for name in global_state_dict.keys():
+            new_param = 0
+            target_key = name
+            splited = target_key.split('.')
+            if int(splited[layer_index]) in cur_layer_num:
+                if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                    continue
+                for id in range(training_args.num_clients):
+                    # if layer number is different
+                    layer_num = []
+                    for k in local_state_dict_list[id].keys():
+                        if 'layers.' in k:
+                            layer_num.append(int(k.split('.')[layer_index]))
+                    layer_num = len(set(layer_num)) // 2
+                    
+                    target_layers = [layer_num*1 -1,layer_num*2 -1]
+                    if cur_layer_num[-1] != target_layers[-1]: # if different size
+                        idx = cur_layer_num.index(int(splited[layer_index]))
+                        splited[layer_index] = str(target_layers[idx])
+                        new_target_key = '.'.join(splited)
+                    else:
+                        new_target_key = target_key
+                
+                    new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
+            else:
+                for id in homo_client_ids:
+                    new_param += local_state_dict_list[id][target_key] / len(homo_client_ids)
+                
+            new_global_state_dict[name] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        # else:
+        #     new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False)
+ 
+def fedMulti05pq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
+    # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)    
+        
+        model_ids = extra_state_dict_dict['model_ids']
+        
+        for model_id, homo_ids in model_ids.items():
+            if client_id in homo_ids:
+                homo_client_ids = homo_ids  
+        
+        cur_layer_num = []
+        for k in global_state_dict.keys():
+            if 'layers.' in k:
+                cur_layer_num.append(int(k.split('.')[layer_index]))
+        cur_layer_num = sorted(list(set(cur_layer_num)))
+        cur_layer_num = [len(cur_layer_num)//2 -1,len(cur_layer_num) -1]
         new_global_state_dict = {}
         for name in global_state_dict.keys():
             new_param = 0

@@ -279,6 +279,7 @@ def fedMultipq_HomoAgg_load_state_dict(model, global_state_dict, local_state_dic
                 if 'lora_P' not in target_key and 'lora_Q' not in target_key:
                     continue
                 for id in range(training_args.num_clients):
+                    splited = target_key.split('.')
                     # if layer number is different
                     layer_num = []
                     for k in local_state_dict_list[id].keys():
@@ -432,6 +433,7 @@ def fedMulti05pq_HomoAgg_load_state_dict(model, global_state_dict, local_state_d
                 if 'lora_P' not in target_key and 'lora_Q' not in target_key:
                     continue
                 for id in range(training_args.num_clients):
+                    splited = target_key.split('.')
                     # if layer number is different
                     layer_num = []
                     for k in local_state_dict_list[id].keys():

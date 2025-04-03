@@ -137,7 +137,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['TRILORA'] = TripleLoraModel
             lora_config.peft_type = 'TRILORA'
         elif training_args.mode in ['feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze']:
-            from models.triplelora.triple_pqloramodel_freeze_full import Triple_PQLorafreezeModel
+            from models.triple_pqlora_freeze_full.triple_pqloramodel_freeze_full import Triple_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['TRIPQFULLFREEZELORA'] = Triple_PQLorafreezeModel
             lora_config.peft_type = 'TRIPQFULLFREEZELORA'

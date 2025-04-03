@@ -2209,7 +2209,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                                 'fedMultipqfullfreeze512', 'fedMultipqfullfreeze512_sft',
                                 'fedMultipqfullfreeze1024', 'fedMultipqfullfreeze1024_sft', 'feddualMultipq_freezeA_trainB_weightnormP',
                                 'fedMultipqfullfreeze_distill', 'fedMultipqfullfreeze_sft_Taskloss', 'fedMultipqfullfreeze_Taskloss', 'fedMultipqfullfreeze_distillTaskloss',
-                                'fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft']:
+                                ]:
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:

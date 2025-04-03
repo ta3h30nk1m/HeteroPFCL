@@ -106,7 +106,8 @@ def feddat_hetero_load_state_dict(model, global_state_dict, local_state_dict_lis
                 new_param = 0
                 if 'lora1' in name:
                     target_key = name.replace('lora1', 'lora3')
-                
+                else:
+                    continue
                 for id in homo_client_ids:
                     new_param += local_state_dict_list[id][name] / len(homo_client_ids)
                     
@@ -117,6 +118,96 @@ def feddat_hetero_load_state_dict(model, global_state_dict, local_state_dict_lis
             #     torch.save(new_global_state_dict, output_dir)
         else:
             new_global_state_dict = global_state_dict
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(new_global_state_dict, model, strict=False)
+        else:
+            model.load_state_dict(new_global_state_dict, strict=False) 
+
+def feddat_hetero_pqlora_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
+    # first load loca model and then load global model
+    layer_index = extra_state_dict_dict['LAYER_INDEX']
+    with torch.no_grad():
+        if 'zero3' in training_args.deepspeed:
+            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
+        else:
+            model.load_state_dict(local_state_dict_list[client_id], strict=False)
+            
+        model_ids = extra_state_dict_dict['model_ids']
+        
+        for model_id, homo_ids in model_ids.items():
+            if client_id in homo_ids:
+                homo_client_ids = homo_ids    
+        
+        new_global_state_dict = {}
+        for key in global_state_dict.keys():
+            if 'lora1' in key:
+                new_key = key.replace('lora1','lora3')
+                new_global_state_dict[new_key] = copy.deepcopy(local_state_dict_list[client_id][key])
+                new_global_state_dict[key] = copy.deepcopy(local_state_dict_list[client_id][key])
+
+        # gradient based similarity wegithed averaging (exclude own)
+        if extra_state_dict_dict['curr_round'] > 0:
+
+            cur_layer_num = []
+            for k in global_state_dict.keys():
+                if 'layers.' in k:
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
+            cur_layer_num = sorted(list(set(cur_layer_num)))
+            if 'Multi05' in training_args.mode:
+                cur_layer_num = len(set(cur_layer_num)) // 2
+                cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1]
+            else:
+                cur_layer_num = len(set(cur_layer_num)) // 4
+                cur_layer_num = [cur_layer_num*1 -1,cur_layer_num*2 -1,cur_layer_num*3 -1,cur_layer_num*4 -1]
+            for name in global_state_dict.keys():
+                new_param = 0
+                if 'lora1' in name:
+                    target_key = name.replace('lora1', 'lora3')
+                else:
+                    continue
+                splited = name.split('.')
+                if int(splited[layer_index]) in cur_layer_num:
+                    if 'lora1_P' not in name and 'lora1_Q' not in name:
+                        continue
+                    
+                    for id in range(training_args.num_clients):
+                        if id == client_id:
+                            continue
+                        else:
+                            splited = name.split('.')
+                            # if layer number is different
+                            layer_num = []
+                            for k in local_state_dict_list[id].keys():
+                                if 'layers.' in k:
+                                    layer_num.append(int(k.split('.')[layer_index]))
+                            
+                            if 'Multi05' in training_args.mode:
+                                layer_num = len(set(layer_num)) // 2
+                                target_layers = [layer_num*1 -1,layer_num*2 -1]
+                            else:
+                                layer_num = len(set(layer_num)) // 4
+                                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                            if cur_layer_num[-1] != target_layers[-1]: # if different size
+                                index = cur_layer_num.index(int(splited[layer_index]))
+                                splited[layer_index] = str(target_layers[index])
+                                new_target_key = '.'.join(splited)
+                            else:
+                                new_target_key = name
+                            new_param += local_state_dict_list[id][new_target_key] / len(training_args.num_clients)
+                else:
+                    for id in homo_client_ids:
+                        if id == client_id:
+                            continue
+                        new_param += local_state_dict_list[id][name] / len(homo_client_ids)
+                if isinstance(new_param, int):
+                    continue
+                new_global_state_dict[name] = new_param
+                new_global_state_dict[target_key] = new_param
+            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+            #     torch.save(new_global_state_dict, output_dir)
+        # else:
+        #     new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(new_global_state_dict, model, strict=False)
         else:

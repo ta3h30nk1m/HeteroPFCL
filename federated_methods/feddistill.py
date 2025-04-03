@@ -71,7 +71,7 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
     # get public dataset
     data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     # data_path = 'chatbotIT.json'
-    public_datalist = json.load(open(data_path, "r"))
+    public_datalist = json.load(open(data_path, "r"))[:200]
     random.shuffle(public_datalist)
 
     for model_id, homo_client_ids in model_ids.items():

@@ -22,7 +22,7 @@ from federated_methods.fedavg_layerwiseloss import fedavg_layerwise_create_train
 from federated_methods.fedours_layerwiseloss import fedours_layerwise_create_trainer
 from federated_methods.fedours_pqgrad import fedours_pqgrad_create_trainer
 
-from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict
+from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict, feddat_hetero_pqlora_load_state_dict
 from federated_methods.feddistill import Distillation_aggregate_state_dict
 from federated_methods.perada import perada_create_trainer
 
@@ -57,6 +57,9 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in ['feddat']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict
+    
+    elif mode in ['feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_pqlora_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict
     
     elif mode in ['perada','perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, Distillation_aggregate_state_dict

@@ -193,7 +193,7 @@ def feddat_hetero_pqlora_load_state_dict(model, global_state_dict, local_state_d
                                 new_target_key = '.'.join(splited)
                             else:
                                 new_target_key = name
-                            new_param += local_state_dict_list[id][new_target_key] / len(training_args.num_clients)
+                            new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
                 else:
                     for id in homo_client_ids:
                         if id == client_id:

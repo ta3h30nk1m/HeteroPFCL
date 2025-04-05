@@ -194,7 +194,7 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
             # regularization
             reg_loss = 0
             for n, p in model.module.named_parameters():
-                if 'lora2' in n:
+                if 'lora2' in n and p.requires_grad:
                     target_n = n.replace('lora2', 'lora1')
                     reg_loss += torch.norm(p.reshape(-1) - self.global_model_weights[target_n].reshape(-1)) **2
 

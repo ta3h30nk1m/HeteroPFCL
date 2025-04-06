@@ -22,8 +22,9 @@ def clean_checkpoints(directory, round_numbers):
             print(f"Deleted: {filename}")
 
 # Example usage
-directory = "client_states_feddat_fedours_moe_iter50_round10_homo_1B"  # Change this to your actual directory path
-if num_rounds = 10:
+directory = "client_states_feddat_scenario320_fedavg_iter100_round5_homo_3B"
+num_rounds = 10
+if num_rounds == 10:
     round_numbers = {5, 10, 15, 20, 25, 30, 35, 40}
 else:
     round_numbers = {2, 5, 7, 10, 12, 15, 17, 20}

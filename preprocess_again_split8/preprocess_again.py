@@ -41,12 +41,6 @@ shutil.copyfile('dataset/DocVQA/train/dataset-3.json', 'dataset/DocVQA/train/dat
 shutil.copyfile('dataset/DocVQA/test/dataset-3.json', 'dataset/DocVQA/test/dataset-53.json')
 
 # client 9 #######################################################################################
-shutil.copyfile('dataset/TQA/train/dataset-0.json', 'dataset/TQA/train/dataset-50.json')
-original_data = json.load(open('dataset/TQA/test/dataset-0.json','r'))
-sampled_data = random.sample(original_data, 1000)
-with open('dataset/TQA/test/dataset-50.json','w') as fp:
-    json.dump(sampled_data, fp, indent=4)
-    
 shutil.copyfile('dataset/VSR/train/dataset-0.json', 'dataset/VSR/train/dataset-50.json')
 shutil.copyfile('dataset/VSR/test/dataset-0.json', 'dataset/VSR/test/dataset-50.json')
 
@@ -82,6 +76,6 @@ with open('dataset/SEED-Bench-2/test/dataset-50.json','w') as fp:
 
 original_data = json.load(open('dataset/WCVQA/train/dataset-2.json','r'))
 sampled_data = random.sample(original_data, 8000)
-with open('dataset/WCVQA/train/dataset-42.json','w') as fp:
+with open('dataset/WCVQA/train/dataset-52.json','w') as fp:
     json.dump(sampled_data, fp, indent=4)
-shutil.copyfile('dataset/WCVQA/test/dataset-2.json', 'dataset/WCVQA/test/dataset-42.json')
+shutil.copyfile('dataset/WCVQA/test/dataset-2.json', 'dataset/WCVQA/test/dataset-52.json')

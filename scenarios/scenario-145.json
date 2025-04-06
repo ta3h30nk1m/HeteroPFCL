@@ -64,27 +64,27 @@
     {
         "client_id": 6,
         "datasets":[
-            {"dataset": "WCVQA","subset_id": 40, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 50, "type":"multi-choice"},
             {"dataset": "", "subset_id": , "type":"multi-choice"},
-            {"dataset": "Co-Instruct-DB","subset_id": 45, "type":"multi-choice"},
-            {"dataset": "SEED-Bench-2","subset_id": 41, "type":"multi-choice"}
+            {"dataset": "Co-Instruct-DB","subset_id": 55, "type":"multi-choice"},
+            {"dataset": "SEED-Bench-2","subset_id": 51, "type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 7,
         "datasets":[
-            {"dataset": "dvqa","subset_id": 40, "type":"multi-choice"},
-            {"dataset": "WCVQA","subset_id": 43, "type":"multi-choice"},
+            {"dataset": "dvqa","subset_id": 50, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 53, "type":"multi-choice"},
             {"dataset": "","subset_id": , "type":"multi-choice"},
-            {"dataset": "Co-Instruct-DB","subset_id": 41, "type":"multi-choice"}
+            {"dataset": "Co-Instruct-DB","subset_id": 51, "type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 8,
         "datasets":[
-            {"dataset": "Co-Instruct-DB","subset_id": 40, "type":"multi-choice"},
+            {"dataset": "Co-Instruct-DB","subset_id": 50, "type":"multi-choice"},
             {"dataset": "VSR","subset_id": 50, "type":"multi-choice"},
             {"dataset": "","subset_id": , "type":"multi-choice"},
             {"dataset": "","subset_id": , "type":"multi-choice"}
@@ -96,8 +96,8 @@
         "datasets":[
             {"dataset": "","subset_id": , "type":"multi-choice"},
             {"dataset": "","subset_id": , "type":"multi-choice"},
-            {"dataset": "SEED-Bench-2","subset_id": 40, "type":"multi-choice"},
-            {"dataset": "WCVQA","subset_id": 42, "type":"multi-choice"}
+            {"dataset": "SEED-Bench-2","subset_id": 50, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 52, "type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     }

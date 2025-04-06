@@ -39,36 +39,36 @@ def split_q_instruct(datalist, output_folder, train_samples, test_samples):
     random.shuffle(json_data_list_3)
     random.shuffle(json_data_list_4)
 
-    train_samples = 7000
+    train_samples = 4000
     test_samples = 1000
     json_data_list_train = json_data_list_1[:int(train_samples/2)] + json_data_list_2[:int(train_samples/2)]
     json_data_list_test = json_data_list_1[-int(test_samples/2):] + json_data_list_2[-int(test_samples/2):]
     
     # Save the JSON data list to a file
-    # json_output_path = os.path.join(train_folder, f'dataset-50.json')
-    # print(f"Total samples: {len(json_data_list_train)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_train, json_file, indent=4)
+    json_output_path = os.path.join(train_folder, f'dataset-50.json')
+    print(f"Total samples: {len(json_data_list_train)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_train, json_file, indent=4)
         
-    # json_output_path = os.path.join(test_folder, f'dataset-50.json')
-    # print(f"Total samples: {len(json_data_list_test)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_test, json_file, indent=4)
+    json_output_path = os.path.join(test_folder, f'dataset-50.json')
+    print(f"Total samples: {len(json_data_list_test)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_test, json_file, indent=4)
     
-    # train_samples = 10000
-    # test_samples = 1000
-    # json_data_list_2_train = json_data_list_3[:int(train_samples)]
-    # json_data_list_2_test = json_data_list_3[-int(test_samples):]
+    train_samples = 10000
+    test_samples = 1000
+    json_data_list_2_train = json_data_list_3[:int(train_samples)]
+    json_data_list_2_test = json_data_list_3[-int(test_samples):]
     
-    # json_output_path = os.path.join(train_folder, f'dataset-51.json')
-    # print(f"Total samples: {len(json_data_list_2_train)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_2_train, json_file, indent=4)
+    json_output_path = os.path.join(train_folder, f'dataset-51.json')
+    print(f"Total samples: {len(json_data_list_2_train)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_2_train, json_file, indent=4)
         
-    # json_output_path = os.path.join(test_folder, f'dataset-51.json')
-    # print(f"Total samples: {len(json_data_list_2_test)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_2_test, json_file, indent=4)
+    json_output_path = os.path.join(test_folder, f'dataset-51.json')
+    print(f"Total samples: {len(json_data_list_2_test)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_2_test, json_file, indent=4)
         
 yes_no_choice_list = '\nChoice list:[Yes, No]. You must choose your answer from the Choice List. '
 

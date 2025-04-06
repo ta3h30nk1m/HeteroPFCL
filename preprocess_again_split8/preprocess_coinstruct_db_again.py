@@ -190,20 +190,20 @@ def split_compare_qna(datalist, output_folder, train_samples, test_samples):
     random.shuffle(json_data_list_2)
     random.shuffle(json_data_list_3)
     
-    # train_samples = 5000
-    # test_samples = 1000
-    # json_data_list_train = json_data_list_1[:int(train_samples)]
-    # json_data_list_test = json_data_list_1[-int(test_samples):]
+    train_samples = 5000
+    test_samples = 1000
+    json_data_list_train = json_data_list_1[:int(train_samples)]
+    json_data_list_test = json_data_list_1[-int(test_samples):]
     
-    # json_output_path = os.path.join(train_folder, f'dataset-55.json')
-    # print(f"Total samples: {len(json_data_list_train)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_train, json_file, indent=4)
+    json_output_path = os.path.join(train_folder, f'dataset-55.json')
+    print(f"Total samples: {len(json_data_list_train)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_train, json_file, indent=4)
         
-    # json_output_path = os.path.join(test_folder, f'dataset-55.json')
-    # print(f"Total samples: {len(json_data_list_test)}")
-    # with open(json_output_path, 'w') as json_file:
-    #     json.dump(json_data_list_test, json_file, indent=4)
+    json_output_path = os.path.join(test_folder, f'dataset-55.json')
+    print(f"Total samples: {len(json_data_list_test)}")
+    with open(json_output_path, 'w') as json_file:
+        json.dump(json_data_list_test, json_file, indent=4)
     
     train_samples = 4000
     test_samples = 1000

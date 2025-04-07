@@ -302,6 +302,15 @@ def parse_choice_list(input_string):
         if all(choice.startswith("Image ") for choice in choices):
             choices = [re.match(r'(Image [A-D])', choice).group(1) for choice in choices]
         return choices
+
+    match = re.search(r'\n \[(.*?)\]\n', input_string)
+    if match:
+        # Split the choices and strip whitespace
+        choices = [choice.strip() for choice in match.group(1).split(',')]
+        # If choices start with "Image", only keep the "Image X" part
+        if all(choice.startswith("Image ") for choice in choices):
+            choices = [re.match(r'(Image [A-D])', choice).group(1) for choice in choices]
+        return choices
     
     # If not found, try to find choices in the format "A. ... B. ... C. ... D. ..."
     match = re.findall(r'([A-D])\.\s*(.*?)(?=\n[A-D]\.|$)', input_string, re.DOTALL)

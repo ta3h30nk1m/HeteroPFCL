@@ -524,7 +524,7 @@ def main():
             logger.info(f"done Round {curr_round} client {client_id} | elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
             
         
-        aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **extra_state_dict_dict)
+        aggregate_state_dict(global_state_dict_list, local_state_dict_list, training_args=training_args, **extra_state_dict_dict)
         
         # Save server model
         # if training_args.mode != 'fedours':

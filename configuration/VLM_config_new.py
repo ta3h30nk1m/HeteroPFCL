@@ -148,3 +148,6 @@ class TrainingConfig(transformers.TrainingArguments):
     # hypergradient
     use_hypergradient:bool = False
     hypergrad_lr:float = 1e-8
+    
+    # incremental client setup
+    is_incremental_client_scenario: bool = False

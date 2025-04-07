@@ -173,52 +173,71 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
             
         # gradient based similarity wegithed averaging (exclude own)
         if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
+            # active clients
+            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
             
-            weights = sim[client_id].clone()
-            
-            weights[client_id] = -1e9
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4 / lora5 or lora6
-                    if training_args.share_ema:
-                        if 'fedquad' in training_args.mode:
-                            target_key = name
-                        elif 'fedhexa' in training_args.mode:
-                            if 'lora5' in name:
-                                target_key = name.replace('lora5', 'lora3')
-                            elif 'lora6' in name:
-                                target_key = name.replace('lora6', 'lora4')
-                    else:
-                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
-                        continue
+            if client_id not in active_clients_prev_round:
+                # FIXME: now simple averaging all local state dict of prev clients
                 
-                for id in range(training_args.num_clients):
-                    if id == client_id:
+                new_global_state_dict = {}
+                for name in local_state_dict_list[client_id].keys():
+                    new_param = 0
+                    if 'lora1' in name:
                         continue
-                    # if training_args.is_hetero_model:
-                    #     breakpoint()
-                    # else:
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                if isinstance(new_param, int):
-                    continue
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
+                    
+                    for id in active_clients_prev_round:
+                        new_param += local_state_dict_list[id][name] / len(active_clients_prev_round)
+                    
+                    new_global_state_dict[name] = new_param
+                    if 'lora2' in name:
+                        new_global_state_dict[name.replace('lora2', 'lora1')] = new_param
+            else:
+                # similarity matrix
+                sim = extra_state_dict_dict['task_similarity']
+                new_global_state_dict = {}
+                
+                weights = sim[client_id].clone()
+                
+                weights[client_id] = -1e9
+                weights = (weights/training_args.softmax_temp).softmax(dim=0)
+                
+                sim_sum = weights.sum() - weights[client_id]
+                
+                # # weights[client_id] = sim_sum
+                # # sim_sum += sim_sum
+                
+                for name in global_state_dict.keys():
+                    new_param = 0
+                    if 'lora1' in name:
+                        target_key = name.replace('lora1', 'lora2')
+                    elif 'ia3_l_1' in name:
+                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    else: # lora3 or lora4 / lora5 or lora6
+                        if training_args.share_ema:
+                            if 'fedquad' in training_args.mode:
+                                target_key = name
+                            elif 'fedhexa' in training_args.mode:
+                                if 'lora5' in name:
+                                    target_key = name.replace('lora5', 'lora3')
+                                elif 'lora6' in name:
+                                    target_key = name.replace('lora6', 'lora4')
+                        else:
+                            new_global_state_dict[name] = local_state_dict_list[client_id][name]
+                            continue
+                    
+                    for id in range(training_args.num_clients):
+                        if id == client_id:
+                            continue
+                        # if training_args.is_hetero_model:
+                        #     breakpoint()
+                        # else:
+                        new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                    if isinstance(new_param, int):
+                        continue
+                    new_global_state_dict[name] = new_param
+                # if (training_args.local_rank == 0 or training_args.local_rank == -1):
+                #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
+                #     torch.save(new_global_state_dict, output_dir)
         else:
             new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:
@@ -236,50 +255,65 @@ def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_l
             
         # gradient based similarity wegithed averaging (exclude own)
         if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
+            # active clients
+            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
             
-            weights = sim[client_id].clone()
-            
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() #- weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                else: # lora3 or lora4 / lora5 or lora6
-                    if training_args.share_ema:
-                        if 'fedquad' in training_args.mode:
-                            target_key = name
-                        elif 'fedhexa' in training_args.mode:
-                            if 'lora5' in name:
-                                target_key = name.replace('lora5', 'lora3')
-                            elif 'lora6' in name:
-                                target_key = name.replace('lora6', 'lora4')
-                    else:
-                        new_global_state_dict[name] = local_state_dict_list[client_id][name]
+            if client_id not in active_clients_prev_round:
+                # FIXME: now simple averaging all local state dict of prev clients
+                new_global_state_dict = {}
+                for name in local_state_dict_list[client_id].keys():
+                    new_param = 0
+                    if 'lora1' in name:
                         continue
-                
-                for id in range(training_args.num_clients):
-                    # if id == client_id:
-                    #     continue
-                    # if training_args.is_hetero_model:
-                    #     breakpoint()
-                    # else:
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
+                    for id in active_clients_prev_round:
+                        new_param += local_state_dict_list[id][name] / len(active_clients_prev_round)
+                    
+                    new_global_state_dict[name] = new_param
+                    if 'lora2' in name:
+                        new_global_state_dict[name.replace('lora2', 'lora1')] = new_param
+            else:
+                # similarity matrix
+                sim = extra_state_dict_dict['task_similarity']
+                new_global_state_dict = {}
+                
+                weights = sim[client_id].clone()
+                
+                weights = (weights/training_args.softmax_temp).softmax(dim=0)
+                
+                sim_sum = weights.sum() #- weights[client_id]
+                
+                # # weights[client_id] = sim_sum
+                # # sim_sum += sim_sum
+                
+                for name in global_state_dict.keys():
+                    new_param = 0
+                    if 'lora1' in name:
+                        target_key = name.replace('lora1', 'lora2')
+                    elif 'ia3_l_1' in name:
+                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    else: # lora3 or lora4 / lora5 or lora6
+                        if training_args.share_ema:
+                            if 'fedquad' in training_args.mode:
+                                target_key = name
+                            elif 'fedhexa' in training_args.mode:
+                                if 'lora5' in name:
+                                    target_key = name.replace('lora5', 'lora3')
+                                elif 'lora6' in name:
+                                    target_key = name.replace('lora6', 'lora4')
+                        else:
+                            new_global_state_dict[name] = local_state_dict_list[client_id][name]
+                            continue
+                    
+                    for id in range(training_args.num_clients):
+                        # if id == client_id:
+                        #     continue
+                        # if training_args.is_hetero_model:
+                        #     breakpoint()
+                        # else:
+                        new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                        
+                    new_global_state_dict[name] = new_param
         else:
             new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:
@@ -301,43 +335,57 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
         for model_id, homo_ids in model_ids.items():
             if client_id in homo_ids:
                 homo_client_ids = homo_ids
-        
+        active_homo_ids = [id for id in homo_client_ids if id in extra_state_dict_dict['selected_ids_prev_round']]
         # gradient based similarity wegithed averaging (exclude own)
         if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            for id in range(training_args.num_clients):
-                if id not in homo_client_ids:
-                    weights[id] = -1e9
-            
-            weights[client_id] = -1e9
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() - weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                
-                for id in homo_client_ids:
-                    if id == client_id:
+            # active clients
+            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
+            if client_id not in active_clients_prev_round:
+                # FIXME: now simple averaging all local state dict of prev clients
+                new_global_state_dict = {}
+                for name in local_state_dict_list[client_id].keys():
+                    new_param = 0
+                    if 'lora1' in name:
                         continue
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
+                    for id in active_clients_prev_round:
+                        new_param += local_state_dict_list[id][name] / len(active_clients_prev_round)
+                    
+                    new_global_state_dict[name] = new_param
+                    if 'lora2' in name:
+                        new_global_state_dict[name.replace('lora2', 'lora1')] = new_param
+            else:
+                # similarity matrix
+                sim = extra_state_dict_dict['task_similarity']
+                new_global_state_dict = {}
+                
+                weights = sim[client_id].clone()
+                
+                for id in range(active_clients_prev_round):
+                    if id not in active_homo_ids:
+                        weights[id] = -1e9
+                
+                weights[client_id] = -1e9
+                weights = (weights/training_args.softmax_temp).softmax(dim=0)
+                
+                sim_sum = weights.sum() - weights[client_id]
+                
+                # # weights[client_id] = sim_sum
+                # # sim_sum += sim_sum
+                
+                for name in global_state_dict.keys():
+                    new_param = 0
+                    if 'lora1' in name:
+                        target_key = name.replace('lora1', 'lora2')
+                    elif 'ia3_l_1' in name:
+                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
+                    
+                    for id in active_homo_ids:
+                        if id == client_id:
+                            continue
+                        new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
+                        
+                    new_global_state_dict[name] = new_param
         else:
             new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:

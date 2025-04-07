@@ -98,24 +98,21 @@ def feddat_hetero_load_state_dict(model, global_state_dict, local_state_dict_lis
         for model_id, homo_ids in model_ids.items():
             if client_id in homo_ids:
                 homo_client_ids = homo_ids
-        
+        active_homo_ids = [id for id in homo_client_ids if id in extra_state_dict_dict['selected_ids_prev_round']]
         # gradient based similarity wegithed averaging (exclude own)
         if extra_state_dict_dict['curr_round'] > 0:       
-            new_global_state_dict = {}     
+            new_global_state_dict = {}
             for name in global_state_dict.keys():
                 new_param = 0
                 if 'lora1' in name:
                     target_key = name.replace('lora1', 'lora3')
                 else:
                     continue
-                for id in homo_client_ids:
-                    new_param += local_state_dict_list[id][name] / len(homo_client_ids)
+                for id in active_homo_ids:
+                    new_param += local_state_dict_list[id][name] / len(active_homo_ids)
                     
                 new_global_state_dict[name] = new_param
                 new_global_state_dict[target_key] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
         else:
             new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:
@@ -137,7 +134,7 @@ def feddat_hetero_pqlora_load_state_dict(model, global_state_dict, local_state_d
         for model_id, homo_ids in model_ids.items():
             if client_id in homo_ids:
                 homo_client_ids = homo_ids    
-        
+        active_homo_ids = [id for id in homo_client_ids if id in extra_state_dict_dict['selected_ids_prev_round']]
         new_global_state_dict = {}
         for key in global_state_dict.keys():
             if 'lora1' in key:
@@ -170,35 +167,30 @@ def feddat_hetero_pqlora_load_state_dict(model, global_state_dict, local_state_d
                     if 'lora1_P' not in name and 'lora1_Q' not in name:
                         continue
                     
-                    for id in range(training_args.num_clients):
-                        if id == client_id:
-                            continue
+                    for id in extra_state_dict_dict['selected_ids_prev_round']:
+                        splited = name.split('.')
+                        # if layer number is different
+                        layer_num = []
+                        for k in local_state_dict_list[id].keys():
+                            if 'layers.' in k:
+                                layer_num.append(int(k.split('.')[layer_index]))
+                        
+                        if 'Multi05' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 2
+                            target_layers = [layer_num*1 -1,layer_num*2 -1]
                         else:
-                            splited = name.split('.')
-                            # if layer number is different
-                            layer_num = []
-                            for k in local_state_dict_list[id].keys():
-                                if 'layers.' in k:
-                                    layer_num.append(int(k.split('.')[layer_index]))
-                            
-                            if 'Multi05' in training_args.mode:
-                                layer_num = len(set(layer_num)) // 2
-                                target_layers = [layer_num*1 -1,layer_num*2 -1]
-                            else:
-                                layer_num = len(set(layer_num)) // 4
-                                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                            if cur_layer_num[-1] != target_layers[-1]: # if different size
-                                index = cur_layer_num.index(int(splited[layer_index]))
-                                splited[layer_index] = str(target_layers[index])
-                                new_target_key = '.'.join(splited)
-                            else:
-                                new_target_key = name
-                            new_param += local_state_dict_list[id][new_target_key] / training_args.num_clients
+                            layer_num = len(set(layer_num)) // 4
+                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        if cur_layer_num[-1] != target_layers[-1]: # if different size
+                            index = cur_layer_num.index(int(splited[layer_index]))
+                            splited[layer_index] = str(target_layers[index])
+                            new_target_key = '.'.join(splited)
+                        else:
+                            new_target_key = name
+                        new_param += local_state_dict_list[id][new_target_key] / len(extra_state_dict_dict['selected_ids_prev_round'])
                 else:
-                    for id in homo_client_ids:
-                        if id == client_id:
-                            continue
-                        new_param += local_state_dict_list[id][name] / len(homo_client_ids)
+                    for id in active_homo_ids:
+                        new_param += local_state_dict_list[id][name] / len(active_homo_ids)
                 if isinstance(new_param, int):
                     continue
                 new_global_state_dict[name] = new_param

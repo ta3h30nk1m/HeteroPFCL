@@ -418,7 +418,7 @@ def main():
 
     # model, tokenizer, processor, data_args = get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data_args)
     
-    train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
+    _, test_datalists = get_datalists(training_args, training_args.scenario)
     
     batch_size = 4 #if 'l2p' in training_args.mode or 'dap' in training_args.mode or 'LAE' in training_args.mode or 'fedsim' in training_args.mode else 4
     
@@ -486,7 +486,14 @@ def main():
                             or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
                             print('output file already exist')
                             continue
-                            
+                        if data_info['type'] == 'dummy':
+                            if training_args.eval_iter is not None:
+                                output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"
+                            else:
+                                output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json"
+                            with open(output_path, 'w') as fp:
+                                json.dump([{'accuracy':-1}], fp)
+                            continue
                         if data_info['type'] == 'open-ended':
                             evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
                         elif data_info['type'] == 'multi-choice':
@@ -527,6 +534,15 @@ def main():
                 if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
                     or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
                     print('output file already exist')
+                    continue
+                
+                if data_info['type'] == 'dummy':
+                    if training_args.eval_iter is not None:
+                        output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"
+                    else:
+                        output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json"
+                    with open(output_path, 'w') as fp:
+                        json.dump([{'accuracy':-1}], fp)
                     continue
                     
                 if data_info['type'] == 'open-ended':
@@ -577,6 +593,12 @@ def get_datalists(args, scenario_num):
         eval_cnt = 0
         train_cnt = 0
         for data in client_data['datasets']:
+            if data['dataset'] == 'dummy':
+                for i in range(rounds_per_task):
+                    train_datalist.append({'datalist':[],'model_id':''})
+                test_datalist.append({'data':[],'type':'dummy','model_id':client_data['model_id']})
+                continue
+            
             with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
                 datalist = json.load(fp)
             random.shuffle(datalist)

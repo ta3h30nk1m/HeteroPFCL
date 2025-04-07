@@ -158,8 +158,12 @@ def fedavg_heterosimple_aggregate_state_dict(global_state_dict_list, local_state
     
     for model_id, homo_client_ids in model_ids.items():
         global_state_dict = global_state_dict_list[homo_client_ids[0]]
+        
+        # only use active clients
+        active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
+        
         for key in global_state_dict.keys():
-            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(homo_client_ids) for client in homo_client_ids])
+            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
         for i in homo_client_ids:
             global_state_dict_list[i] = global_state_dict
 

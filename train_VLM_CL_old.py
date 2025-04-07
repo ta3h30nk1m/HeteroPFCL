@@ -66,7 +66,7 @@ def main():
     if training_args.local_rank == 0 or training_args.local_rank == -1: 
         logger.info(training_args)
     
-    train_datalists, test_datalists, incremental_setup = get_datalists(training_args, training_args.scenario)
+    train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
     # select functions
     set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules = select_method(training_args.mode)
@@ -273,7 +273,7 @@ def main():
             if 'tv' in training_args.mode:
                 sims = []
                 for layer_name in task_vectors[0].keys():
-                    task_vector = F.normalize(torch.stack([task_vectors[i][layer_name] for i in range(incremental_setup['num_active_clients'][curr_round-1])], dim=0), dim=-1)
+                    task_vector = F.normalize(torch.stack([task_vectors[i][layer_name] for i in range(len(task_vectors))], dim=0), dim=-1)
                     sim = torch.matmul(task_vector,
                                     torch.transpose(task_vector, 1, 0))
                     if sim.sum() != 0:
@@ -281,13 +281,13 @@ def main():
                         sims.append(sim)
                 sim = torch.stack(sims, dim=0).mean(dim=0)
             elif 'excludemean' in training_args.mode:
-                sim = torch.ones(incremental_setup['num_active_clients'][curr_round-1], incremental_setup['num_active_clients'][curr_round-1])
+                sim = torch.ones(training_args.num_clients, training_args.num_clients)
             else:
                 # vectorize cosine sim and then average them
                 sims = []
                 if 'pqgrad' in training_args.mode or 'pqfisher' in training_args.mode:
                     for grad_idx in range(len(task_vectors[0])):
-                        task_vector = F.normalize(torch.stack([tv[grad_idx] for tv in task_vectors[:incremental_setup['num_active_clients'][curr_round-1]]], dim=0), dim=-1)
+                        task_vector = F.normalize(torch.stack([tv[grad_idx] for tv in task_vectors], dim=0), dim=-1)
                         sim = torch.matmul(task_vector,
                                         torch.transpose(task_vector, 1, 0))
                         sim = torch.transpose(sim, 1, 0)
@@ -295,7 +295,7 @@ def main():
                 
                 else:
                     for grad_idx in range(task_vectors[0].shape[-1]):
-                        task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:incremental_setup['num_active_clients'][curr_round-1]]], dim=0), dim=-1)
+                        task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
                         sim = torch.matmul(task_vector,
                                         torch.transpose(task_vector, 1, 0))
                         sim = torch.transpose(sim, 1, 0)
@@ -309,19 +309,11 @@ def main():
             print(sim)
         
         # clients turn
-        # cids = np.arange(training_args.num_clients).tolist()
-        # num_selection = int(round(training_args.num_clients*frac_clients)) 
-        # selected_ids = sorted(random.sample(cids, num_selection)) 
-        num_selection = incremental_setup['num_active_clients'][curr_round]
-        selected_ids_prev_round = list(range(incremental_setup['num_active_clients'][curr_round-1]))
-        selected_ids = list(range(incremental_setup['num_active_clients'][curr_round]))
-        
+        cids = np.arange(training_args.num_clients).tolist()
+        num_selection = int(round(training_args.num_clients*frac_clients)) 
+        selected_ids = sorted(random.sample(cids, num_selection)) 
         if training_args.local_rank == 0 or training_args.local_rank == -1: 
             logger.info(f"Round {curr_round} | selected_ids: {selected_ids}\n")
-        
-        extra_state_dict_dict['selected_ids'] = selected_ids
-        extra_state_dict_dict['selected_ids_prev_round'] = selected_ids_prev_round
-        extra_state_dict_dict['num_selection'] = num_selection
         
         # selected_ids = cids
         training_args.learning_rate = init_lr - lr_step*curr_round
@@ -561,18 +553,6 @@ def main():
 def get_datalists(args, scenario_num):
     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
         scenario = json.load(fp)
-    
-    if args.is_incremental_client_scenario:
-        incremental_setup = scenario[0]
-        assert args.num_rounds == incremental_setup['num_rounds']
-        assert args.num_tasks == incremental_setup['num_tasks']
-        assert args.num_rounds * args.num_tasks == len(incremental_setup['num_active_clients'])
-        
-        scenario = scenario[1:]
-    else:
-        incremental_setup = {
-            "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
-        }
     assert args.num_clients == len(scenario)
 
     train_datalists = {}
@@ -586,11 +566,6 @@ def get_datalists(args, scenario_num):
         train_datalist = []
         test_datalist = []
         for task_id, data in enumerate(client_data['datasets']):
-            if data['dataset'] == 'dummy':
-                for i in range(rounds_per_task):
-                    train_datalist.append({'datalist':[],'model_id':''})
-                test_datalist.append({'data':[],'type':''})
-                continue
             with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
                 datalist = json.load(fp)
             random.shuffle(datalist)
@@ -613,7 +588,7 @@ def get_datalists(args, scenario_num):
             train_datalists[client_id] = train_datalist
         test_datalists[client_id] = test_datalist
 
-    return train_datalists, test_datalists, incremental_setup
+    return train_datalists, test_datalists
 
 if __name__ == "__main__":
     main()

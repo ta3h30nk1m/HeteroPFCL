@@ -99,7 +99,7 @@ class LLaVATrainerFEDAVG_Layerwise(LLaVATrainerFEDAVG):
             # self-dstill on 
             distillation_loss = 0
             for idx, target_layer in enumerate(target_layers):
-                output_repr = model.module.base_model.language_model.model.layers[target_layer].mlp.down_proj.lora_C['default'](outputs.hidden_states[target_layer])
+                output_repr = model.module.base_model.language_model.model.layers[target_layer].mlp.down_proj.lora_C['default'](outputs.hidden_states[target_layer+1])
                 start_range = 0 if idx == 0 else target_layers[idx-1]+1
                 blockwise_distill_loss = 0
                 for target_idx in range(start_range, target_layer):
@@ -112,8 +112,9 @@ class LLaVATrainerFEDAVG_Layerwise(LLaVATrainerFEDAVG):
             labels = inputs['labels']
             blockwise_taskloss = 0
             for target_layer in target_layers:
-                proj_out = model.module.base_model.language_model.model.layers[target_layer].mlp.down_proj.lora_F['default'](outputs.hidden_states[target_layer])
-                proj_out = model.module.base_model.language_model.model.norm(proj_out)
+                proj_out = model.module.base_model.language_model.model.layers[target_layer].mlp.down_proj.lora_F['default'](outputs.hidden_states[target_layer+1])
+                if target_layer+1 != len(outputs.hidden_states) - 1: # last layer hidden state has already passed through norm
+                    proj_out = model.module.base_model.language_model.model.norm(proj_out)
                 block_logit = model.module.base_model.language_model.lm_head(proj_out)
                 
                 shift_logits = block_logit[..., :-1, :].contiguous()

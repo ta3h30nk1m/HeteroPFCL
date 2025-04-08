@@ -242,7 +242,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
         elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe', 'feddualMultipqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMulti05pqfullfreeze_moe', 'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe', 'feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
-                                    'feddualMulti2pqfullfreeze_back_homoAgg_moe', 'feddualMulti2pqfullfreeze_back_moe']:
+                                    'feddualMulti2pqfullfreeze_back_homoAgg_moe', 'feddualMulti2pqfullfreeze_back_moe',
+                                    'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss'
+                                    ]:
             from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = Dual_PQMOELorafreezeModel
@@ -1515,6 +1517,83 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
     
+    elif training_args.mode in ['feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss']:
+        from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import ProjectMLP
+        from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
+        if '256' in training_args.mode:
+            r = 256
+        elif '512' in training_args.mode:
+            r = 512
+        elif '1024' in training_args.mode:
+            r = 1024
+        else:
+            r = 128
+        last_layer = len(total_layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                        m.r['default'] = r
+                        m.lora_alpha['default'] = r*2
+                        m.lora1_A['default'] = nn.Linear(m.in_features, r, bias=False)
+                        m.lora1_B['default'] = nn.Linear(r, m.out_features, bias=False)
+                        m.lora2_A['default'] = copy.deepcopy(m.lora1_A['default'])
+                        m.lora2_B['default'] = copy.deepcopy(m.lora1_B['default'])
+                        
+                        m.lora1_P['default'] = nn.Parameter(torch.eye((r)))  # Initialized to 1
+                        m.lora1_Q['default'] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
+                        m.lora2_P['default'] = nn.Parameter(torch.eye((r)))  # Initialized to 1
+                        m.lora2_Q['default'] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
+                        
+                        init_A = torch.empty_like(m.lora1_A['default'].weight)
+                        nn.init.kaiming_uniform_(init_A, a=math.sqrt(5))
+                        # Assign the same values to both lora1 and lora2
+                        m.lora1_A['default'].weight.data.copy_(init_A)
+                        m.lora2_A['default'].weight.data.copy_(init_A)
+                        
+                        init_B = torch.empty_like(m.lora1_B['default'].weight)
+                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        m.lora1_B['default'].weight.data.copy_(init_B)
+                        m.lora2_B['default'].weight.data.copy_(init_B)
+                        
+                        m.lora1_A['default'].weight.requires_grad = False
+                        m.lora2_A['default'].weight.requires_grad = False
+                        m.lora1_B['default'].weight.requires_grad = False
+                        m.lora2_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora1_P['default'])
+                        nn.init.zeros_(m.lora2_P['default'])
+                        nn.init.zeros_(m.lora1_Q['default'])
+                        nn.init.zeros_(m.lora2_Q['default'])
+                        
+                        m.freeze_AB = True
+
+                if 'Taskloss' in training_args.mode or 'KLloss' in training_args.mode:
+                    for n, m in layer.named_modules():
+                        if isinstance(m, PQMOELoraFullFreezeLayer) and 'mlp.down_proj' in n:
+                            m.lora_F = nn.ModuleDict({})
+                            # m.lora_F['default'] = ProjectMLP(model.base_model.language_model.config.hidden_size, model.base_model.language_model.config.hidden_size, 128).to(compute_dtype)
+                            # m.lora_F['default'].requires_grad = True
+                            m.lora_F['default'] = nn.Identity(model.base_model.language_model.config.hidden_size,model.base_model.language_model.config.hidden_size).to(compute_dtype)
+                            m.lora_F['default'].requires_grad = False
+                if 'distill' in training_args.mode:
+                    for n, m in layer.named_modules():
+                        if isinstance(m, PQMOELoraFullFreezeLayer) and 'mlp.down_proj' in n:
+                            m.lora_C = nn.ModuleDict({})
+                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
+                            m.lora_C['default'].requires_grad = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                        m.use_pq = False
+                if 'distill' in training_args.mode:
+                    for n, m in layer.named_modules():
+                        if isinstance(m, PQMOELoraFullFreezeLayer) and 'mlp.down_proj' in n:
+                            m.lora_C = nn.ModuleDict({})
+                            m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
+                            m.lora_C['default'].requires_grad = True
+    
     elif training_args.mode == 'feddualMultipqfullfreezeA' or training_args.mode == 'feddualMultipqfullfreezeA_tv' or training_args.mode == 'feddualMultipqfullfreezeA_excludemean':
         from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
         last_layer = len(total_layers) // 4
@@ -1864,6 +1943,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedquadMulti05pqfullfreeze_moe', 'fedquadMulti05pqfullfreeze_homoAgg_moe', 'fedquadMulti05pqfullfreeze_include_moe', 'fedquadMulti05pqfullfreeze_include_homoAgg_moe',
                                     'feddualMulti2pqfullfreeze_back','feddualMulti2pqfullfreeze_front','feddualMulti2pqfullfreeze_back_homoAgg','feddualMulti2pqfullfreeze_back_moe','feddualMulti2pqfullfreeze_back_homoAgg_moe',
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze',
+                                    'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     ]:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -2236,6 +2316,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'feddualMulti2pqfullfreeze_back_homoAgg','feddualMulti2pqfullfreeze_back_homoAgg_moe',
                               'perada','perada_feddualMulti05pqfullfreeze','perada_feddualMultipqfullfreeze',
                               'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
+                              'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss'
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

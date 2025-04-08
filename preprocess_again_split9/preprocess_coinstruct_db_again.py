@@ -55,21 +55,6 @@ def split_q_instruct(datalist, output_folder, train_samples, test_samples):
     with open(json_output_path, 'w') as json_file:
         json.dump(json_data_list_test, json_file, indent=4)
     
-    train_samples = 10000
-    test_samples = 1000
-    json_data_list_2_train = json_data_list_3[:int(train_samples)]
-    json_data_list_2_test = json_data_list_3[-int(test_samples):]
-    
-    json_output_path = os.path.join(train_folder, f'dataset-51.json')
-    print(f"Total samples: {len(json_data_list_2_train)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_2_train, json_file, indent=4)
-        
-    json_output_path = os.path.join(test_folder, f'dataset-51.json')
-    print(f"Total samples: {len(json_data_list_2_test)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_2_test, json_file, indent=4)
-        
 yes_no_choice_list = '\nChoice list:[Yes, No]. You must choose your answer from the Choice List. '
 
 two_image_choice_list = '\nChoice list:[First image, Second image, None of the images, Both images]. You must choose your answer from the Choice List. '
@@ -190,21 +175,6 @@ def split_compare_qna(datalist, output_folder, train_samples, test_samples):
     random.shuffle(json_data_list_2)
     random.shuffle(json_data_list_3)
     
-    train_samples = 5000
-    test_samples = 1000
-    json_data_list_train = json_data_list_1[:int(train_samples)]
-    json_data_list_test = json_data_list_1[-int(test_samples):]
-    
-    json_output_path = os.path.join(train_folder, f'dataset-55.json')
-    print(f"Total samples: {len(json_data_list_train)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_train, json_file, indent=4)
-        
-    json_output_path = os.path.join(test_folder, f'dataset-55.json')
-    print(f"Total samples: {len(json_data_list_test)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_test, json_file, indent=4)
-    
     train_samples = 4000
     test_samples = 1000
     json_data_list_2_train = json_data_list_2[:int(train_samples)]
@@ -218,20 +188,6 @@ def split_compare_qna(datalist, output_folder, train_samples, test_samples):
     print(f"Total samples: {len(json_data_list_2_test)}")
     with open(json_output_path, 'w') as json_file:
         json.dump(json_data_list_2_test, json_file, indent=4)
-        
-    train_samples = 4000
-    test_samples = 1000
-    json_data_list_3_train = json_data_list_3[:int(train_samples)]
-    json_data_list_3_test = json_data_list_3[-int(test_samples):]
-    json_output_path = os.path.join(train_folder, f'dataset-57.json')
-    print(f"Total samples: {len(json_data_list_2_train)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_3_train, json_file, indent=4)
-        
-    json_output_path = os.path.join(test_folder, f'dataset-57.json')
-    print(f"Total samples: {len(json_data_list_2_test)}")
-    with open(json_output_path, 'w') as json_file:
-        json.dump(json_data_list_3_test, json_file, indent=4)
   
     
 with open('./dataset/Co-Instruct-DB/coinstruct_562k_llava_format.json', 'r') as fp:

@@ -42,7 +42,10 @@ def get_loss(data_module, model, batch_size):
     with torch.no_grad():
         device = "cuda" if torch.cuda.is_available() else "cpu"
         for _, batch in enumerate(train_dataloader):
-            batch = {k: v.to(device) for k, v in batch.items()}
+            for k,v in batch.items():
+                if isinstance(v, torch.Tensor):
+                    batch[k] = v.to(device)
+            # batch = {k: v.to(device) for k, v in batch.items()}
             with torch.no_grad():
                 outputs = model(**batch)
             loss = outputs.loss
@@ -106,9 +109,9 @@ def fdlora_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
     # combine local and global and save it
     data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     # data_path = 'chatbotIT.json'
-    public_datalist = json.load(open(data_path, "r"))[:200]
+    public_datalist = json.load(open(data_path, "r"))
     random.shuffle(public_datalist)
-    data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
+    data_module = make_supervised_data_module(client_data=public_datalist[:12], # sub_dataset
                                                 tokenizer=kwargs['tokenizer'],
                                                 processor=kwargs['processor'],
                                                 data_args=copy.deepcopy(kwargs['data_args']))
@@ -125,7 +128,7 @@ def fdlora_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         get_score_partial = partial(get_score, 
                                     model=model, 
                                     cache=cache,
-                                    example_dataset=data_module,
+                                    data_module=data_module,
                                     batch_size=4,
                                     get_loss=get_loss, 
                                     get_regular=get_regular,

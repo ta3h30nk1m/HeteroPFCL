@@ -1040,7 +1040,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         # if step % self.fisher_freq == 0:
                         self.input_penultimate = []
                         self.hidden_states_before_norm = []
-                        if 'tv' not in args.mode and 'excludemean' not in args.mode and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.fisher_freq == 0:
+                        if 'tv' not in args.mode and 'excludemean' not in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
                             # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                             #     p.requires_grad = True
                             

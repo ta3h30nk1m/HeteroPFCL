@@ -169,8 +169,8 @@ def main():
                         else:
                             target_layers = list(range(len(set(layer_num))))
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            target_idx = cur_layer_num.index(int(splited[layer_index]))
-                            splited[layer_index] = str(target_layers[target_idx])
+                            target_idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
+                            splited[LAYER_INDEX] = str(target_layers[target_idx])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key

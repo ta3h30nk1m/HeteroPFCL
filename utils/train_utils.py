@@ -12,7 +12,7 @@ import torch.nn.utils as nn_utils
 from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
 
 from models.llava.llava_multi import LlavaMultiForConditionalGeneration
-from models.llava.llava_fedsim import FEDSIMLlavaMultiForConditionalGeneration
+# from models.llava.llava_fedsim import FEDSIMLlavaMultiForConditionalGeneration
 from models.llava.llama_model import CustomLlamaForCausalLM
 import copy
 ACCESS_TOKEN = "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"

@@ -5,31 +5,17 @@ from typing import List, Optional, Tuple, Union
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.generation.utils import GenerateOutput
 
-from transformers.generation.logits_process import LogitsProcessorList
-from transformers.generation.stopping_criteria import StoppingCriteriaList, EosTokenCriteria
-from transformers.generation.utils import GenerateNonBeamOutput, validate_stopping_criteria, GenerateEncoderDecoderOutput, GenerateDecoderOnlyOutput
-from transformers.generation.streamers import BaseStreamer
-import warnings
-from transformers.utils import logging
-import copy
-logger = logging.get_logger(__name__)
+# from transformers.generation.logits_process import LogitsProcessorList
+# from transformers.generation.stopping_criteria import StoppingCriteriaList, EosTokenCriteria
+# from transformers.generation.utils import GenerateNonBeamOutput, validate_stopping_criteria, GenerateEncoderDecoderOutput, GenerateDecoderOnlyOutput
+# from transformers.generation.streamers import BaseStreamer
+# import warnings
+# from transformers.utils import logging
+# import copy
+# logger = logging.get_logger(__name__)
 
 
 class FEDSIMLlavaMultiForConditionalGeneration(LlavaMultiForConditionalGeneration):
-    config_class = LlavaConfig
-
-    def __init__(self, config):
-        super(LlamaForCausalLM, self).__init__(config)
-        self.model = LlavaLlamaModel(config)
-        self.pretraining_tp = config.pretraining_tp
-        self.vocab_size = config.vocab_size
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
-        # Initialize weights and apply final processing
-        self.post_init()
-        
-        self.active_state = 'loar1'
-
     def _sample(
         self,
         input_ids: torch.LongTensor,

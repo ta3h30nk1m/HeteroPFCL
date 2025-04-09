@@ -24,6 +24,7 @@ from federated_methods.fedours_pqgrad import fedours_pqgrad_create_trainer
 from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict, feddat_hetero_pqlora_load_state_dict
 from federated_methods.feddistill import Distillation_aggregate_state_dict
 from federated_methods.perada import perada_create_trainer
+from federated_methods.fedsim import fedsim_create_trainer
 
 def dummy_function(*args):
     return {}
@@ -56,6 +57,9 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in ['feddat']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict
+    
+    elif mode in ['fedsim']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, fedsim_create_trainer, fedavg_aggregate_state_dict
     
     elif mode in ['feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_pqlora_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict

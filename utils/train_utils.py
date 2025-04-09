@@ -12,6 +12,7 @@ import torch.nn.utils as nn_utils
 from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
 
 from models.llava.llava_multi import LlavaMultiForConditionalGeneration
+from models.llava.llava_fedsim import FEDSIMLlavaMultiForConditionalGeneration
 from models.llava.llama_model import CustomLlamaForCausalLM
 import copy
 ACCESS_TOKEN = "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"
@@ -50,12 +51,20 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     
     if data_args.is_multimodal:
         if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
-            model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
-                model_args.model_name_or_path,
-                torch_dtype=compute_dtype,
-                use_flash_attention_2=True,
-                token=ACCESS_TOKEN
-            )
+            if 'fedsim' in training_args.mode:
+                model = FEDSIMLlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
+                    model_args.model_name_or_path,
+                    torch_dtype=compute_dtype,
+                    use_flash_attention_2=True,
+                    token=ACCESS_TOKEN
+                )
+            else:
+                model = LlavaMultiForConditionalGeneration.from_pretrained( # LlavaForConditionalGeneration
+                    model_args.model_name_or_path,
+                    torch_dtype=compute_dtype,
+                    use_flash_attention_2=True,
+                    token=ACCESS_TOKEN
+                )
         else:
             model = AutoModelForImageTextToText.from_pretrained( # LlavaForConditionalGeneration
                 model_args.model_name_or_path,
@@ -125,7 +134,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
         if training_args.mode in ['fedsim', 'apfl', 'ditto', 'fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero',
-                                  'perada',]:
+                                  'perada','fedsim',]:
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
@@ -2316,7 +2325,8 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'feddualMulti2pqfullfreeze_back_homoAgg','feddualMulti2pqfullfreeze_back_homoAgg_moe',
                               'perada','perada_feddualMulti05pqfullfreeze','perada_feddualMultipqfullfreeze',
                               'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
-                              'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss'
+                              'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
+                              'fedsim',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

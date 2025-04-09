@@ -2699,8 +2699,8 @@ def get_task_vectors(model, tokenizer, processor, train_datalists, training_args
         extra_state_dict_dict['data_args'] = data_args
         extra_state_dict_dict['model2'] = model2
         copy_training_args = copy.deepcopy(training_args)
-        copy_training_args.per_gpu_train_batch_size = 4
-        copy_training_args.gradient_accumulation_steps = 1
+        copy_training_args.per_gpu_train_batch_size = 1
+        copy_training_args.gradient_accumulation_steps = 4
         trainer = fedours_ema_distill_create_trainer(model, tokenizer, copy_training_args, data_module, extra_state_dict_dict)
 
         results = trainer.train()

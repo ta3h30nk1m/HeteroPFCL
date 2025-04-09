@@ -638,7 +638,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # if step % self.fisher_freq == 0:
                         self.input_penultimate = []
                         self.hidden_states_before_norm = []
-                        if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
+                        if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.fisher_freq == 0:
                             torch.cuda.empty_cache()
                             # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                             #     p.requires_grad = True
@@ -716,8 +716,8 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        if args.save_per_step and step % 25 == 0:
-                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
+                        if args.save_per_step and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 25 == 0:
+                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{int(((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps))}.pth")
                             state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
                             
                             if (self.args.local_rank == 0 or self.args.local_rank == -1):

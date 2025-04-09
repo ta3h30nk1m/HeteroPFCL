@@ -19,6 +19,8 @@ from transformers import BitsAndBytesConfig
 import time
 import datetime
 import torch.nn.functional as F
+import glob
+import re
 
 os.environ["WANDB_DISABLED"] = "true"
 def main():    
@@ -112,9 +114,17 @@ def main():
                 load_round = int(training_args.load_checkpoint.split('round')[-1][:-4])+1
                 load_dir = training_args.load_checkpoint.split('/')[0]
                 prev_local_state_dict_list = []
-                for local_id in range(10):
-                    prev_local_state_dict_list.append(torch.load(f"{load_dir}/{local_id}_client_model_round{load_round}.pth", map_location='cpu'))
-                
+                pattern = f"{load_dir}/*_client_model_round{load_round}.pth"
+                # for local_id in range(10):
+                #     prev_local_state_dict_list.append(torch.load(f"{load_dir}/{local_id}_client_model_round{load_round}.pth", map_location='cpu'))
+                file_paths = glob.glob(pattern)
+                def extract_local_id(filename):
+                    # Capture the digits before "_client_model_round" at the end of the filename
+                    match = re.search(r'(\d+)_client_model_round\d+\.pth$', filename)
+                    return int(match.group(1)) if match else 9999999  # fallback if no match
+                file_paths_sorted = sorted(file_paths, key=extract_local_id)
+                for file_path in file_paths_sorted:
+                    prev_local_state_dict_list.append(torch.load(file_path, map_location='cpu'))
                 state_dict = get_peft_state_maybe_zero_3(
                         model.named_parameters(), training_args.lora_bias
                     )
@@ -130,11 +140,8 @@ def main():
                 
                 new_global_state_dict = {}
             
-                weights = torch.ones(10)
-                sim_sum = weights.sum() #- weights[client_id]
-            
-                # # weights[client_id] = sim_sum
-                # # sim_sum += sim_sum
+                weights = torch.ones(len(prev_local_state_dict_list))
+                sim_sum = weights.sum()
                 cur_layer_num = []
                 for k in global_state_dict.keys():
                     if 'layers.' in k:
@@ -146,36 +153,30 @@ def main():
                     target_key = name
                     
                     for id in range(len(prev_local_state_dict_list)):
-                        # if id == client_id:
-                        #     continue
-                        # else:
                         splited = target_key.split('.')
                         # if layer number is different
                         layer_num = []
                         for k in prev_local_state_dict_list[id].keys():
                             if 'layers.' in k:
                                 layer_num.append(int(k.split('.')[LAYER_INDEX]))
-                        layer_num = len(set(layer_num)) // 4
                         
-                        target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        if 'Multi05' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 2
+                            target_layers = [layer_num*1 -1,layer_num*2 -1]
+                        elif 'Multi' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 4
+                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        else:
+                            target_layers = list(range(len(set(layer_num))))
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
-                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                splited[5] = str(target_layers[2])
-                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                splited[5] = str(target_layers[3])
+                            target_idx = cur_layer_num.index(int(splited[layer_index]))
+                            splited[layer_index] = str(target_layers[target_idx])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key
                         new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
                         
                     new_global_state_dict[name] = new_param
-                    
-                    new_global_state_dict[name] = new_param
-                
                 if 'zero3' in training_args.deepspeed:
                     load_deepspeed(new_global_state_dict, model, strict=False)
                 else:
@@ -204,12 +205,12 @@ def main():
             
             model_ids[model_id] = [client_id]
     
-    if data_args.is_multimodal and training_args.use_task_vector and 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
-    elif not data_args.is_multimodal and training_args.use_task_vector and 'meta-llama/Llama-3.2-1B' not in models.keys():
+    elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
@@ -223,8 +224,21 @@ def main():
         logger.info(f'load task vector {training_args.load_checkpoint}')
         tv_weights = torch.load(training_args.load_checkpoint, map_location='cpu')
         prev_task_vectors = tv_weights['task_vectors']
-        prev_local_state_dict_list = tv_weights['local_state_dict_list']
         
+        load_round = int(training_args.load_checkpoint.split('round')[-1].split('_')[0])
+        load_dir = training_args.load_checkpoint.split('/')[0]
+        prev_local_state_dict_list = []
+        pattern = f"{load_dir}/*_client_model_round{load_round}.pth"
+        # for local_id in range(10):
+        #     prev_local_state_dict_list.append(torch.load(f"{load_dir}/{local_id}_client_model_round{load_round}.pth", map_location='cpu'))
+        file_paths = glob.glob(pattern)
+        def extract_local_id(filename):
+            # Capture the digits before "_client_model_round" at the end of the filename
+            match = re.search(r'(\d+)_client_model_round\d+\.pth$', filename)
+            return int(match.group(1)) if match else 9999999  # fallback if no match
+        file_paths_sorted = sorted(file_paths, key=extract_local_id)
+        for file_path in file_paths_sorted:
+            prev_local_state_dict_list.append(torch.load(file_path, map_location='cpu'))
         current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/llama3.2_1B_vl'])
     else:
         current_task_vectors = None
@@ -397,27 +411,24 @@ def main():
                         target_key = name.replace('ia3_l', 'ia3_l_2')
                     
                     for id in range(len(prev_local_state_dict_list)):
-                        # if id == client_id:
-                        #     continue
-                        # else:
                         splited = target_key.split('.')
                         # if layer number is different
                         layer_num = []
                         for k in prev_local_state_dict_list[id].keys():
                             if 'layers.' in k:
                                 layer_num.append(int(k.split('.')[LAYER_INDEX]))
-                        layer_num = len(set(layer_num)) // 4
+                        if 'Multi05' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 2
+                            target_layers = [layer_num*1 -1,layer_num*2 -1]
+                        elif 'Multi' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 4
+                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        else:
+                            target_layers = list(range(len(set(layer_num))))
                         
-                        target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            if int(splited[5]) == cur_layer_num[0]: # mid layer
-                                splited[5] = str(target_layers[0])
-                            elif int(splited[5]) == cur_layer_num[1]: # last layer 
-                                splited[5] = str(target_layers[1])
-                            elif int(splited[5]) == cur_layer_num[2]: # last layer 
-                                splited[5] = str(target_layers[2])
-                            elif int(splited[5]) == cur_layer_num[3]: # last layer 
-                                splited[5] = str(target_layers[3])
+                            target_idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
+                            splited[LAYER_INDEX] = str(target_layers[target_idx])
                             new_target_key = '.'.join(splited)
                         else:
                             new_target_key = target_key
@@ -526,36 +537,10 @@ def main():
         
         aggregate_state_dict(global_state_dict_list, local_state_dict_list, training_args=training_args, **extra_state_dict_dict)
         
-        # Save server model
-        # if training_args.mode != 'fedours':
-        #     if (training_args.local_rank == 0 or training_args.local_rank == -1): 
-        #         torch.save(global_state_dict_list[0], os.path.join(training_args.state_dir, f"server_model_round{curr_round}.pth"))
-            
     if training_args.use_task_vector:
         path = os.path.join(training_args.state_dir, f"round{curr_round+1}_task_vector_local_weights.pth")
         tv_weight = {'task_vectors': task_vectors}#, 'local_state_dict_list': local_state_dict_list}
         torch.save(tv_weight, path)
-        
-        # task_vector = F.normalize(torch.stack(task_vectors, dim=0), dim=-1)
-        # sim = torch.matmul(task_vector,
-        #                 torch.transpose(task_vector, 1, 0))
-        # sim = torch.transpose(sim, 1, 0)
-        # sim = (sim+1)/2
-        
-        # sims = []
-        # for grad_idx in range(task_vectors[0].shape[-1]):
-        #     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors], dim=0), dim=-1)
-        #     sim = torch.matmul(task_vector,
-        #                     torch.transpose(task_vector, 1, 0))
-        #     sim = torch.transpose(sim, 1, 0)
-        #     sims.append(sim)
-        
-        # sim = torch.stack(sims, dim=0).mean(dim=0)
-        
-        # extra_state_dict_dict['task_similarity'] = sim
-        # extra_state_dict_dict['curr_round'] += 1
-        # for client_id in range(training_args.num_clients):
-        #     load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict)
     logger.info("total done\n")
 
 def get_datalists(args, scenario_num):

@@ -9,7 +9,7 @@
     {
         "client_id": 1,
         "datasets":[
-            {"dataset": "MagicBrush","subset_id": 0, "type":"open-ended", "metric":"RougeL"}
+            {"dataset": "RecipeQA_VisualCloze","subset_id": 0, "type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     },

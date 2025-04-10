@@ -205,11 +205,16 @@ def main():
             
             model_ids[model_id] = [client_id]
     
-    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.2' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
+    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_1.5B_vl' not in models.keys():
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'thkim0305/qwen2.5_1.5B_vl'
+        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['thkim0305/qwen2.5_1.5B_vl'] = model2
     elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
@@ -239,7 +244,12 @@ def main():
         file_paths_sorted = sorted(file_paths, key=extract_local_id)
         for file_path in file_paths_sorted:
             prev_local_state_dict_list.append(torch.load(file_path, map_location='cpu'))
-        current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/llama3.2_1B_vl'])
+        if 'thkim0305/llama3.2_1B_vl' in models.keys():
+            current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/llama3.2_1B_vl'])
+        elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
+            current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/qwen2.5_1.5B_vl'])
+        elif 'meta-llama/Llama-3.2-1B' in models.keys():
+            current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['meta-llama/Llama-3.2-1B'])
     else:
         current_task_vectors = None
 
@@ -456,7 +466,13 @@ def main():
                 
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
-                extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'] if data_args.is_multimodal else models['meta-llama/Llama-3.2-1B']
+                if data_args.is_multimodal:
+                    if 'thkim0305/llama3.2_1B_vl' in models.keys():
+                        extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
+                    elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
+                        extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_1.5B_vl']
+                else:
+                    extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
@@ -483,7 +499,10 @@ def main():
                     task_vectors[client_id] = trainer.task_vector
                     
                     if data_args.is_multimodal:
-                        models['thkim0305/llama3.2_1B_vl'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                        if 'thkim0305/llama3.2_1B_vl' in models.keys():
+                            extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
+                        elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
+                            extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_1.5B_vl'].cpu()
                     else:
                         models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             

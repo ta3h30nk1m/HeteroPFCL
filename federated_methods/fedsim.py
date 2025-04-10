@@ -23,14 +23,14 @@ def fedsim_create_trainer(model, tokenizer, training_args, data_module, extra_st
 
 
 class LLaVATrainerFEDSIM(LLaVATrainerFEDAVG):
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         
         # global forward
         model.module.set_state('lora1')
-        _, outputs = super(LLaVATrainerFEDSIM, self).compute_loss(model, inputs, return_outputs=True)     
+        _, outputs = super(LLaVATrainerFEDSIM, self).compute_loss(model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch)     
         # local forward
         model.module.set_state('lora2')
-        _, local_outputs = super(LLaVATrainerFEDSIM, self).compute_loss(model, inputs, return_outputs=True) 
+        _, local_outputs = super(LLaVATrainerFEDSIM, self).compute_loss(model, inputs, return_outputs=True,num_items_in_batch=num_items_in_batch) 
         
         final_logits = outputs['logits'] + local_outputs['logits']
         labels = inputs['labels']

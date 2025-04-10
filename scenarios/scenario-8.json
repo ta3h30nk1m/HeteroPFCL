@@ -16,7 +16,7 @@
     {
         "client_id": 2,
         "datasets":[
-            {"dataset": "RecipeQA_TextCloze","subset_id": 0, "type":"multi-choice"}
+            {"dataset": "PickaPic","subset_id": 0, "type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     },

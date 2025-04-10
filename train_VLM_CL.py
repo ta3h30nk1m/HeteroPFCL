@@ -148,34 +148,55 @@ def main():
                         cur_layer_num.append(int(k.split('.')[LAYER_INDEX]))
                 cur_layer_num = sorted(list(set(cur_layer_num)))
                 
+                homo_client_ids = []
+                for i in range(len(prev_local_state_dict_list)):
+                    prev_local_state_dict = prev_local_state_dict_list[i]
+                    prev_layer_num = []
+                    for k in prev_local_state_dict.keys():
+                        if 'layers.' in k:
+                            prev_layer_num.append(int(k.split('.')[LAYER_INDEX]))
+                    prev_layer_num = sorted(list(set(prev_layer_num)))
+                    if len(cur_layer_num) == len(prev_layer_num):
+                        homo_client_ids.append(i)
+                
+                if 'Multi05' in training_args.mode:
+                    cur_layer_num = [len(cur_layer_num)//2 -1,len(cur_layer_num) -1]
+                elif 'Multi' in training_args.mode:
+                    layer_num = len(cur_layer_num) // 4
+                    cur_layer_num = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
                 for name in global_state_dict.keys():
                     new_param = 0
                     target_key = name
-                    
-                    for id in range(len(prev_local_state_dict_list)):
-                        splited = target_key.split('.')
-                        # if layer number is different
-                        layer_num = []
-                        for k in prev_local_state_dict_list[id].keys():
-                            if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[LAYER_INDEX]))
-                        
-                        if 'Multi05' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 2
-                            target_layers = [layer_num*1 -1,layer_num*2 -1]
-                        elif 'Multi' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 4
-                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                        else:
-                            target_layers = list(range(len(set(layer_num))))
-                        if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            target_idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
-                            splited[LAYER_INDEX] = str(target_layers[target_idx])
-                            new_target_key = '.'.join(splited)
-                        else:
-                            new_target_key = target_key
-                        new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
-                        
+                    splited = target_key.split('.')
+                    if int(splited[LAYER_INDEX]) in cur_layer_num:
+                        if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                            continue
+                        for id in range(len(prev_local_state_dict_list)):
+                            splited = target_key.split('.')
+                            # if layer number is different
+                            layer_num = []
+                            for k in prev_local_state_dict_list[id].keys():
+                                if 'layers.' in k:
+                                    layer_num.append(int(k.split('.')[LAYER_INDEX]))
+                            if 'Multi05' in training_args.mode:
+                                layer_num = len(set(layer_num)) // 2
+                                target_layers = [layer_num*1 -1,layer_num*2 -1]
+                            elif 'Multi' in training_args.mode:
+                                layer_num = len(set(layer_num)) // 4
+                                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                            else:
+                                target_layers = list(range(len(set(layer_num))))
+                            if cur_layer_num[-1] != target_layers[-1]: # if different size
+                                idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
+                                splited[LAYER_INDEX] = str(target_layers[idx])
+                                new_target_key = '.'.join(splited)
+                            else:
+                                new_target_key = target_key
+                            new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
+                    else:
+                        for id in homo_client_ids:
+                            new_param += weights[id]*prev_local_state_dict_list[id][target_key] / len(homo_client_ids)
+
                     new_global_state_dict[name] = new_param
                 if 'zero3' in training_args.deepspeed:
                     load_deepspeed(new_global_state_dict, model, strict=False)
@@ -413,37 +434,58 @@ def main():
                         cur_layer_num.append(int(k.split('.')[LAYER_INDEX]))
                 cur_layer_num = sorted(list(set(cur_layer_num)))
                 
+                homo_client_ids = []
+                for i in range(len(prev_local_state_dict_list)):
+                    prev_local_state_dict = prev_local_state_dict_list[i]
+                    prev_layer_num = []
+                    for k in prev_local_state_dict.keys():
+                        if 'layers.' in k:
+                            prev_layer_num.append(int(k.split('.')[LAYER_INDEX]))
+                    prev_layer_num = sorted(list(set(prev_layer_num)))
+                    if len(cur_layer_num) == len(prev_layer_num):
+                        homo_client_ids.append(i)
+                
+                if 'Multi05' in training_args.mode:
+                    cur_layer_num = [len(cur_layer_num)//2 -1,len(cur_layer_num) -1]
+                elif 'Multi' in training_args.mode:
+                    layer_num = len(cur_layer_num) // 4
+                    cur_layer_num = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                
                 for name in global_state_dict.keys():
                     new_param = 0
                     if 'lora' in name:
                         target_key = name.replace('lora', 'lora2')
                     elif 'ia3_l' in name:
                         target_key = name.replace('ia3_l', 'ia3_l_2')
-                    
-                    for id in range(len(prev_local_state_dict_list)):
-                        splited = target_key.split('.')
-                        # if layer number is different
-                        layer_num = []
-                        for k in prev_local_state_dict_list[id].keys():
-                            if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[LAYER_INDEX]))
-                        if 'Multi05' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 2
-                            target_layers = [layer_num*1 -1,layer_num*2 -1]
-                        elif 'Multi' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 4
-                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                        else:
-                            target_layers = list(range(len(set(layer_num))))
-                        
-                        if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            target_idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
-                            splited[LAYER_INDEX] = str(target_layers[target_idx])
-                            new_target_key = '.'.join(splited)
-                        else:
-                            new_target_key = target_key
-                        new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
-                    
+                    splited = target_key.split('.')
+                    if int(splited[LAYER_INDEX]) in cur_layer_num:
+                        if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                            continue
+                        for id in range(len(prev_local_state_dict_list)):
+                            splited = target_key.split('.')
+                            # if layer number is different
+                            layer_num = []
+                            for k in prev_local_state_dict_list[id].keys():
+                                if 'layers.' in k:
+                                    layer_num.append(int(k.split('.')[LAYER_INDEX]))
+                            if 'Multi05' in training_args.mode:
+                                layer_num = len(set(layer_num)) // 2
+                                target_layers = [layer_num*1 -1,layer_num*2 -1]
+                            elif 'Multi' in training_args.mode:
+                                layer_num = len(set(layer_num)) // 4
+                                target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                            else:
+                                target_layers = list(range(len(set(layer_num))))
+                            if cur_layer_num[-1] != target_layers[-1]: # if different size
+                                idx = cur_layer_num.index(int(splited[LAYER_INDEX]))
+                                splited[LAYER_INDEX] = str(target_layers[idx])
+                                new_target_key = '.'.join(splited)
+                            else:
+                                new_target_key = target_key
+                            new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
+                    else:
+                        for id in homo_client_ids:
+                            new_param += weights[id]*prev_local_state_dict_list[id][target_key] / len(homo_client_ids)
                     new_global_state_dict[name] = new_param
                 
                 if 'zero3' in training_args.deepspeed:

@@ -86,7 +86,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
                 'fedquadMultipqfullfreeze','fedquadMultipqfullfreeze_moe',
                 ]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode in ['feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg', 'feddualMultipqfullfreeze_homoAgg_moe',
+    elif mode in ['feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipfullfreeze_homoAgg_moe',
                   'fedquadMultipqfullfreeze_homoAgg','fedquadMultipqfullfreeze_homoAgg_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_homoAgg_normalize_moe']:
@@ -100,7 +100,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_moe',
                   'fedquadMulti05pqfullfreeze','fedquadMulti05pqfullfreeze_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti05pq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode in ['feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAgg_moe',
+    elif mode in ['feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pfullfreeze_homoAgg_moe',
                   'fedquadMulti05pqfullfreeze_homoAgg','fedquadMulti05pqfullfreeze_homoAgg_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti05pq_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMulti05pqfullfreeze_homoAgg_normalize_moe']:
@@ -148,7 +148,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['feddualOptimal2pqfullfreeze','feddualOptimal4pqfullfreeze','feddualOptimal8pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualOptimalpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
         
-    elif mode in ['feddualMulti2pqfullfreeze_front', 'feddualMulti2pqfullfreeze_back', 'feddualMulti2pqfullfreeze_back_moe',]:
+    elif mode in ['feddualMulti2pqfullfreeze_front', 'feddualMulti2pqfullfreeze_back', 'feddualMulti2pqfullfreeze_back_moe','feddualMulti2pfullfreeze_back']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMulti2pqfullfreeze_back_homoAgg', 'feddualMulti2pqfullfreeze_back_homoAgg_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pq_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict

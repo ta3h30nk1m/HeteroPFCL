@@ -43,7 +43,7 @@ def main():
                 bnb_4bit_quant_type=training_args.quant_type # {'fp4', 'nf4'}
             )
         ))
-    if training_args.mode in ['perada', 'feddat']:
+    if 'feddat' in training_args.mode or 'perada' in training_args.mode:
         training_args.gradient_accumulation_steps = training_args.gradient_accumulation_steps//2
     # Fix the random seeds
     torch.manual_seed(training_args.seed)
@@ -164,12 +164,14 @@ def main():
                 elif 'Multi' in training_args.mode:
                     layer_num = len(cur_layer_num) // 4
                     cur_layer_num = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                else:
+                    cur_layer_num = []
                 for name in global_state_dict.keys():
                     new_param = 0
                     target_key = name
                     splited = target_key.split('.')
                     if int(splited[LAYER_INDEX]) in cur_layer_num:
-                        if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                        if 'Multi' in training_args.mode and ('lora_P' not in target_key and 'lora_Q' not in target_key):
                             continue
                         for id in range(len(prev_local_state_dict_list)):
                             splited = target_key.split('.')
@@ -421,9 +423,9 @@ def main():
                 new_global_state_dict = {}
             
                 weights = sim[-1][:-1].clone()
+                homo_weights = sim[-1][:-1].clone()
                 
                 weights = (weights/training_args.softmax_temp).softmax(dim=0)
-                
                 sim_sum = weights.sum() #- weights[client_id]
             
                 # # weights[client_id] = sim_sum
@@ -444,13 +446,20 @@ def main():
                     prev_layer_num = sorted(list(set(prev_layer_num)))
                     if len(cur_layer_num) == len(prev_layer_num):
                         homo_client_ids.append(i)
+                        
+                for id in range(len(homo_weights)):
+                    if id not in homo_client_ids:
+                        homo_weights[id] = -1e9
+                homo_weights = (homo_weights/training_args.softmax_temp).softmax(dim=0)
+                homo_sim_sum = homo_weights.sum()
                 
                 if 'Multi05' in training_args.mode:
                     cur_layer_num = [len(cur_layer_num)//2 -1,len(cur_layer_num) -1]
                 elif 'Multi' in training_args.mode:
                     layer_num = len(cur_layer_num) // 4
                     cur_layer_num = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                
+                else:
+                    cur_layer_num = []
                 for name in global_state_dict.keys():
                     new_param = 0
                     if 'lora' in name:
@@ -459,7 +468,7 @@ def main():
                         target_key = name.replace('ia3_l', 'ia3_l_2')
                     splited = target_key.split('.')
                     if int(splited[LAYER_INDEX]) in cur_layer_num:
-                        if 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                        if 'Multi' in training_args.mode and 'lora_P' not in target_key and 'lora_Q' not in target_key:
                             continue
                         for id in range(len(prev_local_state_dict_list)):
                             splited = target_key.split('.')
@@ -485,7 +494,7 @@ def main():
                             new_param += weights[id]*prev_local_state_dict_list[id][new_target_key] / sim_sum
                     else:
                         for id in homo_client_ids:
-                            new_param += weights[id]*prev_local_state_dict_list[id][target_key] / len(homo_client_ids)
+                            new_param += homo_weights[id]*prev_local_state_dict_list[id][target_key] / homo_sim_sum
                     new_global_state_dict[name] = new_param
                 
                 if 'zero3' in training_args.deepspeed:

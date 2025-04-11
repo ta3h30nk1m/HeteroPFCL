@@ -2722,7 +2722,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
         for k in new_global_state_dict.keys():
             if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
-    elif training_args.mode in ['feddualMulti2pqfullfreeze_back', 'feddualMulti2pqfullfreeze_front','feddualMulti2pfullfreeze_back'
+    elif training_args.mode in ['feddualMulti2pqfullfreeze_back', 'feddualMulti2pqfullfreeze_front','feddualMulti2pfullfreeze_back',
                                 'feddualMulti2pqfullfreeze_back_moe',]:
         layer_num = []
         for k in new_global_state_dict.keys():

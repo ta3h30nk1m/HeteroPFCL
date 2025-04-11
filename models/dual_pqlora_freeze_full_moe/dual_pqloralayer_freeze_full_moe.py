@@ -226,8 +226,8 @@ class PQMOELoraFullFreezeLayer(BaseTunerLayer):
                 nn.init.zeros_(self.lora1_B[adapter_name].bias)
                 nn.init.zeros_(self.lora2_B[adapter_name].bias)
                 
-            nn.init.ones_(self.lora1_P[adapter_name])
-            nn.init.ones_(self.lora2_P[adapter_name])
+            # nn.init.ones_(self.lora1_P[adapter_name])
+            # nn.init.ones_(self.lora2_P[adapter_name])
             init_Q = torch.empty_like(self.lora1_Q[adapter_name])
             nn.init.kaiming_uniform_(init_Q, a=math.sqrt(5))
             self.lora1_Q[adapter_name].data.copy_(init_Q)
@@ -859,27 +859,27 @@ class Linear(nn.Module, PQMOELoraFullFreezeLayer):
 
                 if not self.use_dora[active_adapter]:
                     if self.use_pq:
-                        if self.active_state == 'lora1':
-                            result = result + lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling
-                        elif self.active_state == 'lora2':
-                            result = result + lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
-                        elif self.active_state == 'gate':
+                        if self.active_state == 'gate':
                             weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
                             # weights = self.lora_w_gate[active_adapter][0]
                             result = result + weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling + (1-weights.unsqueeze(-1))* lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
                             # self.moe_loss = cv_squared(weights.sum(0))
-                    else:
-                        if self.active_state == 'lora1':
-                            result = result + lora1_B(lora1_A(dropout(x))) * scaling
+                        elif self.active_state == 'lora1':
+                            result = result + lora1_B(lora1_A(dropout(x)) @ lora1_P + lora1_Q) * scaling
                         elif self.active_state == 'lora2':
-                            result = result + lora2_B(lora2_A(dropout(x))) * scaling
-                        elif self.active_state == 'gate':
+                            result = result + lora2_B(lora2_A(dropout(x)) @ lora2_P + lora2_Q) * scaling
+                    else:
+                        if self.active_state == 'gate':
                             # result = result + (lora1_B(lora1_A(dropout(x))) + lora2_B(lora2_A(dropout(x)))) * scaling / 2
                             weights = moe_gating_weight(x, self.lora_w_gate[active_adapter], self.lora_w_noise[active_adapter], train=self.training)
                             # weights = self.lora_w_gate[active_adapter][0]
                             result = result + weights.unsqueeze(-1) * lora1_B(lora1_A(dropout(x))) * scaling + (1-weights.unsqueeze(-1)) * lora2_B(lora2_A(dropout(x))) * scaling
                             
                             # self.moe_loss = cv_squared(weights.sum(0))
+                        elif self.active_state == 'lora1':
+                            result = result + lora1_B(lora1_A(dropout(x))) * scaling
+                        elif self.active_state == 'lora2':
+                            result = result + lora2_B(lora2_A(dropout(x))) * scaling
                 else:
                     raise ValueError("only support vanilla lora")
                     if isinstance(dropout, nn.Identity) or not self.training:

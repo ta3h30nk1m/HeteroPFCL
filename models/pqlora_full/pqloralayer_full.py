@@ -137,7 +137,7 @@ class PQLoraFullLayer(BaseTunerLayer):
         self.lora_bias[adapter_name] = lora_bias
         
         #FIXME: lora_P as r x r matrix or r x 1 vector
-        self.lora_P[adapter_name] = nn.Parameter(torch.ones((r,r)))  # Initialized to 1
+        self.lora_P[adapter_name] = nn.Parameter(torch.eye((r)))  # Initialized to 1
         self.lora_Q[adapter_name] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
 
         if use_rslora:

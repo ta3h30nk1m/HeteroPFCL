@@ -395,7 +395,8 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
 
         if self.args.save_optim and self.curr_round > 0:
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-            self._load_optimizer_and_scheduler(output_dir)
+            if os.path.exists(output_dir):
+                self._load_optimizer_and_scheduler(output_dir)
             
         ##############################################################################################################
         # important: at this point:

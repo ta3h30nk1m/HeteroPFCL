@@ -634,7 +634,7 @@ def get_datalists(args, scenario_num):
         for task_id, data in enumerate(client_data['datasets']):
             if data['dataset'] == 'dummy':
                 for i in range(rounds_per_task):
-                    train_datalist.append({'datalist':[],'model_id':''})
+                    train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
                 test_datalist.append({'data':[],'type':''})
                 continue
             with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:

@@ -225,7 +225,7 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
                             new_global_state_dict[name] = local_state_dict_list[client_id][name]
                             continue
                     
-                    for id in range(training_args.num_clients):
+                    for id in active_clients_prev_round:
                         if id == client_id:
                             continue
                         # if training_args.is_hetero_model:
@@ -305,7 +305,7 @@ def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_l
                             new_global_state_dict[name] = local_state_dict_list[client_id][name]
                             continue
                     
-                    for id in range(training_args.num_clients):
+                    for id in active_clients_prev_round:
                         # if id == client_id:
                         #     continue
                         # if training_args.is_hetero_model:
@@ -795,7 +795,8 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
 
         if self.args.save_optim and self.curr_round > 0:
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-            self._load_optimizer_and_scheduler(output_dir)
+            if os.path.exists(output_dir):
+                self._load_optimizer_and_scheduler(output_dir)
             
         ##############################################################################################################
         # important: at this point:

@@ -207,8 +207,6 @@ def fdlora_blockwise_aggregate_state_dict(global_state_dict_list, local_state_di
                 for id in active_homo_ids:
                     new_param += local_state_dict_list[id][target_key] / len(active_homo_ids)
             global_state_dict[name] = new_param
-        for key in global_state_dict.keys():
-            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
         for i in homo_client_ids:
             global_state_dict_list[i] = global_state_dict
 

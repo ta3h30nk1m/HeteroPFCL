@@ -67,6 +67,75 @@ import gc
 def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
     model_ids = kwargs['model_ids']
     models = kwargs['models']
+    layer_index = kwargs['LAYER_INDEX']
+    
+    # fedavg first
+    if 'Multi' in training_args.mode:
+        for model_id, homo_client_ids in model_ids.items():
+            global_state_dict = global_state_dict_list[homo_client_ids[0]]
+            
+            # only use active clients
+            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
+            
+            cur_layer_num = []
+            for k in global_state_dict.keys():
+                if 'layers.' in k:
+                    cur_layer_num.append(int(k.split('.')[layer_index]))
+            cur_layer_num = sorted(list(set(cur_layer_num)))
+            if 'Multi05' in training_args.mode:
+                cur_layer_num = [len(cur_layer_num)//2 -1, len(cur_layer_num) -1]
+            elif 'Multi' in training_args.mode:
+                cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1]
+            else:
+                raise ValueError('wrong mode')
+            
+            for name in global_state_dict.keys():
+                new_param = 0
+                target_key = name
+                splited = target_key.split('.')
+                if int(splited[layer_index]) in cur_layer_num:
+                    if 'lora_P' not in target_key and 'lora_Q' not in target_key and 'lora1_P' not in target_key and 'lora1_Q' not in target_key:
+                        continue
+                    for id in range(training_args.num_clients):
+                        splited = target_key.split('.')
+                        # if layer number is different
+                        layer_num = []
+                        for k in local_state_dict_list[id].keys():
+                            if 'layers.' in k:
+                                layer_num.append(int(k.split('.')[layer_index]))
+                        
+                        if 'Multi05' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 2
+                            target_layers = [layer_num*1 -1,layer_num*2 -1]
+                        elif 'Multi' in training_args.mode:
+                            layer_num = len(set(layer_num)) // 4
+                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        if cur_layer_num[-1] != target_layers[-1]: # if different size
+                            idx = cur_layer_num.index(int(splited[layer_index]))
+                            splited[layer_index] = str(target_layers[idx])
+                            new_target_key = '.'.join(splited)
+                        else:
+                            new_target_key = target_key
+                    
+                        new_param += local_state_dict_list[id][new_target_key] / len(selected_ids)
+                else:
+                    for id in active_homo_ids:
+                        new_param += local_state_dict_list[id][target_key] / len(active_homo_ids)
+                global_state_dict[name] = new_param
+            for i in homo_client_ids:
+                global_state_dict_list[i] = global_state_dict
+    else:
+        for model_id, homo_client_ids in model_ids.items():
+            global_state_dict = global_state_dict_list[homo_client_ids[0]]
+            
+            # only use active clients
+            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
+            
+            for key in global_state_dict.keys():
+                global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
+            for i in homo_client_ids:
+                global_state_dict_list[i] = global_state_dict
+    
     
     # get public dataset
     data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"

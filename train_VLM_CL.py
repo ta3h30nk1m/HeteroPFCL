@@ -517,6 +517,7 @@ def main():
                 
             if training_args.use_task_vector:
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
+                extra_state_dict_dict['fisher_freq'] = training_args.fisher_freq
                 if data_args.is_multimodal:
                     if 'thkim0305/llama3.2_1B_vl' in models.keys():
                         extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']

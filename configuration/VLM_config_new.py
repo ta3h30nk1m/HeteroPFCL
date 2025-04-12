@@ -151,3 +151,5 @@ class TrainingConfig(transformers.TrainingArguments):
     
     # incremental client setup
     is_incremental_client_scenario: bool = False
+    
+    fisher_freq: int = 5

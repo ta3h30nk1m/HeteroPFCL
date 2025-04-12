@@ -539,12 +539,6 @@ def main():
             dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
             
             if not training_args.eval_server:
-                # if training_args.mode not in ['fedsim', 'feddat']:
-                if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
-                    or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
-                    print('output file already exist')
-                    continue
-                
                 if data_info['type'] == 'dummy':
                     if training_args.eval_iter is not None:
                         output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"
@@ -552,6 +546,11 @@ def main():
                         output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json"
                     with open(output_path, 'w') as fp:
                         json.dump([{'accuracy':-1}], fp)
+                    continue
+                # if training_args.mode not in ['fedsim', 'feddat']:
+                if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
+                    or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
+                    print('output file already exist')
                     continue
                     
                 if data_info['type'] == 'open-ended':
@@ -587,6 +586,18 @@ def main():
 def get_datalists(args, scenario_num):
     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
         scenario = json.load(fp)
+    
+    if args.is_incremental_client_scenario:
+        incremental_setup = scenario[0]
+        assert args.num_rounds == incremental_setup['num_rounds']
+        assert args.num_tasks == incremental_setup['num_tasks']
+        assert args.num_rounds * args.num_tasks == len(incremental_setup['num_active_clients'])
+        
+        scenario = scenario[1:]
+    else:
+        incremental_setup = {
+            "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
+        }
     assert args.num_clients == len(scenario)
 
     train_datalists = {}
@@ -605,7 +616,7 @@ def get_datalists(args, scenario_num):
             if data['dataset'] == 'dummy':
                 for i in range(rounds_per_task):
                     train_datalist.append({'datalist':[],'model_id':''})
-                test_datalist.append({'data':[],'type':'dummy','model_id':client_data['model_id']})
+                test_datalist.append({'data_name':'dummy','data':[],'type':'dummy','model_id':client_data['model_id']})
                 continue
             
             with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:

@@ -196,7 +196,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedMultipqfullfreeze_distill', 'fedMultipqfullfreeze_Taskloss', 'fedMultipqfullfreeze_distillTaskloss',
                                     'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly',
                                     'fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft','fedMulti05pqfullfreeze_homoAgg','fedMulti05pqfullfreeze_homoAggOnly',
-                                    'fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg'
+                                    'fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg',
+                                    'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
+                                    'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
                                      ]:
             from models.pqlora_full.pqloramodel_full import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -383,7 +385,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     m.lora_A['default'].weight.requires_grad = False
                     
     elif training_args.mode in ['fedMultipqfullfreeze','fedMultipqfullfreeze_sft','fedMultipqfullfreeze_tv','fedMultipqfullfreeze_ours',
-                                'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly','fdlora_fedMultipqfullfreeze_homoAgg']:
+                                'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly','fdlora_fedMultipqfullfreeze_homoAgg','takfl_fedMultipqfullfreeze_homoAgg','fedmkt_fedMultipqfullfreeze_homoAgg',]:
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -404,7 +406,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft', 'fedMulti05pqfullfreeze_homoAgg','fedMulti05pqfullfreeze_homoAggOnly', 'fdlora_fedMulti05pqfullfreeze_homoAgg']:
+    elif training_args.mode in ['fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft', 'fedMulti05pqfullfreeze_homoAgg','fedMulti05pqfullfreeze_homoAggOnly', 'fdlora_fedMulti05pqfullfreeze_homoAgg',
+                                'takfl_fedMulti05pqfullfreeze_homoAgg','fedmkt_fedMulti05pqfullfreeze_homoAgg',]:
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(total_layers) // 2
         target_layers = [last_layer*1 -1,last_layer*2 -1]
@@ -1983,6 +1986,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly', 'fedMultipqfullfreeze_sft_Taskloss',
                                   'fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft', 'fedMulti05pqfullfreeze_homoAgg','fedMulti05pqfullfreeze_homoAggOnly',
                                   'fdlora_fedMultipqfullfreeze_homoAgg','fdlora_fedMulti05pqfullfreeze_homoAgg',
+                                  'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
+                                  'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
                                   ]:
             if training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:

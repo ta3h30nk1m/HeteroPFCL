@@ -26,6 +26,8 @@ from federated_methods.feddistill import Distillation_aggregate_state_dict
 from federated_methods.perada import perada_create_trainer
 from federated_methods.fedsim import fedsim_create_trainer, fedsim_blockwise_aggregate_state_dict
 from federated_methods.fdlora import fdlora_aggregate_state_dict, fdlora_blockwise_aggregate_state_dict
+from federated_methods.takfl import TAKFL_aggregate_state_dict
+from federated_methods.fedmkt import FEDMKT_aggregate_state_dict
 
 def dummy_function(*args):
     return {}
@@ -77,6 +79,13 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in ['perada','perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, Distillation_aggregate_state_dict
+    
+    elif mode in ['takfl', 'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, TAKFL_aggregate_state_dict
+    
+    elif mode in ['fedmkt', 'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, FEDMKT_aggregate_state_dict
+    
     elif mode in ['feddualpq','feddualpqfullfreeze','feddualpqfullfreeze_tv','feddualpqfreezeA','feddualpqfullfreezeA']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualpq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode =='fedpqfullfreeze' or mode == 'fedpqfullfreezeA' or mode == 'fedpqfreezeA':

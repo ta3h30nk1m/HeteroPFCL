@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del, make_supervised_data_module
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del, make_supervised_data_module, find_all_linear_names
 
 from federated_methods.method_manager import select_method
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
@@ -233,11 +233,11 @@ def main():
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
-    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_1.5B_vl' not in models.keys():
+    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
-        new_model_args.model_name_or_path = 'thkim0305/qwen2.5_1.5B_vl'
+        new_model_args.model_name_or_path = 'thkim0305/qwen2.5_0.5B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-        models['thkim0305/qwen2.5_1.5B_vl'] = model2
+        models['thkim0305/qwen2.5_0.5B_vl'] = model2
     elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
@@ -269,8 +269,8 @@ def main():
             prev_local_state_dict_list.append(torch.load(file_path, map_location='cpu'))
         if 'thkim0305/llama3.2_1B_vl' in models.keys():
             current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/llama3.2_1B_vl'])
-        elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
-            current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/qwen2.5_1.5B_vl'])
+        elif 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+            current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['thkim0305/qwen2.5_0.5B_vl'])
         elif 'meta-llama/Llama-3.2-1B' in models.keys():
             current_task_vectors = get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, models['meta-llama/Llama-3.2-1B'])
     else:
@@ -502,6 +502,22 @@ def main():
                 else:
                     model.load_state_dict(new_global_state_dict, strict=False) 
             
+            # new: merge current lora and then init new lora
+            # if training_args.load_checkpoint is not None:
+            #     print("merge current lora and init new lora")
+            #     model = model.merge_and_unload()
+            #     from peft import LoraConfig, get_peft_model
+            #     lora_config = LoraConfig(
+            #         r=training_args.lora_r,
+            #         lora_alpha=training_args.lora_alpha,
+            #         target_modules=find_all_linear_names(model),
+            #         lora_dropout=training_args.lora_dropout,
+            #         bias=training_args.lora_bias,
+            #         task_type="CAUSAL_LM",
+            #         exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
+            #     )
+            #     model = get_peft_model(model, lora_config)
+            
             datalist = configure_online_datastream(sub_dataset, num_iterations, training_args, client_id, memory, memory_count, memory_size, total_batchsize)
             data_module = make_supervised_data_module(client_data=datalist, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -521,8 +537,8 @@ def main():
                 if data_args.is_multimodal:
                     if 'thkim0305/llama3.2_1B_vl' in models.keys():
                         extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
-                    elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
-                        extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_1.5B_vl']
+                    elif 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+                        extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl']
                 else:
                     extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
             
@@ -553,8 +569,8 @@ def main():
                     if data_args.is_multimodal:
                         if 'thkim0305/llama3.2_1B_vl' in models.keys():
                             extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
-                        elif 'thkim0305/qwen2.5_1.5B_vl' in models.keys():
-                            extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_1.5B_vl'].cpu()
+                        elif 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+                            extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl'].cpu()
                     else:
                         models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             

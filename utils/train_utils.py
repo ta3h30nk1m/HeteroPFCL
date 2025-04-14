@@ -2113,6 +2113,10 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('qwen_1.5b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('qwen_3b_blockwise_pca_init.pth', map_location='cpu')
             new_state_dict = {}
             for k, v in state_dict.items():
                 if ('WN' in training_args.mode or 'LIL' in training_args.mode or 'pfullfreeze' in training_args.mode) and ('lora_P' in k or 'lora_Q' in k):

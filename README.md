@@ -21,11 +21,13 @@ gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW
 ```bash
 gdrive files download 1YxdZKJosR53oyi_kMiMb8Fu9WldIyUT5
 gdrive files download 1iQYOO5VNRTA282JZCsNlSWLF4x4n6R5c
+gdrive files download 1jSDpPlJVVoZJilhK73pbAMdTK-vMCxZ8
 ```
     - blockwise (2 layers) - PCA
 ```bash
 gdrive files download 194GaXFFlz3-T7rQQpnzQI1sp6FgIKA0D
 gdrive files download 1wnh1gelZrf810q2hSMHg0K_j_FZKp1jU
+gdrive files download 1GBfjgvISWsf7_7_oy8y_WVaihQLyBCR9
 ```
     - blockwise (8 layers, back) - PCA
 ```bash
@@ -42,13 +44,11 @@ gdrive files download 1fp1PlRmnrX3rz2QPvCnkKQfCl7TGjcwy
 ```bash
 gdrive files download 1LG81Bsz24FnQQnD7YFA_2GGfg03syQYg
 gdrive files download 1xa_WluV_fe0RjW0bGndM97Gdk_QB9Igk
-gdrive files download 1GBfjgvISWsf7_7_oy8y_WVaihQLyBCR9
 ```
     - blockwise Optimal (4 layers) - PCA
 ```bash
 gdrive files download 1H7er2B6W3uLQUCkDlncFuED-opuNpEhy
 gdrive files download 1py9w8dDAQ-iG7m8x-s1Woj3l3h8_MvXu
-gdrive files download 1jSDpPlJVVoZJilhK73pbAMdTK-vMCxZ8
 ```
     - blockwise Optimal (8 layers) - PCA
 ```bash
@@ -83,6 +83,12 @@ gdrive files download 1sygf0_hkyMYxMCbeX6RUmSjbfAZ3SZ3I
 gdrive files download 1s7SwWMHEZI6-1sEpyfgjTgYxB7EBdwxU
 gdrive files download 1wVZ5Vrw9418sxaWL7INq518PvrAfQ9oy
 gdrive files download 1HFUFyjiGhIST9SSXsX87q8-3lHCg2zHL
+```
+
+    - llava - blockwise all CCA (1b, 3b)
+```bash
+gdrive files download 1WrJuHX0iQ5z15BC8pR3-h5RO4qVoDuRH
+gdrive files download 1T3uawEzFkd5uSwtX8UeROHaIDO7RJHsq
 ```
 
 ## New data instruction

@@ -491,10 +491,6 @@ def main():
                     dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
                     if not training_args.eval_server:
                         # if training_args.mode not in ['fedsim', 'feddat']:
-                        if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
-                            or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
-                            print('output file already exist')
-                            continue
                         if data_info['type'] == 'dummy':
                             if training_args.eval_iter is not None:
                                 output_path = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json"
@@ -503,6 +499,11 @@ def main():
                             with open(output_path, 'w') as fp:
                                 json.dump([{'accuracy':-1}], fp)
                             continue
+                        if (training_args.eval_iter is not None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_iter{training_args.eval_iter}_{data_info['data_name']}.json")) \
+                            or (training_args.eval_iter is None and os.path.isfile(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_{data_info['data_name']}.json")):
+                            print('output file already exist')
+                            continue
+                        
                         if data_info['type'] == 'open-ended':
                             evaluate(dataset, data_info['data_name'], training_args.round_to_eval, model, tokenizer, device, model_args.max_new_tokens, training_args, logger, client_id, batch_size)
                         elif data_info['type'] == 'multi-choice':

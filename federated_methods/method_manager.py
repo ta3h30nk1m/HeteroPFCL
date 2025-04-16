@@ -1,6 +1,6 @@
 from typing import Callable, Tuple, Type, Dict
 
-from federated_methods.fedavg import fedavg_load_state_dict, fedavg_aggregate_state_dict, fedavg_create_trainer, fedavg_memefficient_aggregate_state_dict, fedavg_memefficient_load_state_dict, fedavg_heterosimple_aggregate_state_dict
+from federated_methods.fedavg import fedavg_load_state_dict, fedavg_aggregate_state_dict, fedavg_create_trainer, fedavg_memefficient_load_state_dict
 from federated_methods.sft import sft_load_state_dict, fedper_load_state_dict
 from federated_methods.task_id import task_id_create_trainer
 from federated_methods.fedours import fedours_ema_distill_create_trainer, fedours_load_state_dict, OURS_set_state_dict, OURS_aggregate_state_dict, OURS_memefficient_aggregate_state_dict, fedours_memefficient_load_state_dict, fedsim_load_state_dict, fedours_include_load_state_dict, fedours_hetero_load_state_dict, fedours_self_load_state_dict
@@ -24,7 +24,7 @@ from federated_methods.fedours_pqgrad import fedours_pqgrad_create_trainer
 from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict, feddat_hetero_pqlora_load_state_dict
 from federated_methods.feddistill import Distillation_aggregate_state_dict
 from federated_methods.perada import perada_create_trainer
-from federated_methods.fedsim import fedsim_create_trainer, fedsim_blockwise_aggregate_state_dict
+from federated_methods.fedsim import fedsim_create_trainer
 from federated_methods.fdlora import fdlora_aggregate_state_dict, fdlora_blockwise_aggregate_state_dict
 from federated_methods.takfl import TAKFL_aggregate_state_dict
 from federated_methods.fedmkt import FEDMKT_aggregate_state_dict
@@ -63,14 +63,11 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddat_hetero_pqlora_load_state_dict, feddat_create_trainer, feddat_aggregate_state_dict
     
-    elif mode in ['fedsim']:
+    elif mode in ['fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, fedsim_create_trainer, fedavg_aggregate_state_dict
-    
-    elif mode in ['fedsim_hetero']:
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, fedsim_create_trainer, fedavg_heterosimple_aggregate_state_dict
-    
-    elif mode in ['fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg']:
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, fedsim_create_trainer, fedsim_blockwise_aggregate_state_dict
+
+    elif mode in ['ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, fedavg_aggregate_state_dict
     
     elif mode in ['fdlora']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fdlora_aggregate_state_dict
@@ -179,12 +176,6 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['fedMulti05pqfullfreeze_homoAggOnly']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedMulti05pq_HomoAggOnly_load_state_dict, fedavg_create_trainer, OURS_aggregate_state_dict
     
-    elif mode =='fedavg_memefficient':
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_memefficient_load_state_dict, fedavg_create_trainer, fedavg_memefficient_aggregate_state_dict
-    elif mode == 'fedours_memefficient':
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_memefficient_load_state_dict, fedours_ema_distill_create_trainer, OURS_memefficient_aggregate_state_dict 
-    elif mode in ['feddualMultipqfullfreeze_pqgrad', 'feddualMultipqfullfreeze_pqfisher']:
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_pqgrad_create_trainer, OURS_aggregate_state_dict
     else:
         raise NotImplementedError(mode)
     return set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules

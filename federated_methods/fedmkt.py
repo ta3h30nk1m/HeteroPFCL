@@ -97,7 +97,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         
         trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs, target_logits = None)
         results = trainer.train()
-        client_pairs.append((torch.stack(trainer.public_losses), torch.cat(trainer.public_logits)))
+        client_pairs.append((trainer.public_losses, trainer.public_logits))
         
         trainer.deepspeed.empty_partition_cache()
         trainer.accelerator.free_memory()
@@ -124,7 +124,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                                                 data_args=copy.deepcopy(kwargs['data_args']))
         trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=None)
         results = trainer.train()
-        global_losses = torch.stack(trainer.public_losses)
+        global_losses = trainer.public_losses
         
         trainer.deepspeed.empty_partition_cache()
         trainer.accelerator.free_memory()
@@ -146,37 +146,38 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 valid_datalist.append(data)
                 target_logits.append(target_logit)
         
-        with torch.no_grad():
-            if 'zero3' in training_args.deepspeed:
-                load_deepspeed(global_state_dict, model, strict=False)
-            else:
-                model.load_state_dict(global_state_dict, strict=False)  
-        
-        data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
-                                                data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
-        results = trainer.train()
-        
-        state_dict = get_peft_state_maybe_zero_3(
-            model.named_parameters(), training_args.lora_bias
-        )
-        non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-            model.named_parameters()
-        )
-        state_dict.update(non_lora_state_dict)
-        for k in global_state_dict.keys():
-            global_state_dict[k] = state_dict[k]
-        for i in homo_client_ids:
-            global_state_dict_list[i] = global_state_dict
+        if len(valid_datalist) > 0:
+            with torch.no_grad():
+                if 'zero3' in training_args.deepspeed:
+                    load_deepspeed(global_state_dict, model, strict=False)
+                else:
+                    model.load_state_dict(global_state_dict, strict=False)  
+            
+            data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
+                                                    tokenizer=kwargs['tokenizer'],
+                                                    processor=kwargs['processor'],
+                                                    data_args=copy.deepcopy(kwargs['data_args']))
+            trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
+            results = trainer.train()
+            
+            state_dict = get_peft_state_maybe_zero_3(
+                model.named_parameters(), training_args.lora_bias
+            )
+            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                model.named_parameters()
+            )
+            state_dict.update(non_lora_state_dict)
+            for k in global_state_dict.keys():
+                global_state_dict[k] = state_dict[k]
+            for i in homo_client_ids:
+                global_state_dict_list[i] = global_state_dict
 
-        trainer.deepspeed.empty_partition_cache()
-        trainer.accelerator.free_memory()
-        del trainer
-        model = model.cpu()
-        gc.collect()
-        torch.cuda.empty_cache()
+            trainer.deepspeed.empty_partition_cache()
+            trainer.accelerator.free_memory()
+            del trainer
+            model = model.cpu()
+            gc.collect()
+            torch.cuda.empty_cache()
     
     # client distill
     global_losses = {}
@@ -197,7 +198,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                                                 data_args=copy.deepcopy(kwargs['data_args']))
         trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=None)
         results = trainer.train()
-        global_losses[model_id] = (torch.stack(trainer.public_losses), torch.cat(trainer.public_logits))
+        global_losses[model_id] = (trainer.public_losses, trainer.public_logits)
         
         trainer.deepspeed.empty_partition_cache()
         trainer.accelerator.free_memory()
@@ -226,7 +227,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         
         trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs, target_logits = None)
         results = trainer.train()
-        client_loss = torch.stack(trainer.public_losses)
+        client_loss = trainer.public_losses
         
         trainer.deepspeed.empty_partition_cache()
         trainer.accelerator.free_memory()
@@ -242,30 +243,31 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 valid_datalist.append(data)
                 target_logits.append(target_logit)
         
-        with torch.no_grad():
-            if 'zero3' in training_args.deepspeed:
-                load_deepspeed(local_state_dict, model, strict=False)
-            else:
-                model.load_state_dict(local_state_dict, strict=False)  
+        if len(valid_datalist) > 0:
+            with torch.no_grad():
+                if 'zero3' in training_args.deepspeed:
+                    load_deepspeed(local_state_dict, model, strict=False)
+                else:
+                    model.load_state_dict(local_state_dict, strict=False)  
+            
+            data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
+                                                    tokenizer=kwargs['tokenizer'],
+                                                    processor=kwargs['processor'],
+                                                    data_args=copy.deepcopy(kwargs['data_args']))
+            trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
+            results = trainer.train()
+            
+            state_dict = get_peft_state_maybe_zero_3(
+                model.named_parameters(), training_args.lora_bias
+            )
+            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                model.named_parameters()
+            )
+            state_dict.update(non_lora_state_dict)
+            for k in local_state_dict.keys():
+                local_state_dict[k] = state_dict[k]
+            local_state_dict_list[client_id] = local_state_dict
         
-        data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
-                                                data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
-        results = trainer.train()
-        
-        state_dict = get_peft_state_maybe_zero_3(
-            model.named_parameters(), training_args.lora_bias
-        )
-        non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-            model.named_parameters()
-        )
-        state_dict.update(non_lora_state_dict)
-        for k in local_state_dict.keys():
-            local_state_dict[k] = state_dict[k]
-        local_state_dict_list[client_id] = local_state_dict
-    
 
 def FEDMKT_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict,target_logits):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
@@ -301,7 +303,7 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
         labels = inputs['labels']
         pred_logits = outputs.logits
         if self.target_logits is None:
-            self.public_logits.append(pred_logits.detach())
+            # self.public_logits.append(pred_logits.detach())
             
             loss_fct = nn.CrossEntropyLoss()
             shift_logits = pred_logits[..., :-1, :].contiguous()
@@ -309,20 +311,21 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
             loss = loss_fct(
                 shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device)
             )
+            self.public_logits.append(shift_logits[shift_labels != -100].detach().cpu())
             self.public_losses.append(loss.detach())
             
             loss = loss * 0
         else:
-            target_logits = self.target_logits[self.count:self.count+pred_logits.shape[0]]
+            target = self.target_logits[self.count]
 
             shift_logits = pred_logits[..., :-1, :].contiguous()
-            target_logits = target_logits[..., :-1, :].contiguous()
+            # target_logits = target_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
 
             pred = shift_logits[shift_labels != -100]
-            target = target_logits[shift_labels != -100].detach()
+            # target = target_logits[shift_labels != -100].detach()
             
-            loss = cross_entropy(pred, target)
+            loss = cross_entropy(pred, target.to(pred.device))
         self.count += pred_logits.shape[0]
         return (loss, outputs) if return_outputs else loss
     

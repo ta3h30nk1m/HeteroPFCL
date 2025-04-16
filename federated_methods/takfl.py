@@ -139,7 +139,7 @@ def TAKFL_aggregate_state_dict(global_state_dict_list, local_state_dict_list, se
     # get public dataset
     data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     # data_path = 'chatbotIT.json'
-    public_datalist = json.load(open(data_path, "r"))[:200]
+    public_datalist = json.load(open(data_path, "r"))[:training_args.num_serverdistill]
     random.shuffle(public_datalist)
 
     for model_id, homo_client_ids in model_ids.items():

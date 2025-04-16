@@ -361,7 +361,7 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
                 
                 weights = sim[client_id].clone()
                 
-                for id in range(active_clients_prev_round):
+                for id in active_clients_prev_round:
                     if id not in active_homo_ids:
                         weights[id] = -1e9
                 

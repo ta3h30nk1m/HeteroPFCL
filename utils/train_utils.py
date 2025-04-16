@@ -134,7 +134,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         
         if training_args.mode in ['fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero',
-                                  'perada','fedsim','fedsim_hetero']:
+                                  'perada','fedsim','fedsim_hetero','ditto']:
             from models.duallora.dualloramodel import DualLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALLORA'] = DualLoraModel
@@ -241,6 +241,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualOptimal2pqfullfreeze','feddualOptimal4pqfullfreeze','feddualOptimal8pqfullfreeze',
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze',
                                     'fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg',
+                                    'ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg',
                                     ]:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -1046,7 +1047,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         m.use_pq = False
     
     elif training_args.mode in ['feddualMultipqfullfreeze','feddualMultipqfullfreeze_tv','feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
-        'feddualMultipqfullfreeze_include','feddualMultipqfullfreeze_tv_include','feddualMultipqfullfreeze_excludemean_include','perada_feddualMultipqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg',
+        'feddualMultipqfullfreeze_include','feddualMultipqfullfreeze_tv_include','feddualMultipqfullfreeze_excludemean_include','perada_feddualMultipqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg',
         'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly',]:
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         last_layer = len(total_layers) // 4
@@ -1428,7 +1429,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PMOELoraFullFreezeLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAggOnly','perada_feddualMulti05pqfullfreeze','fedsim_feddualMulti05pqfullfreeze_homoAgg',]:
+    elif training_args.mode in ['feddualMulti05pqfullfreeze','feddualMulti05pqfullfreeze_excludemean','feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','feddualMulti05pqfullfreeze_homoAggOnly','perada_feddualMulti05pqfullfreeze','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg',]:
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         last_layer = len(total_layers) // 2
         target_layers = [last_layer*1 -1,last_layer*2 -1]
@@ -1994,6 +1995,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+            elif training_args.load_pretrained_cca:
+                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_1b_blockwise_cca_init.pth', map_location='cpu')
+                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_3b_blockwise_cca_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
                 if not data_args.is_multimodal:
                     if 'Llama-3.2-1B' in model_args.model_name_or_path:
@@ -2067,7 +2073,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedquadMultipqfullfreeze_moe', 'fedquadMultipqfullfreeze_homoAgg_moe', 'fedquadMultipqfullfreeze_include_moe', 'fedquadMultipqfullfreeze_include_homoAgg_moe',
                                     'fedquadMulti05pqfullfreeze_moe', 'fedquadMulti05pqfullfreeze_homoAgg_moe', 'fedquadMulti05pqfullfreeze_include_moe', 'fedquadMulti05pqfullfreeze_include_homoAgg_moe',
                                     'feddualMulti2pqfullfreeze_back','feddualMulti2pqfullfreeze_front','feddualMulti2pqfullfreeze_back_homoAgg','feddualMulti2pqfullfreeze_back_moe','feddualMulti2pqfullfreeze_back_homoAgg_moe',
-                                    'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg',
+                                    'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                                     ]:
@@ -2076,6 +2082,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+            elif training_args.load_pretrained_cca:
+                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_1b_blockwise_cca_init.pth', map_location='cpu')
+                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_3b_blockwise_cca_init.pth', map_location='cpu')
             elif training_args.load_pretrained_pca:
                 if not data_args.is_multimodal:
                     if 'Llama-3.2-1B' in model_args.model_name_or_path:
@@ -2448,6 +2459,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                               'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                               'fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg', 'feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
+                              'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

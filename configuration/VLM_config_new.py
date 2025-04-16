@@ -153,3 +153,7 @@ class TrainingConfig(transformers.TrainingArguments):
     is_incremental_client_scenario: bool = False
     
     fisher_freq: int = 5
+    
+    num_serverdistill: int = 200
+    
+    load_pretrained_cca: bool = False

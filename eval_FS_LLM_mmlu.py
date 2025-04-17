@@ -50,9 +50,9 @@ def format_example(df, idx, include_answer=True):
     k = df.shape[1] - 2
     for j in range(k):
         prompt += "\n{}. {}".format(choices[j], df.iloc[idx, j + 1])
-    prompt += "\nAnswer:"
+    # prompt += "
     if include_answer:
-        prompt += " {}\n\n".format(df.iloc[idx, k + 1])
+        prompt += "\nAnswer: {}\n\n".format(df.iloc[idx, k + 1])
     return prompt
 
 
@@ -111,6 +111,7 @@ def eval(subject, model, processor, tokenizer, dev_df, test_df, device):
         prompt = train_prompt + prompt_end
         conversation = [{'role':'user','content':prompt}]
         prompt = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+        prompt += "Answer: "
         input_ids = processor(text=prompt, return_tensors='pt')['input_ids'].to(device)
         while input_ids.shape[-1] > 1024:
             k -= 1
@@ -118,10 +119,10 @@ def eval(subject, model, processor, tokenizer, dev_df, test_df, device):
             prompt = train_prompt + prompt_end
             conversation = [{'role':'user','content':prompt}]
             prompt = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+            prompt += "Answer: "
             input_ids = processor(text=prompt, return_tensors='pt')['input_ids'].to(device)
 
         label = test_df.iloc[i, test_df.shape[1] - 1]
-
         logits = model(input_ids=input_ids).logits[0, -1]
 
         probs = (torch.nn.functional.softmax(

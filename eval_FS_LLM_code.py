@@ -14,6 +14,7 @@ import copy
 import json
 import gzip
 from transformers import BitsAndBytesConfig
+import subprocess
 
 from utils.data_loader_VLM import GenerationDataset, DataCollatorForGenerationDataset
 from torch.utils.data import DataLoader
@@ -130,10 +131,10 @@ def clean_answer(code):
     # code = code.split("\n\n")[0]
     # 3. remove everything after the following stop sequences
     # Reference: https://github.com/openai/human-eval
-    for stop_seq in ['\nclass', '\ndef', '\n#', '\nif', '\nprint', '\nassert']:
-        code = code.split(stop_seq)[0]
+    # for stop_seq in ['\nclass', '\ndef', '\n#', '\nif', '\nprint', '\nassert']:
+        # code = code.split(stop_seq)[0]
     # 4. pad to four space to avoid `unindent` error
-    code = pad_spaces(code, 4)
+    # code = pad_spaces(code, 4)
     return code
 
 
@@ -277,6 +278,7 @@ def main():
                 json_str = json.dumps(answer)
                 f.write(json_str + '\n')
 
-
+        cmd = f"evaluate_functional_correctness {out_file}"
+        result = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@ conda activate fcl2
 pip install transformers==4.47.1
 pip install torch==2.3.0 torchvision --index-url https://download.pytorch.org/whl/cu118
 pip install flash-attn==2.5.8 --no-build-isolation
-pip install peft==0.14.0 bitsandbytes pandas kornia opencv-python timm torch_optimizer easydict pycocoevalcap sentencepiece protobuf trl==0.8.6 deepspeed==0.15.2 loguru captum POT jsonlines numpy==1.26.4 accelerate==0.29.3
+pip install peft==0.14.0 bitsandbytes pandas kornia opencv-python timm torch_optimizer easydict pycocoevalcap sentencepiece protobuf trl==0.8.6 deepspeed==0.15.2 loguru captum POT jsonlines numpy==1.26.4 accelerate==0.29.3 nevergrad
 pip install -U scikit-learn
 ```
 

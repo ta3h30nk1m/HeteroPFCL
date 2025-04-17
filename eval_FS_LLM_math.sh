@@ -73,7 +73,7 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --use_task_vector False \
         --is_multimodal False \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
-        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
+        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_math.log 2>&1 & #_iter${ITER_TO_EVAL}
 done
 # --eval_period $EVAL_PERIOD
 #--eval_iter $ITER_TO_EVAL \

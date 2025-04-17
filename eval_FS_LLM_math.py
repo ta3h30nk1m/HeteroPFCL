@@ -305,7 +305,7 @@ def main():
     
     _, test_datalists = get_datalists(training_args, training_args.scenario)
     for client_id in range(training_args.num_clients):
-        out_file = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_humaneval_answer.jsonl"
+        out_file = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_math.json"
         if os.path.isfile(out_file):
             print('output file already exist')
             continue
@@ -353,7 +353,7 @@ def main():
         answers = []
         predictions = []
         for sample in tqdm(list_data_dict):
-            input_text = sample['instruction']
+            input_text = build_prompt(sample['instruction'], N_SHOT, COT_FLAG)
             conversation = [{'role':'user','content':input_text}]
             prompt = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
             inputs = processor(text=prompt, return_tensors='pt')['input_ids']
@@ -379,7 +379,7 @@ def main():
             is_cor = is_correct(model_answer, sample['output'])
             answers.append(is_cor)
 
-            predictions.append({"input":sample['instruction'], 'sentence':pred_sentence, 'gt_sentence':sample['output']})
+            predictions.append({"input":sample['instruction'], 'sentence':pred_sentence, 'gt_sentence':sample['output'], 'is_correct':is_cor})
         predictions.append({"accuracy":sum(answers)/len(answers)})
         with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_math.json", 'w', encoding='utf-8') as fp:
             json.dump(predictions, fp, indent=4, ensure_ascii=False)

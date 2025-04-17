@@ -212,6 +212,10 @@ def main():
             except Exception as e:
                 print(e)
                 continue
+        results_file = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_mmlu.json"
+        if os.path.isfile(results_file):
+            print('output file already exist')
+            continue
         
         test_datalist = test_datalists[client_id]
         new_model_args = copy.deepcopy(model_args)
@@ -296,8 +300,7 @@ def main():
         weighted_acc = np.mean(np.concatenate(all_cors))
         results["weighted_accuracy"] = weighted_acc
         print("Average accuracy: {:.3f}".format(weighted_acc))
-
-        results_file = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_mmlu.json"
+        
         with open(results_file, "w") as f:
             json.dump([results, {"accuracy":weighted_acc}], f)
         

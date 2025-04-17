@@ -189,6 +189,9 @@ def main():
     _, test_datalists = get_datalists(training_args, training_args.scenario)
     for client_id in range(training_args.num_clients):
         out_file = f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_humaneval_answer.jsonl"
+        if os.path.isfile(out_file):
+            print('output file already exist')
+            continue
         if training_args.eval_client:
             if client_id != training_args.eval_client:
                 continue

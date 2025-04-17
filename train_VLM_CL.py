@@ -43,7 +43,7 @@ def main():
                 bnb_4bit_quant_type=training_args.quant_type # {'fp4', 'nf4'}
             )
         ))
-    if 'feddat' in training_args.mode or 'perada' in training_args.mode:
+    if 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args.mode:
         training_args.gradient_accumulation_steps = training_args.gradient_accumulation_steps//2
     # Fix the random seeds
     torch.manual_seed(training_args.seed)

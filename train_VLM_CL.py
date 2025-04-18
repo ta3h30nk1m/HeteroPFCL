@@ -228,7 +228,7 @@ def main():
             
             model_ids[model_id] = [client_id]
     
-    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.2' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)

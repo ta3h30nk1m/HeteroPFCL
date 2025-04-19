@@ -482,7 +482,7 @@ def main():
                 model.load_state_dict(client_state_dict, strict=False)
                 model = model.to(torch.bfloat16)
                 model = model.to(device)
-            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args.mode:
                 model.set_state(training_args.set_state)
             
             for client_id_ in range(training_args.num_clients):

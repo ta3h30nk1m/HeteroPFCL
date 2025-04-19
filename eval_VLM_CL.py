@@ -482,7 +482,7 @@ def main():
                 model.load_state_dict(client_state_dict, strict=False)
                 model = model.to(torch.bfloat16)
                 model = model.to(device)
-            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args:
                 model.set_state(training_args.set_state)
             
             for client_id_ in range(training_args.num_clients):
@@ -531,7 +531,7 @@ def main():
                     personal_global_state_dict = torch.load(f'./client_states_{training_args.note}/{client_id}_client_global_model_round{training_args.round_to_eval}.pth', map_location='cpu')
                     model.load_state_dict(personal_global_state_dict, strict=False)
             # model.load_state_dict(server_state_dict, strict=False)
-            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode:
+            if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args.mode:
                 # for name, module in model.named_modules():
                 #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                 #         module.set_state('lora2')
@@ -563,7 +563,7 @@ def main():
             if training_args.eval_server and data_info['data_name'] not in server_eval_key:
                 if not training_args.zeroshot:
                     model.load_state_dict(server_state_dict, strict=False)
-                if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode:
+                if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args.mode:
                     # for name, module in model.named_modules():
                     #     if isinstance(module, DualLoraLayer) or isinstance(module, DualIA3Layer):
                     #         module.set_state('lora1')

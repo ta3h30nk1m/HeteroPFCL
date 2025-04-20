@@ -280,5 +280,10 @@ def main():
 
         cmd = f"evaluate_functional_correctness {out_file}"
         result = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        fp = open(f'{out_file}_score.txt', 'w')
+        for line in result.stdout:
+            fp.write(line.decode())
+        fp.close()
+        
 if __name__ == "__main__":
     main()

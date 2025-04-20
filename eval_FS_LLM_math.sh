@@ -1,8 +1,8 @@
 #!/bin/bash
 export CUBLAS_WORKSPACE_CONFIG=:16:8
 # CIL CONFIG
-NOTE="sft_bs4_saveoptim_lr2e-5_sc205_4tasks_5rounds_fixitr50_T0125_decay099"
-MODE="sft"
+NOTE="new_fedours_moe_T05_freq10_bs4_saveoptim_r16_32_lr3e-4_5e-4_sc205_4tasks_5rounds_fixitr29_T0125_decay099"
+MODE="fedours_moe"
 MODEL_ARCH="llama3_3b" # llava llama3_1b llama3_3b
 
 # fed args
@@ -72,6 +72,8 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --is_prompt False \
         --use_task_vector False \
         --is_multimodal False \
+        --lora_r 16 \
+        --lora_alpha 32 \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
         --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_math.log 2>&1 & #_iter${ITER_TO_EVAL}
 done

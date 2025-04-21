@@ -774,7 +774,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             if idx in target_layers:
                 for n, m in layer.named_modules():
                     if 'lora_A.default' in n or 'lora_B.default' in n:
-                        m.apply(orthonormal_kaiming_uniform_init)
+                        # m.apply(orthonormal_kaiming_uniform_init)
+                        nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
+                        m.weight.to(torch.bfloat16)
                 for n, p in layer.named_parameters():
                     if 'lora_A' in n:
                         p.requires_grad = True
@@ -1978,7 +1980,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if hasattr(model.config, "image_token_index"):
         tokenizer.image_token_index = model.config.image_token_index
     
-    if training_args.load_pretrained_random or training_args.load_pretrained_pca:
+    if training_args.load_pretrained_random or training_args.load_pretrained_orthnorm or training_args.load_pretrained_pca:
         if training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours', 'fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft' 'fedMultipqfreezeA' 'fedMultipqfreezeA_sft', 'feddualMultipq_freezeA_trainB_weightnormP',
                                   'fedMultipqfullfreeze256_sft','fedMultipqfullfreeze256',
                                   'fedMultipqfullfreeze512_sft','fedMultipqfullfreeze512',
@@ -1990,11 +1992,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                   'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
                                   ]:
-            if training_args.load_pretrained_random:
+            if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+            elif training_args.load_pretrained_random:
+                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_1b_blockwise_random_init.pth', map_location='cpu')
+                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_3b_blockwise_random_init.pth', map_location='cpu')
             elif training_args.load_pretrained_cca:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_cca_init.pth', map_location='cpu')
@@ -2079,11 +2086,16 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                                     ]:
-            if training_args.load_pretrained_random:
+            if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+            elif training_args.load_pretrained_random:
+                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_1b_blockwise_random_init.pth', map_location='cpu')
+                elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('llava_3b_blockwise_random_init.pth', map_location='cpu')
             elif training_args.load_pretrained_cca:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_cca_init.pth', map_location='cpu')
@@ -2148,6 +2160,29 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     v.data = torch.zeros_like(v)
                 elif 'freezeA' in training_args.mode and 'lora_Q' in k:
                     nn.init.kaiming_uniform_(v, a=math.sqrt(5))
+                elif training_args.randomize_B and 'lora_B' in k and v.sum() != 0:
+                    nn.init.kaiming_uniform_(v, a=math.sqrt(5))
+                elif training_args.randomize_orth_B and 'lora_B' in k and v.sum() != 0:
+                    init_B = torch.empty_like(v)
+                    nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                    # Get the current shape of the weight matrix
+                    rows, cols = v.size()
+
+                    # Ensure the matrix is contiguous
+                    init_B = init_B.contiguous()
+
+                    # Perform Singular Value Decomposition
+                    u_, _, v_ = torch.svd(init_B, some=False)
+                    
+                    u_ = u_.contiguous()
+                    v_ = v_.contiguous()
+
+                    # Use U or V from SVD based on the shape of the weight matrix
+                    if rows > cols:
+                        init_B.data = u_[:, :cols].to(torch.bfloat16)
+                    else:
+                        init_B.data = v_[:rows, :].to(torch.bfloat16)
+                    v.data = copy.deepcopy(init_B)
                 new_state_dict[new_k1] = v
                 new_state_dict[new_k2] = v
                 

@@ -134,7 +134,10 @@ class TrainingConfig(transformers.TrainingArguments):
     fedours:bool = False
     
     load_pretrained_random:bool = False
+    load_pretrained_orthnorm:bool = False
     load_pretrained_pca:bool = False
+    randomize_B:bool = False
+    randomize_orth_B:bool = False
     
     softmax_temp: float = 0.2
     save_per_step: bool = False

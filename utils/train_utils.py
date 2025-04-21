@@ -187,7 +187,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedlastpqfullfreeze_sft', 'fedlastpqfullfreeze', 'fedlastpqfullfreeze_tv', 'fedlastpqfullfreeze_ours', 
                                     'fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours',
                                     'fedMulti2pqfullfreeze_sft', 'fedMulti2pqfullfreeze', 'fedMulti2pqfullfreeze_tv', 'fedMulti2pqfullfreeze_ours',
-                                    'fedMulti2pqfullfreezeA','fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft',
+                                    'fedMulti2pqfullfreezeA','fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft','fedMultipqfullfreezeB_sft','fedMultipqfull_sft',
                                     'fedMultipqfullfreeze256_sft','fedMultipqfullfreeze256', 'feddualMultipq_freezeA_trainB_weightnormP',
                                     'fedMultipqfullfreeze512_sft','fedMultipqfullfreeze512',
                                     'fedMultipqfullfreeze1024_sft','fedMultipqfullfreeze1024',
@@ -744,6 +744,32 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if 'lora_A' in n:
                         p.requires_grad = False
                     elif 'lora_P' in n:
+                        p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullLayer):
+                        m.use_pq = False
+    elif training_args.mode == 'fedMultipqfullfreezeB' or training_args.mode == 'fedMultipqfullfreezeB_sft':
+        from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
+        last_layer = len(total_layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora_B' in n:
+                        p.requires_grad = False
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullLayer):
+                        m.use_pq = False
+    elif training_args.mode == 'fedMultipqfull' or training_args.mode == 'fedMultipqfull_sft':
+        from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
+        last_layer = len(total_layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora_P' in n:
                         p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
             else:
                 for n, m in layer.named_modules():
@@ -1981,7 +2007,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         tokenizer.image_token_index = model.config.image_token_index
     
     if training_args.load_pretrained_random or training_args.load_pretrained_orthnorm or training_args.load_pretrained_pca:
-        if training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours', 'fedMultipqfullfreezeA', 'fedMultipqfullfreezeA_sft' 'fedMultipqfreezeA' 'fedMultipqfreezeA_sft', 'feddualMultipq_freezeA_trainB_weightnormP',
+        if training_args.mode in ['fedMultipqfullfreeze_sft', 'fedMultipqfullfreeze', 'fedMultipqfullfreeze_tv', 'fedMultipqfullfreeze_ours', 'fedMultipqfullfreezeA', 'fedMultipqfreezeA', 'fedMultipqfreezeA_sft', 'feddualMultipq_freezeA_trainB_weightnormP',
+                                  'fedMultipqfullfreezeA_sft','fedMultipqfullfreezeB_sft','fedMultipqfull_sft',
                                   'fedMultipqfullfreeze256_sft','fedMultipqfullfreeze256',
                                   'fedMultipqfullfreeze512_sft','fedMultipqfullfreeze512',
                                   'fedMultipqfullfreeze1024_sft','fedMultipqfullfreeze1024',
@@ -2042,7 +2069,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         state_dict = torch.load('qwen_1.5b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
                         state_dict = torch.load('qwen_3b_blockwise_pca_init.pth', map_location='cpu')
-            if 'freezeA' in training_args.mode:
+            if 'freezeA' in training_args.mode or training_args.mode == 'fedMultipqfull_sft':
                 new_state_dict = {}
                 for k, v in state_dict.items():
                     if 'lora_P' in k:

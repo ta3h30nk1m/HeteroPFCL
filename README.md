@@ -12,7 +12,13 @@ pip install -U scikit-learn
 ```
 
 - init weight for 1B, 3B
-    - blockwise (4 layers)
+    - blockwise (4 layers) - A random
+```bash
+gdrive files download 17ZJwam-dnm1_F186XRfIAJQe0SRCUWGr
+gdrive files download 1zx-jltyAuqfyuAABGlZR7zGfZ4K6h_rh
+```
+
+    - blockwise (4 layers) - A orthnorm
 ```bash
 gdrive files download 1b90paEEbwvv608S7KW-XcXKcCcXWAyhS
 gdrive files download 1gUh9JvVpJJqOXW0mzoWKiAF_0OuGFcKW

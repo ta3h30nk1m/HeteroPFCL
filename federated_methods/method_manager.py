@@ -14,6 +14,7 @@ from federated_methods.fedpq import (feddualpq_load_state_dict,  feddualMultipq_
                                      feddualMulti2pq_load_state_dict, feddualMulti2pq_homoAgg_load_state_dict,
                                      fedMulti05pq_load_state_dict,fedMulti05pq_HomoAgg_load_state_dict,fedMulti05pq_HomoAggOnly_load_state_dict,
                                      feddualMulti05pq_homoAgg_Normalize_load_state_dict,feddualMultipq_homoAgg_Normalize_load_state_dict,
+                                     feddualMultipqfull_homoAgg_load_state_dict,
                                      )
 
 from federated_methods.sft_layerwiseloss import sft_layerwise_create_trainer
@@ -101,6 +102,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipfullfreeze_homoAgg_moe',
                   'fedquadMultipqfullfreeze_homoAgg','fedquadMultipqfullfreeze_homoAgg_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    elif mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipqfull_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_homoAgg_normalize_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAgg_Normalize_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_include','feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_include_moe',

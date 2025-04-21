@@ -2163,7 +2163,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 elif training_args.randomize_B and 'lora_B' in k and v.sum() != 0:
                     nn.init.kaiming_uniform_(v, a=math.sqrt(5))
                 elif training_args.randomize_orth_B and 'lora_B' in k and v.sum() != 0:
-                    init_B = torch.empty_like(v)
+                    init_B = torch.empty_like(v).float()
                     nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
                     # Get the current shape of the weight matrix
                     rows, cols = v.size()

@@ -153,7 +153,12 @@ def fedMultipq_HomoAggOnly_load_state_dict(model, global_state_dict, local_state
             target_key = name
             splited = target_key.split('.')
             if int(splited[layer_index]) in cur_layer_num:
-                continue
+                # continue
+                if 'lora_P' in target_key or 'lora_Q' in target_key:
+                    for id in homo_client_ids:
+                        new_param += local_state_dict_list[id][target_key] / len(homo_client_ids)
+                else:
+                    continue
             else:
                 for id in homo_client_ids:
                     new_param += local_state_dict_list[id][target_key] / len(homo_client_ids)
@@ -1462,7 +1467,12 @@ def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_s
                 
                 splited = target_key.split('.')
                 if int(splited[layer_index]) in cur_layer_num:
-                    continue
+                    # continue
+                    if 'lora2_P' in target_key or 'lora2_Q' in  target_key:
+                        for id in homo_client_ids:
+                            if id == client_id:
+                                continue
+                            new_param += homo_weights[id]*local_state_dict_list[id][target_key] / homo_sim_sum
                 else:
                     for id in homo_client_ids:
                         if id == client_id:

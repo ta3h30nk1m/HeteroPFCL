@@ -160,3 +160,5 @@ class TrainingConfig(transformers.TrainingArguments):
     num_serverdistill: int = 200
     
     load_pretrained_cca: bool = False
+    
+    is_continual: bool = True

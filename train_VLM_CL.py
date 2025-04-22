@@ -657,33 +657,52 @@ def get_datalists(args, scenario_num):
         client_id = client_data['client_id']
         train_datalist = []
         test_datalist = []
-        for task_id, data in enumerate(client_data['datasets']):
-            if data['dataset'] == 'dummy':
+        
+        if args.is_continual: # PFCL
+            for task_id, data in enumerate(client_data['datasets']):
+                if data['dataset'] == 'dummy':
+                    for i in range(rounds_per_task):
+                        train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
+                    test_datalist.append({'data':[],'type':''})
+                    continue
+                with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
+                    datalist = json.load(fp)
+                random.shuffle(datalist)
+                samplenum_per_rounds = int(len(datalist) / rounds_per_task)
+                num_iter = max_iterations #max(int(max_iterations*samplenum_per_rounds/2000), 2) # 10000 / 5 = 2000
                 for i in range(rounds_per_task):
-                    train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
-                test_datalist.append({'data':[],'type':''})
-                continue
-            with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-                datalist = json.load(fp)
-            random.shuffle(datalist)
-            samplenum_per_rounds = int(len(datalist) / rounds_per_task)
-            num_iter = max_iterations #max(int(max_iterations*samplenum_per_rounds/2000), 2) # 10000 / 5 = 2000
-            for i in range(rounds_per_task):
+                    train_datalist.append(
+                        {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
+                        'num_iter': num_iter,
+                        'task_id': task_id,
+                        'model_id': client_data['model_id']})
+                with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
+                    datalist = json.load(fp)
+                test_datalist.append({
+                    "data_name": f"{data['dataset']}-{data['subset_id']}",
+                    "type": data['type'],
+                    "data": datalist,
+                    "train_start_round": rounds_per_task*task_id})
+                
+                train_datalists[client_id] = train_datalist
+            test_datalists[client_id] = test_datalist
+        else: # PFL
+            combined_datalist = []
+            for task_id, data in enumerate(client_data['datasets']):
+                with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
+                    datalist = json.load(fp)
+                combined_datalist.extend(datalist)
+            random.shuffle(combined_datalist)
+            samplenum_per_rounds int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
+            num_iter = max_iterations
+            for i in range(args.num_rounds * args.num_tasks):
                 train_datalist.append(
                     {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
-                     'num_iter': num_iter,
-                     'task_id': task_id,
-                     'model_id': client_data['model_id']})
-            with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
-                datalist = json.load(fp)
-            test_datalist.append({
-                "data_name": f"{data['dataset']}-{data['subset_id']}",
-                "type": data['type'],
-                "data": datalist,
-                "train_start_round": rounds_per_task*task_id})
-            
+                    'num_iter': num_iter,
+                    'task_id': 0,
+                    'model_id': client_data['model_id']})
             train_datalists[client_id] = train_datalist
-        test_datalists[client_id] = test_datalist
+            test_datalists[client_id] = test_datalist
 
     return train_datalists, test_datalists, incremental_setup
 

@@ -693,11 +693,11 @@ def get_datalists(args, scenario_num):
                     datalist = json.load(fp)
                 combined_datalist.extend(datalist)
             random.shuffle(combined_datalist)
-            samplenum_per_rounds int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
+            samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
             num_iter = max_iterations
             for i in range(args.num_rounds * args.num_tasks):
                 train_datalist.append(
-                    {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
+                    {'datalist':combined_datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
                     'num_iter': num_iter,
                     'task_id': 0,
                     'model_id': client_data['model_id']})

@@ -29,6 +29,7 @@ from federated_methods.fedsim import fedsim_create_trainer
 from federated_methods.fdlora import fdlora_aggregate_state_dict, fdlora_blockwise_aggregate_state_dict
 from federated_methods.takfl import TAKFL_aggregate_state_dict
 from federated_methods.fedmkt import FEDMKT_aggregate_state_dict
+from federated_methods.fedpa import feddpa_create_trainer
 
 def dummy_function(*args):
     return {}
@@ -70,6 +71,8 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, fedavg_aggregate_state_dict
     
+    elif mode in ['feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, feddpa_create_trainer, fedavg_aggregate_state_dict
     elif mode in ['fdlora']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fdlora_aggregate_state_dict
     elif mode in ['fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg']:

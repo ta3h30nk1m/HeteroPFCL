@@ -162,3 +162,5 @@ class TrainingConfig(transformers.TrainingArguments):
     load_pretrained_cca: bool = False
     
     is_continual: bool = True
+    
+    iter_to_get_grad: int = 20

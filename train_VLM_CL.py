@@ -170,8 +170,10 @@ def main():
                     new_param = 0
                     target_key = name
                     splited = target_key.split('.')
-                    if int(splited[LAYER_INDEX]) in cur_layer_num:
-                        if 'Multi' in training_args.mode and ('lora_P' not in target_key and 'lora_Q' not in target_key):
+                    # if int(splited[LAYER_INDEX]) in cur_layer_num:
+                    #     if 'Multi' in training_args.mode and ('lora_P' not in target_key and 'lora_Q' not in target_key):
+                    if 'homoAggOnly' not in training_args.mode and int(splited[LAYER_INDEX]) in cur_layer_num:
+                        if 'Multi' in training_args.mode and ('lora_P' not in target_key and 'lora_Q' not in target_key) and ('lora2_P' not in target_key and 'lora2_Q' not in target_key):
                             continue
                         for id in range(len(prev_local_state_dict_list)):
                             splited = target_key.split('.')
@@ -467,8 +469,10 @@ def main():
                     elif 'ia3_l' in name:
                         target_key = name.replace('ia3_l', 'ia3_l_2')
                     splited = target_key.split('.')
-                    if int(splited[LAYER_INDEX]) in cur_layer_num:
-                        if 'Multi' in training_args.mode and 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                    # if int(splited[LAYER_INDEX]) in cur_layer_num:
+                    #     if 'Multi' in training_args.mode and 'lora_P' not in target_key and 'lora_Q' not in target_key:
+                    if 'homoAggOnly' not in training_args.mode and int(splited[LAYER_INDEX]) in cur_layer_num:
+                        if 'Multi' in training_args.mode and ('lora_P' not in target_key and 'lora_Q' not in target_key) and ('lora2_P' not in target_key and 'lora2_Q' not in target_key):
                             continue
                         for id in range(len(prev_local_state_dict_list)):
                             splited = target_key.split('.')
@@ -693,6 +697,8 @@ def get_datalists(args, scenario_num):
                     datalist = json.load(fp)
                 combined_datalist.extend(datalist)
             random.shuffle(combined_datalist)
+            if scenario_num == 285 or scenario_num == 295:
+                combined_datalist = combined_datalist*2*(args.num_rounds * args.num_tasks)
             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
             num_iter = max_iterations
             for i in range(args.num_rounds * args.num_tasks):

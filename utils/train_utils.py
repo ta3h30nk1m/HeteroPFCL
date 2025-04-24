@@ -199,6 +199,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg',
                                     'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                     'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
+                                    'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft',
                                      ]:
             from models.pqlora_full.pqloramodel_full import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -402,10 +403,38 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     m.lora_A['default'].weight.requires_grad = False
                     
     elif training_args.mode in ['fedMultipqfullfreeze','fedMultipqfullfreeze_sft','fedMultipqfullfreeze_tv','fedMultipqfullfreeze_ours',
-                                'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly','fdlora_fedMultipqfullfreeze_homoAgg','takfl_fedMultipqfullfreeze_homoAgg','fedmkt_fedMultipqfullfreeze_homoAgg',]:
+                                'fedMultipqfullfreeze_homoAgg','fedMultipqfullfreeze_homoAggOnly','fdlora_fedMultipqfullfreeze_homoAgg','takfl_fedMultipqfullfreeze_homoAgg','fedmkt_fedMultipqfullfreeze_homoAgg',
+                                'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft',]:
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if isinstance(m,PQLoraFullLayer):
+                        m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
+                        m.lora_B['default'].apply(orthonormal_kaiming_uniform_init)
+
+                        m.lora_A['default'].weight.requires_grad = False
+                        m.lora_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora_P['default'])
+                        nn.init.zeros_(m.lora_Q['default'])
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullLayer):
+                        m.use_pq = False
+    
+    elif training_args.mode in ['fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft']:
+        from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
+        if data_args.is_multimodal:
+            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                if 'front' in training_args.mode:
+                    target_layers = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    target_layers = [2,5,8,11,14,17,20,27]
+            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                target_layers = [1,3,5,7,9,11,13,15]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
@@ -2114,6 +2143,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'fdlora_fedMultipqfullfreeze_homoAgg','fdlora_fedMulti05pqfullfreeze_homoAgg',
                                   'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                   'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
+                                  'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft',
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -2146,6 +2176,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_1b_blockwise_pca_init_r1024.pth', map_location='cpu')
                         elif 'Multi05' in training_args.mode:
                             state_dict = torch.load('llava_1b_blockwise_half_pca_init.pth', map_location='cpu')
+                        elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                            state_dict = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -2157,6 +2189,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise_pca_init_r1024.pth', map_location='cpu')
                         elif 'Multi05' in training_args.mode:
                             state_dict = torch.load('llava_3b_blockwise_half_pca_init.pth', map_location='cpu')
+                        elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                            state_dict = torch.load('llava_3b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
@@ -2981,7 +3015,7 @@ def get_task_vectors(model, tokenizer, processor, train_datalists, training_args
     for client_id in range(len(train_datalists)):
         datalist = train_datalists[client_id][0]['datalist']
         
-        sub_datalist = random.sample(datalist, 4*20)
+        sub_datalist = random.sample(datalist, 4*training_args.iter_to_get_grad)
         
         data_module = make_supervised_data_module(client_data=sub_datalist, # sub_dataset
                                                 tokenizer=tokenizer,

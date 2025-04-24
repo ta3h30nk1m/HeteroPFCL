@@ -70,17 +70,13 @@ def feddpa_create_trainer(model, tokenizer, training_args, data_module, extra_st
         test_datalist=extra_state_dict_dict['test_datalist'],
         processor=extra_state_dict_dict['processor'],
         data_args=extra_state_dict_dict['data_args'],
-        task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
-        fisher_old=extra_state_dict_dict['fisher_old'] if 'fisher_old' in extra_state_dict_dict else None,
-        fisher_freq=extra_state_dict_dict['fisher_freq'] if 'fisher_freq' in extra_state_dict_dict else 5,
-        model2=extra_state_dict_dict['model2'] if 'model2' in extra_state_dict_dict else None,
         **data_module,
         )
     return trainer
 
 class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
-    def __init__(self, client_id, curr_round, test_datalist, processor, data_args, task_vector=None, fisher_old=None, fisher_freq=5,model2=None, **kwargs):
-        super(LLaVATrainerFEDDPA, self).__init__(**kwargs)
+    def __init__(self, client_id, curr_round, test_datalist, processor, data_args,  **kwargs):
+        super(LLaVATrainerFEDDPA, self).__init__( client_id, curr_round, test_datalist, processor, data_args,**kwargs)
         
         self.global_weight = None
         self.local_weight = None
@@ -405,7 +401,6 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                 remainder = args.gradient_accumulation_steps
             update_step = -1
             total_updates = steps_in_epoch // args.gradient_accumulation_steps + 1
-            
             self.model.set_state('lora1')
             self.model.activate_lora1()
             self.local_weight = {k: t.detach().clone() for k, t in self.model.named_parameters() if 'lora2' in k}
@@ -417,11 +412,11 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                 ###################################################################################################3
                 # first half update global adapter & update local adapter in second half
                 
-                if local_update_i / total_updates == 0.5:
+                if local_update_i / (total_updates-1) == 0.5:
                     self.global_weight = {k: t.detach().clone() for k, t in self.model.named_parameters() if 'lora1' in k}
                     self.model.set_state('gate')
                     self.model.activate_lora2()
-                if local_update_i / total_updates >= 0.5:
+                if local_update_i / (total_updates-1) >= 0.5:
                     self.model.load_state_dict(self.global_weight, strict=False)
                 else:
                     self.model.load_state_dict(self.local_weight, strict=False)

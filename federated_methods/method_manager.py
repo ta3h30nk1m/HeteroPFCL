@@ -29,7 +29,7 @@ from federated_methods.fedsim import fedsim_create_trainer
 from federated_methods.fdlora import fdlora_aggregate_state_dict, fdlora_blockwise_aggregate_state_dict
 from federated_methods.takfl import TAKFL_aggregate_state_dict
 from federated_methods.fedmkt import FEDMKT_aggregate_state_dict
-from federated_methods.fedpa import feddpa_create_trainer
+from federated_methods.feddpa import feddpa_create_trainer
 
 def dummy_function(*args):
     return {}

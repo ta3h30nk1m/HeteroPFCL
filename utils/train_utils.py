@@ -2193,6 +2193,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_8b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
                         state_dict = torch.load('qwen_0.5b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
@@ -2281,6 +2283,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                    elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_8b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                         if '256' in training_args.mode:
                             state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')

@@ -1473,6 +1473,8 @@ def feddualMultipq_homoAggOnly_load_state_dict(model, global_state_dict, local_s
                             if id == client_id:
                                 continue
                             new_param += homo_weights[id]*local_state_dict_list[id][target_key] / homo_sim_sum
+                    else:
+                        continue
                 else:
                     for id in homo_client_ids:
                         if id == client_id:

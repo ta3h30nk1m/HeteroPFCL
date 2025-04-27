@@ -306,7 +306,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeALORA'] = Dual_PQLorafreezeAModel
             lora_config.peft_type = 'DUALPQFullFreezeALORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe']:
+        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2']:
             from models.dual_pqlora_freezeA_full_moe.dual_pqloramodel_freezeA_full_moe import Dual_PQMOELorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeALORA'] = Dual_PQMOELorafreezeAModel
@@ -845,8 +845,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             if idx in target_layers:
                 for n, m in layer.named_modules():
                     if 'lora_A.default' in n or 'lora_B.default' in n:
-                        # m.apply(orthonormal_kaiming_uniform_init)
-                        nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
+                        m.apply(orthonormal_kaiming_uniform_init)
+                        # nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
                         m.weight.to(torch.bfloat16)
                 for n, p in layer.named_parameters():
                     if 'lora_A' in n:
@@ -942,6 +942,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 target_layers = [2,5,8,11,14,17,20,27]
         elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
             target_layers = [1,3,5,7,9,11,13,15]
+        elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
+            target_layers = [3,7,11,15,19,23,27,31]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
@@ -1302,7 +1304,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQMOELoraFullFreezeLayer):
                         m.use_pq = False
-    elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe']:
+    elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2']:
         from models.dual_pqlora_freezeA_full_moe.dual_pqloralayer_freezeA_full_moe import PQMOELoraFullFreezeALayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -2244,7 +2246,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
-                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe',
+                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2',
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -2313,16 +2315,18 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 
                 new_k1 = k.replace('lora', 'lora1')
                 new_k2 = k.replace('lora', 'lora2')
-                if ('freezeA' in training_args.mode or training_args.mode == 'feddualMultipqfull_homoAgg_moe' or training_args.mode == 'feddualMultipqfull_homoAggOnly_moe') and 'lora_P' in k:
-                    if 'full' in training_args.mode:
-                        v.data = torch.eye(v.shape[0]).to(torch.bfloat16)
-                    else:
-                        v = torch.ones(v.shape[0]).to(torch.bfloat16)
-                elif ('freezeA' in training_args.mode or training_args.mode == 'feddualMultipqfull_homoAgg_moe' or training_args.mode == 'feddualMultipqfull_homoAggOnly_moe') and 'lora_B' in k:
-                    v.data = torch.zeros_like(v)
-                elif ('freezeA' in training_args.mode or training_args.mode == 'feddualMultipqfull_homoAgg_moe' or training_args.mode == 'feddualMultipqfull_homoAggOnly_moe') and 'lora_Q' in k:
-                    nn.init.kaiming_uniform_(v, a=math.sqrt(5))
-                elif training_args.randomize_B and 'lora_B' in k and v.sum() != 0:
+                # if ('freezeA' in training_args.mode or training_args.mode == 'feddualMultipqfull_homoAgg_moe' or training_args.mode == 'feddualMultipqfull_homoAggOnly_moe') and 'lora_P' in k:
+                if training_args.mode in ['feddualMultipqfull_homoAgg_moe', 'feddualMultipqfull_homoAggOnly_moe', 'feddualMultipqfullfreezeA_homoAgg_moe']:
+                    if 'lora_P' in k:
+                        if 'full' in training_args.mode:
+                            v.data = torch.eye(v.shape[0]).to(torch.bfloat16)
+                        else:
+                            v = torch.ones(v.shape[0]).to(torch.bfloat16)
+                    elif 'lora_B' in k:
+                        v.data = torch.zeros_like(v)
+                    elif 'lora_Q' in k:
+                        nn.init.kaiming_uniform_(v, a=math.sqrt(5))
+                if training_args.randomize_B and 'lora_B' in k and v.sum() != 0:
                     nn.init.kaiming_uniform_(v, a=math.sqrt(5))
                 elif training_args.randomize_orth_B and 'lora_B' in k and v.sum() != 0:
                     init_B = torch.empty_like(v).float()
@@ -2662,7 +2666,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg', 'feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                               'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
                               'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg',
-                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe',
+                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

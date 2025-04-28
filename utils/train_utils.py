@@ -311,7 +311,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullLORA'] = Dual_PQLoraFullModel
             lora_config.peft_type = 'DUALPQFullLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2']:
+        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe',]:
             from models.dual_pqlora_freezeA_full_moe.dual_pqloramodel_freezeA_full_moe import Dual_PQMOELorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeALORA'] = Dual_PQMOELorafreezeAModel
@@ -321,7 +321,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeBLORA'] = Dual_PQMOELorafreezeBModel
             lora_config.peft_type = 'DUALPQMOEFullFreezeBLORA'    
-        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe']:
+        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe','feddualMulti2pqfullfreeze_back_homoAgg_moe']:
             from models.dual_pqlora_full_moe.dual_pqloramodel_full_moe import Dual_PQMOELoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullLORA'] = Dual_PQMOELoraModel
@@ -1327,6 +1327,30 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQMOELoraFullFreezeALayer):
                         m.use_pq = False
+    elif training_args.mode in ['feddualMulti2pqfullfreezeA_back_homoAgg_moe']:
+        from models.dual_pqlora_freezeA_full_moe.dual_pqloralayer_freezeA_full_moe import PQMOELoraFullFreezeALayer
+        if data_args.is_multimodal:
+            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                if 'front' in training_args.mode:
+                    target_layers = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    target_layers = [2,5,8,11,14,17,20,27]
+            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                target_layers = [1,3,5,7,9,11,13,15]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n or 'lora2_B' in n:
+                        p.requires_grad = True
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeALayer):
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeALayer):
+                        m.use_pq = False
     elif training_args.mode in ['feddualMultipqfullfreezeB_homoAgg_moe']:
         from models.dual_pqlora_freezeB_full_moe.dual_pqloralayer_freezeB_full_moe import PQMOELoraFullFreezeBLayer
         last_layer = len(total_layers) // 4
@@ -1375,6 +1399,31 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         from models.dual_pqlora_full_moe.dual_pqloralayer_full_moe import PQMOELoraFullLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = True
+                    elif 'lora1_B' in n or 'lora2_B' in n:
+                        p.requires_grad = True
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullLayer):
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullLayer):
+                        m.use_pq = False
+    
+    elif training_args.mode in ['feddualMulti2pqfull_back_homoAgg_moe',]:
+        from models.dual_pqlora_full_moe.dual_pqloralayer_full_moe import PQMOELoraFullLayer
+        if data_args.is_multimodal:
+            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                if 'front' in training_args.mode:
+                    target_layers = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    target_layers = [2,5,8,11,14,17,20,27]
+            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                target_layers = [1,3,5,7,9,11,13,15]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
                 for n, p in layer.named_parameters():
@@ -2203,7 +2252,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
                             state_dict = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
-                            state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                            # state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                            state_dict = torch.load('llava_1b_blockwise_pca_init_new.pth', map_location='cpu')
                     elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                         if '256' in training_args.mode:
                             state_dict = torch.load('llava_3b_blockwise_pca_init_r256.pth', map_location='cpu')
@@ -2216,7 +2266,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
                             state_dict = torch.load('llava_3b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
-                            state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                            # state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                            state_dict = torch.load('llava_3b_blockwise_pca_init_new.pth', map_location='cpu')
                     elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
                         state_dict = torch.load('llava_8b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
@@ -2272,9 +2323,15 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        state_dict = torch.load('llava_3b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new.pth', map_location='cpu')
             elif training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_random_init.pth', map_location='cpu')
@@ -2306,7 +2363,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
                             state_dict = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
-                            state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                            # state_dict = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+                            state_dict = torch.load('llava_1b_blockwise_pca_init_new.pth', map_location='cpu')
                     elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
                         state_dict = torch.load('llava_8b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -2323,7 +2381,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         elif 'Multi2' in training_args.mode and 'back' in training_args.mode:
                             state_dict = torch.load('llava_3b_blockwise2_back_pca_init.pth', map_location='cpu')
                         else:
-                            state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                            # state_dict = torch.load('llava_3b_blockwise_pca_init.pth', map_location='cpu')
+                            state_dict = torch.load('llava_3b_blockwise_pca_init_new.pth', map_location='cpu')
                     elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
                         state_dict = torch.load('qwen_0.5b_blockwise_pca_init.pth', map_location='cpu')
                     elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
@@ -2338,7 +2397,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 new_k1 = k.replace('lora', 'lora1')
                 new_k2 = k.replace('lora', 'lora2')
                 # if ('freezeA' in training_args.mode or training_args.mode == 'feddualMultipqfull_homoAgg_moe' or training_args.mode == 'feddualMultipqfull_homoAggOnly_moe') and 'lora_P' in k:
-                if training_args.mode in ['feddualMultipqfull_homoAgg_moe', 'feddualMultipqfull_homoAggOnly_moe', 'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA','feddualMultipqfull']:
+                if training_args.mode in ['feddualMultipqfull_homoAgg_moe', 'feddualMultipqfull_homoAggOnly_moe', 'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA','feddualMultipqfull','feddualMulti2pqfullfreezeA_back_homoAgg_moe','feddualMulti2pqfull_back_homoAgg_moe',]:
                     if 'lora_P' in k:
                         if 'full' in training_args.mode:
                             v.data = torch.eye(v.shape[0]).to(torch.bfloat16)
@@ -2688,7 +2747,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg', 'feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                               'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
                               'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg',
-                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2',
+                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe','feddualMulti2pqfull_back_homoAgg_moe',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

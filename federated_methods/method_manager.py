@@ -100,6 +100,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
                 'feddualMultipqLILfullfreeze512_NL','feddualMultipqLILfullfreeze1024_NL',
                 'feddualMultipfullfreeze',
                 'fedquadMultipqfullfreeze','fedquadMultipqfullfreeze_moe',
+                'feddualMultipqfull',
                 ]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipfullfreeze_homoAgg_moe',

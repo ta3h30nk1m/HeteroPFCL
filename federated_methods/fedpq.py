@@ -1927,7 +1927,12 @@ def feddualMulti2pqfull_homoAgg_load_state_dict(model, global_state_dict, local_
                     target_key = name.replace('lora1', 'lora2')
                 elif 'ia3_l_1' in name:
                     target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                
+                # else: # lora3 or lora4
+                #     if training_args.share_ema:
+                #         target_key = name
+                else:
+                    new_global_state_dict[name] = local_state_dict_list[client_id][name]
+                    continue
                 splited = target_key.split('.')
                 if int(splited[layer_index]) in cur_layer_num and ('lora2_P' in target_key or 'lora2_Q' in target_key):
                     # if 'lora2_P' not in target_key and 'lora2_Q' not in target_key:

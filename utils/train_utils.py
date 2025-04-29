@@ -321,7 +321,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeBLORA'] = Dual_PQMOELorafreezeBModel
             lora_config.peft_type = 'DUALPQMOEFullFreezeBLORA'    
-        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe','feddualMulti2pqfullfreeze_back_homoAgg_moe']:
+        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe','feddualMulti2pqfull_back_homoAgg_moe',]:
             from models.dual_pqlora_full_moe.dual_pqloramodel_full_moe import Dual_PQMOELoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullLORA'] = Dual_PQMOELoraModel
@@ -2319,7 +2319,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
-                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2',
+                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe','feddualMulti2pqfull_back_homoAgg_moe',
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:

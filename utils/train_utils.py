@@ -300,18 +300,18 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQWNFullFreezeLORA'] = Dual_PQLoraWNfreezeModel
             lora_config.peft_type = 'DUALPQWNFullFreezeLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualpqfullfreezeA','feddualMultipqfullfreezeA2']:
+        elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualpqfullfreezeA','feddualMultipqfullfreezeA2','feddualMulti2pqfullfreezeA_back2']:
             from models.dual_pqlora_freezeA_full.dual_pqloramodel_freezeA_full import Dual_PQLorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeALORA'] = Dual_PQLorafreezeAModel
             lora_config.peft_type = 'DUALPQFullFreezeALORA'
-        elif training_args.mode in ['feddualMultipqfull','feddualMultipqfull2']:
+        elif training_args.mode in ['feddualMultipqfull','feddualMultipqfull2','feddualMulti2pqfull_back2']:
             from models.dual_pqlora_full.dual_pqloramodel_full import Dual_PQLoraFullModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullLORA'] = Dual_PQLoraFullModel
             lora_config.peft_type = 'DUALPQFullLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe',]:
+        elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2',]:
             from models.dual_pqlora_freezeA_full_moe.dual_pqloramodel_freezeA_full_moe import Dual_PQMOELorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeALORA'] = Dual_PQMOELorafreezeAModel
@@ -321,7 +321,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeBLORA'] = Dual_PQMOELorafreezeBModel
             lora_config.peft_type = 'DUALPQMOEFullFreezeBLORA'    
-        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe','feddualMulti2pqfull_back_homoAgg_moe',]:
+        elif training_args.mode in ['feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2', 'feddualMultipqfull_homoAggOnly_moe','feddualMulti2pqfull_back_homoAgg_moe2',]:
             from models.dual_pqlora_full_moe.dual_pqloramodel_full_moe import Dual_PQMOELoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullLORA'] = Dual_PQMOELoraModel
@@ -949,6 +949,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             target_layers = [1,3,5,7,9,11,13,15]
         elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
             target_layers = [3,7,11,15,19,23,27,31]
+        elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
+            target_layers = [2,5,8,11,14,17,20,27]
+        elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+            target_layers = [2,5,8,11,14,17,20,23]
+        elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
+            target_layers = [3,7,11,15,19,23,27,35]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
                 for n, m in layer.named_modules():
@@ -1327,7 +1333,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQMOELoraFullFreezeALayer):
                         m.use_pq = False
-    elif training_args.mode in ['feddualMulti2pqfullfreezeA_back_homoAgg_moe']:
+    elif training_args.mode in ['feddualMulti2pqfullfreezeA_back_homoAgg_moe2']:
         from models.dual_pqlora_freezeA_full_moe.dual_pqloralayer_freezeA_full_moe import PQMOELoraFullFreezeALayer
         if data_args.is_multimodal:
             if 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -1414,7 +1420,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQMOELoraFullLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMulti2pqfull_back_homoAgg_moe',]:
+    elif training_args.mode in ['feddualMulti2pqfull_back_homoAgg_moe2',]:
         from models.dual_pqlora_full_moe.dual_pqloralayer_full_moe import PQMOELoraFullLayer
         if data_args.is_multimodal:
             if 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -1941,10 +1947,61 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullFreezeALayer):
                         m.use_pq = False
     
+    elif training_args.mode == 'feddualMulti2pqfullfreezeA_back2':
+        from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
+        # last_layer = len(total_layers) // 4
+        # target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        if data_args.is_multimodal:
+            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                if 'front' in training_args.mode:
+                    target_layers = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    target_layers = [2,5,8,11,14,17,20,27]
+            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                target_layers = [1,3,5,7,9,11,13,15]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_P' in n or 'lora2_P' in n:
+                        p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullFreezeALayer):
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullFreezeALayer):
+                        m.use_pq = False
+    
     elif training_args.mode == 'feddualMultipqfull' or training_args.mode =='feddualMultipqfull2':
         from models.dual_pqlora_full.dual_pqloralayer_full import PQLoraFullLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, p in layer.named_parameters():
+                    if 'lora1_P' in n or 'lora2_P' in n:
+                        p.data = torch.eye(p.shape[0]).to(torch.bfloat16)
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullLayer):
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQLoraFullLayer):
+                        m.use_pq = False
+    elif training_args.mode == 'feddualMulti2pqfull_back2':
+        from models.dual_pqlora_full.dual_pqloralayer_full import PQLoraFullLayer
+        # last_layer = len(total_layers) // 4
+        # target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        if data_args.is_multimodal:
+            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                if 'front' in training_args.mode:
+                    target_layers = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    target_layers = [2,5,8,11,14,17,20,27]
+            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                target_layers = [1,3,5,7,9,11,13,15]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
                 for n, p in layer.named_parameters():
@@ -2294,7 +2351,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             model.load_state_dict(state_dict, strict=False)
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
                                     'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualMultipqfull','feddualMultipqfull2',
-                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean','feddualMultipqfullfreezeA2',
+                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean','feddualMultipqfullfreezeA2','feddualMulti2pqfullfreezeA_back2','feddualMulti2pqfull_back2',
                                     'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
                                     'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
@@ -2319,7 +2376,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
-                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe','feddualMulti2pqfull_back_homoAgg_moe',
+                                    'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -2747,7 +2804,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg', 'feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                               'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
                               'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg',
-                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe','feddualMulti2pqfull_back_homoAgg_moe',
+                              'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \
@@ -3033,7 +3090,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
             if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualMulti2pqfullfreeze_back', 'feddualMulti2pqfullfreeze_front','feddualMulti2pfullfreeze_back',
-                                'feddualMulti2pqfullfreeze_back_moe',]:
+                                'feddualMulti2pqfullfreeze_back_moe','feddualMulti2pqfullfreezeA_back2','feddualMulti2pqfull_back2',]:
         layer_num = []
         for k in new_global_state_dict.keys():
             if 'layers.' in k:

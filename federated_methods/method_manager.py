@@ -171,7 +171,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pq_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode in ['feddualMulti2pqfullfreeze_back_homoAgg', 'feddualMulti2pqfullfreeze_back_homoAgg_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pq_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
-    elif mode in ['feddualMulti2pqfullfreezeA_back_homoAgg', 'feddualMulti2pqfull_back_homoAgg_moe',]:
+    elif mode in ['feddualMulti2pqfullfreezeA_back_homoAgg_moe', 'feddualMulti2pqfull_back_homoAgg_moe',]:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMulti2pqfull_homoAgg_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     
     elif mode in ['fedMultipqfullfreeze_homoAgg']:

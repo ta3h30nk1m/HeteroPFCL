@@ -300,12 +300,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQWNFullFreezeLORA'] = Dual_PQLoraWNfreezeModel
             lora_config.peft_type = 'DUALPQWNFullFreezeLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualpqfullfreezeA']:
+        elif training_args.mode in ['feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualpqfullfreezeA','feddualMultipqfullfreezeA2']:
             from models.dual_pqlora_freezeA_full.dual_pqloramodel_freezeA_full import Dual_PQLorafreezeAModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullFreezeALORA'] = Dual_PQLorafreezeAModel
             lora_config.peft_type = 'DUALPQFullFreezeALORA'
-        elif training_args.mode in ['feddualMultipqfull']:
+        elif training_args.mode in ['feddualMultipqfull','feddualMultipqfull2']:
             from models.dual_pqlora_full.dual_pqloramodel_full import Dual_PQLoraFullModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPQFullLORA'] = Dual_PQLoraFullModel
@@ -1922,7 +1922,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             m.lora_C['default'] = nn.Linear(model.base_model.language_model.config.hidden_size,128).to(compute_dtype)
                             m.lora_C['default'].requires_grad = True
     
-    elif training_args.mode == 'feddualMultipqfullfreezeA' or training_args.mode == 'feddualMultipqfullfreezeA_tv' or training_args.mode == 'feddualMultipqfullfreezeA_excludemean':
+    elif training_args.mode == 'feddualMultipqfullfreezeA' or training_args.mode == 'feddualMultipqfullfreezeA_tv' or training_args.mode == 'feddualMultipqfullfreezeA_excludemean' or training_args.mode == 'feddualMultipqfullfreezeA2':
         from models.dual_pqlora_freezeA_full.dual_pqloralayer_freezeA_full import PQLoraFullFreezeALayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -1941,7 +1941,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullFreezeALayer):
                         m.use_pq = False
     
-    elif training_args.mode == 'feddualMultipqfull':
+    elif training_args.mode == 'feddualMultipqfull' or training_args.mode =='feddualMultipqfull2':
         from models.dual_pqlora_full.dual_pqloralayer_full import PQLoraFullLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -2293,8 +2293,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             
             model.load_state_dict(state_dict, strict=False)
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
-                                    'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualMultipqfull',
-                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean',
+                                    'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualMultipqfull','feddualMultipqfull2',
+                                    'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean','feddualMultipqfullfreezeA2',
                                     'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
                                     'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
@@ -2954,7 +2954,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
             if 'layers.' in k and int(k.split('.')[layer_index]) in layers_to_del or ('lora1_P' not in k and 'lora1_Q' not in k):
                 keys_to_del.append(k)
     elif training_args.mode in ['feddualMultipqfreeze','feddualMultipqfullfreeze','feddualMultipqfullfreeze_tv','feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher',
-                                'feddualMultipqfullfreezeA','feddualMultipqfullfreezeA_tv','feddualMultipqfullfreezeA_excludemean','feddualMultipqfull',
+                                'feddualMultipqfullfreezeA','feddualMultipqfullfreezeA_tv','feddualMultipqfullfreezeA_excludemean','feddualMultipqfull','feddualMultipqfull2','feddualMultipqfullfreezeA2',
                                 'feddualMultipqfreezeA','feddualMultipqfreezeA_excludemean','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_include_moe',
                                 'feddualMultipqfullfreeze_include','feddualMultipqfullfreeze_tv_include','feddualMultipqfullfreeze_excludemean_include',
                                 'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',

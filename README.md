@@ -29,6 +29,26 @@ gdrive files download 1YxdZKJosR53oyi_kMiMb8Fu9WldIyUT5
 gdrive files download 1iQYOO5VNRTA282JZCsNlSWLF4x4n6R5c
 gdrive files download 1jSDpPlJVVoZJilhK73pbAMdTK-vMCxZ8
 ```
+    - blockwise (4 layers) - PCA (new!)
+```bash
+gdrive files download 1aaJYQKo6UcvLgupg2t71NDI8V6oHEz-s
+gdrive files download 1jRVjKI8wMqZ9hCrEEfVT1e6cZmLDbNBm
+```
+
+    - blockwise (4 layers) - orthnormal (new!)
+```bash
+gdrive files download 1_sNX5TjuDjr9Sw4zOimlHxee8RAAljcs
+gdrive files download 1phhio5oPV_Aa10yk8y8OuM_SbUCDL2KD
+gdrive files download 1q7LliL4kNzp9jlPVxEVEvAtMmJUVzbfA
+```
+
+    - blockwise (8 layers, back) - orthnormal (new!)
+```bash
+gdrive files download 1K04V3W9XtildXF9jAPqXhTO_9p0SAo3d
+gdrive files download 1Ma5Uu9IlO7_Dc-ra6eOzr3p4mw5OV_p4
+gdrive files download 1W1sG73UQgwajhu9czuyWGRCw0wAdGpy_
+```
+
     - blockwise (2 layers) - PCA
 ```bash
 gdrive files download 194GaXFFlz3-T7rQQpnzQI1sp6FgIKA0D
@@ -111,6 +131,12 @@ bash CoInstruct.sh
 bash Visual_Relation.sh
 bash Visual_storytelling.sh
 bash MultiVQA_small.sh
+```
+
+data jsons
+```bash
+gdrive files download 1Sr2QDnn6lH71fc8L6sol0O8Bcw5ZcKK8
+gdrive files download 141f9sLFjpRjfqzk6nWQSusonuf9VqITI
 ```
 
 2. Run the following preprocessing python codes:

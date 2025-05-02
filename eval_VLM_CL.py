@@ -458,7 +458,7 @@ def main():
         return
     
     for client_id in range(training_args.num_clients):
-        if training_args.eval_client:
+        if training_args.eval_client is not None:
             if client_id != training_args.eval_client:
                 continue
         # load client weight

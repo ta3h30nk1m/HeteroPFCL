@@ -241,7 +241,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         for i, data in enumerate(public_datalist):
             if global_loss[0][i] < client_loss[i]:
                 valid_datalist.append(data)
-                target_logits.append(target_logit)
+                target_logits.append(global_loss[1][i])
         
         if len(valid_datalist) > 0:
             with torch.no_grad():

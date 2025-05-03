@@ -698,7 +698,7 @@ def get_datalists(args, scenario_num):
                 combined_datalist.extend(datalist)
             random.shuffle(combined_datalist)
             if scenario_num == 285 or scenario_num == 295:
-                combined_datalist = combined_datalist*2*(args.num_rounds * args.num_tasks)
+                combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
             num_iter = max_iterations
             for i in range(args.num_rounds * args.num_tasks):

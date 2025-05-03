@@ -208,12 +208,12 @@ class LazySupervisedDataset(Dataset):
             if j % 2 == 0:
                 conversation.append({
                     "role": "user",
-                    "content": source["conversations"][j]['value']
+                    "content": str(source["conversations"][j]['value'])
                 })
             else:
                 conversation.append({
                     "role": "assistant",
-                    "content": source["conversations"][j]['value']
+                    "content": str(source["conversations"][j]['value'])
                 })
         prompt = self.processor.apply_chat_template(conversation, tokenize=False)
         

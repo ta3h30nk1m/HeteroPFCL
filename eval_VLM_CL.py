@@ -577,7 +577,7 @@ def main():
                 # if 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode or 'perada' in training_args.mode or 'ditto' in training_args.mode or 'feddpa' in training_args.mode:
                 if 'perada' in training_args.mode or 'ditto' in training_args.mode:
                     model.set_state('lora2')
-                elif 'feddpa' in training_args.mode:
+                elif 'feddpa' in training_args.mode or 'feddat' in training_args.mode:
                     model.set_state('gate')
                 elif 'fedours' in training_args.mode or 'dual' in training_args.mode or 'fedquad' in training_args.mode or 'fedhexa' in training_args.mode or 'feddat' in training_args.mode:
                     model.set_state(training_args.set_state)

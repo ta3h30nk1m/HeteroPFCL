@@ -698,7 +698,13 @@ def get_datalists(args, scenario_num):
                 combined_datalist.extend(datalist)
             random.shuffle(combined_datalist)
             if scenario_num == 285 or scenario_num == 295 or scenario_num == 286:
-                combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
+                new_combined_datalist = []
+                for _ in range(11*(args.num_rounds * args.num_tasks)):
+                    temp = copy.deepcopy(combined_datalist)
+                    random.shuffle(temp)
+                    new_combined_datalist.extend(temp)
+                combined_datalist = new_combined_datalist
+                # combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
             num_iter = max_iterations
             for i in range(args.num_rounds * args.num_tasks):

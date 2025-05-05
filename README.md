@@ -12,6 +12,21 @@ pip install -U scikit-learn
 ```
 
 - init weight for 1B, 3B
+
+    - final core
+```bash
+llava 1b (4block): gdrive files download 1_sNX5TjuDjr9Sw4zOimlHxee8RAAljcs
+llava 3b (4block): gdrive files download 1xCewPkTCfMAjWSix7q8AiJnpAIbhbDOx
+llava 8b (4block): gdrive files download 1LmhTUJBGSfF2mWWcjF7YDUzrVWEXYTBP
+llava 1b (8block): gdrive files download 1rd6IqWIgO2aLhMWFC1dtvES3qswSRo_Z
+llava 3b (8block): gdrive files download 1xpXVsfdAtVKJumLa1kHwNQIidnQEzTGF
+
+qwen 0.5b (4block): gdrive files download 1z0zr3Iat5bsIXZCisekdSDOAeXxjwblK
+qwen 1.5b (4block): gdrive files download 13j55g6kdkRlQ5ddhHee5qwbVSiVweiYw
+qwen 3b (4block): gdrive files download 194uQ6Dsq9fMTkqjzCZ2LrToTxVjSYUtP
+
+```
+
     - blockwise (4 layers) - A random
 ```bash
 gdrive files download 17ZJwam-dnm1_F186XRfIAJQe0SRCUWGr
@@ -39,7 +54,7 @@ gdrive files download 1jRVjKI8wMqZ9hCrEEfVT1e6cZmLDbNBm
 ```bash
 gdrive files download 1_sNX5TjuDjr9Sw4zOimlHxee8RAAljcs
 gdrive files download 1phhio5oPV_Aa10yk8y8OuM_SbUCDL2KD
-gdrive files download 15x-CLn1cDqcUxtl50ezpz5dBtnS_4JIY
+gdrive files download 1xCewPkTCfMAjWSix7q8AiJnpAIbhbDOx
 ```
 
     - blockwise (8 layers, back) - orthnormal (new!)

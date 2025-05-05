@@ -950,9 +950,9 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
             target_layers = [3,7,11,15,19,23,27,31]
         elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
-            target_layers = [2,5,8,11,14,17,20,27]
-        elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
             target_layers = [2,5,8,11,14,17,20,23]
+        elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+            target_layers = [2,5,8,11,14,17,20,27]
         elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
             target_layers = [3,7,11,15,19,23,27,35]
         for idx, layer in enumerate(total_layers):
@@ -2277,9 +2277,38 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_1b_blockwise_orthnormal_init.pth', map_location='cpu')
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        state_dict = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('llava_3b_blockwise_orthnormal_init.pth', map_location='cpu')
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_3b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_3b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'llama3.1_8B_vl' in model-args.model_name_or_path:
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_8b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_1.5b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
             elif training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_random_init.pth', map_location='cpu')
@@ -2395,6 +2424,23 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'llama3.1_8B_vl' in model-args.model_name_or_path:
+                    if 'Multi2' in training_args.mode and 'back' in training_args.mode:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+                    else:
+                        if training_args.A_ensure_orth:
+                            state_dict = torch.load('llava_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                        else:
+                            state_dict = torch.load('llava_8b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_1.5b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
+                    state_dict = torch.load('qwen_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
             elif training_args.load_pretrained_random:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_1b_blockwise_random_init.pth', map_location='cpu')

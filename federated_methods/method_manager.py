@@ -50,6 +50,10 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
                   'fedquad_grad_include', 'fedquad_excludemean_include', 'fedquad_grad_include_moe', 'fedquad_excludemean_include_moe',
                   'fedhexa_grad_include', 'fedhexa_grad_include_moe'] :
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_include_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
+    
+    elif mode in ['fedours_pqgrad_moe']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_pqgrad_create_trainer, OURS_aggregate_state_dict
+    
     elif mode == 'fedours_self':
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_self_load_state_dict, fedours_ema_distill_create_trainer, OURS_aggregate_state_dict
     elif mode == 'fedMultipqfullfreeze_sft_Taskloss':

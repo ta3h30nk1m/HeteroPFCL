@@ -2292,7 +2292,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                elif 'llama3.1_8B_vl' in model-args.model_name_or_path:
+                elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         if training_args.A_ensure_orth:
                             state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
@@ -2424,7 +2424,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
                         else:
                             state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                elif 'llama3.1_8B_vl' in model-args.model_name_or_path:
+                elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         if training_args.A_ensure_orth:
                             state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')

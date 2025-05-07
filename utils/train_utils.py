@@ -199,7 +199,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg',
                                     'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                     'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
-                                    'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft',
+                                    'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',
                                      ]:
             from models.pqlora_full.pqloramodel_full import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -430,7 +430,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft']:
+    elif training_args.mode in ['fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',]:
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         if data_args.is_multimodal:
             if 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -2273,7 +2273,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'fdlora_fedMultipqfullfreeze_homoAgg','fdlora_fedMulti05pqfullfreeze_homoAgg',
                                   'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                   'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
-                                  'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft',
+                                  'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:

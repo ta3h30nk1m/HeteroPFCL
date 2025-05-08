@@ -433,7 +433,13 @@ def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, clie
             load_deepspeed(local_state_dict_list[client_id], model, strict=False)
         else:
             model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
+        
+        model_ids = extra_state_dict_dict['model_ids']
+        
+        for model_id, homo_ids in model_ids.items():
+            if client_id in homo_ids:
+                homo_client_ids = homo_ids
+        active_homo_ids = [id for id in homo_client_ids if id in extra_state_dict_dict['selected_ids_prev_round']]
         # gradient based similarity wegithed averaging (exclude own)
         if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
             # similarity matrix
@@ -441,6 +447,12 @@ def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, clie
             new_global_state_dict = {}
             
             weights = sim[client_id].clone()
+            
+            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
+            for id in active_clients_prev_round:
+                if id not in active_homo_ids:
+                    weights[id] = -1e9
+            
             weights = (weights/training_args.softmax_temp).softmax(dim=0)
             
             sim_sum = weights.sum() #- weights[client_id]
@@ -452,7 +464,7 @@ def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, clie
                 new_param = 0
                 target_key = name
                 
-                for id in range(training_args.num_clients):
+                for id in active_homo_ids:
                     new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                     
                 new_global_state_dict[name] = new_param
@@ -1238,6 +1250,8 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
 
         if 'tv' not in args.mode and 'excludemean' not in args.mode:
             self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
+            # curronly
+            # self.fisher_old = (self.fisher_cur.detach().cpu()/self.fisher_cnt)
             self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
 
         for hook in self.hooks:

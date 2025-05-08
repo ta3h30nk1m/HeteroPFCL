@@ -146,15 +146,15 @@ def fedMulti2pq_back_HomoAgg_load_state_dict(model, global_state_dict, local_sta
         for k in global_state_dict.keys():
             if 'layers.' in k:
                 cur_layer_num.append(int(k.split('.')[layer_index]))
-            cur_layer_num = len(list(set(cur_layer_num)))
-            if layer_index == 5: # multimodal model
-                if cur_layer_num == 16:
-                    cur_layer_num = [1,3,5,7,9,11,13,15]
-                elif cur_layer_num == 28:
-                    if 'front' in training_args.mode:
-                        cur_layer_num = [6,9,12,15,18,21,24,27]
-                    elif 'back' in training_args.mode:
-                        cur_layer_num = [2,5,8,11,14,17,20,27]
+        cur_layer_num = len(list(set(cur_layer_num)))
+        if layer_index == 5: # multimodal model
+            if cur_layer_num == 16:
+                cur_layer_num = [1,3,5,7,9,11,13,15]
+            elif cur_layer_num == 28:
+                if 'front' in training_args.mode:
+                    cur_layer_num = [6,9,12,15,18,21,24,27]
+                elif 'back' in training_args.mode:
+                    cur_layer_num = [2,5,8,11,14,17,20,27]
         new_global_state_dict = {}
         for name in global_state_dict.keys():
             new_param = 0

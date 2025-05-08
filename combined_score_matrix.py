@@ -5,13 +5,14 @@ from collections import defaultdict
 import os
 import numpy as np
 
-mode = 'fedsim_tv'
-Method='fedsim_tv_bs4_saveoptim_lr2e-5_sc80_4tasks_5rounds_fixitr100_T0125_decay099'
+mode = 'fedsim'
+Method='fedsim_NOCONT_bs4_saveoptim_lr2e-5_5e-5_sc315_4tasks_5rounds_fixitr75_T0125_decay099_SEED2'
 
-num_rounds = [20]
+# num_rounds = [2,5,7,10,12,15,17,20]
+num_rounds = [5,10,15,20]
 is_client = True
 
-scenario_num = 80
+scenario_num = 315
 with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
     scenario = json.load(fp)
 
@@ -25,6 +26,7 @@ for num_round in num_rounds:
             for data in client_data['datasets']:
                 data_name = f"{data['dataset']}-{data['subset_id']}"
                 if is_client:
+                    # print(f'./eval_results/{mode}/{Method}/client{client_id}_round{num_round}_{data_name}.json')
                     with open(f'./eval_results/{mode}/{Method}/client{client_id}_round{num_round}_{data_name}.json', 'r') as fp:
                         result = json.load(fp)[-1]
                 else:

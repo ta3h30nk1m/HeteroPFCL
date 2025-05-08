@@ -597,7 +597,9 @@ class LLaVATrainerOURS_PQGRAD(LLaVATrainerFEDAVG):
                             output = self.model(**inputs).loss
                             grads = []
                             for n, p in self.model.base_model.language_model.model.layers[-1].named_parameters():
-                                if 'lora2_P' in n or 'lora2_Q' in n:
+                                # if 'lora2_P' in n or 'lora2_Q' in n:
+                                
+                                if 'down_proj' in n and ('A' in n or 'B' in n) and p.requires_grad:
                                     grad = torch.autograd.grad(output, p, retain_graph=True)
                                     grads.append(grad[0].flatten())
                                 # grads = []

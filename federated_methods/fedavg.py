@@ -148,6 +148,15 @@ def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 cur_layer_num = [len(cur_layer_num)//2 -1, len(cur_layer_num) -1]
             elif 'Multi' in training_args.mode:
                 cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1]
+            elif 'Multi2' in training_args.mode:
+                if layer_index == 5: # multimodal model
+                    if len(cur_layer_num) == 16:
+                        cur_layer_num = [1,3,5,7,9,11,13,15]
+                    elif len(cur_layer_num) == 28:
+                        if 'front' in training_args.mode:
+                            cur_layer_num = [6,9,12,15,18,21,24,27]
+                        elif 'back' in training_args.mode:
+                            cur_layer_num = [2,5,8,11,14,17,20,27]
             else:
                 raise ValueError('wrong mode')
             
@@ -172,6 +181,15 @@ def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                         elif 'Multi' in training_args.mode:
                             layer_num = len(set(layer_num)) // 4
                             target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
+                        elif 'Multi2' in training_args.mode:
+                            if layer_index == 5: # multimodal model
+                                if layer_num == 16:
+                                    target_layers = [1,3,5,7,9,11,13,15]
+                                elif layer_num == 28:
+                                    if 'front' in training_args.mode:
+                                        target_layers = [6,9,12,15,18,21,24,27]
+                                    elif 'back' in training_args.mode:
+                                        target_layers = [2,5,8,11,14,17,20,27]
                         if cur_layer_num[-1] != target_layers[-1]: # if different size
                             idx = cur_layer_num.index(int(splited[layer_index]))
                             splited[layer_index] = str(target_layers[idx])

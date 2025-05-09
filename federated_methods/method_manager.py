@@ -75,7 +75,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, fedavg_aggregate_state_dict
     
-    elif mode in ['feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg']:
+    elif mode in ['feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, feddpa_create_trainer, fedavg_aggregate_state_dict
     elif mode in ['fdlora']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, fdlora_aggregate_state_dict
@@ -88,7 +88,7 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     elif mode in ['takfl', 'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedavg_load_state_dict, fedavg_create_trainer, TAKFL_aggregate_state_dict
     
-    elif mode in ['fedmkt', 'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg']:
+    elif mode in ['fedmkt', 'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg','fedmkt_fedMulti2pqfullfreeze_back_homoAgg']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, FEDMKT_aggregate_state_dict
     
     elif mode in ['feddualpq','feddualpqfullfreeze','feddualpqfullfreeze_tv','feddualpqfreezeA','feddualpqfullfreezeA']:

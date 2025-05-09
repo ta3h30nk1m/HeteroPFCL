@@ -198,7 +198,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedMulti05pqfullfreeze','fedMulti05pqfullfreeze_sft','fedMulti05pqfullfreeze_homoAgg','fedMulti05pqfullfreeze_homoAggOnly',
                                     'fdlora_fedMultipqfullfreeze_homoAgg', 'fdlora_fedMulti05pqfullfreeze_homoAgg',
                                     'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
-                                    'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
+                                    'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg','fedmkt_fedMulti2pqfullfreeze_back_homoAgg'
                                     'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',
                                      ]:
             from models.pqlora_full.pqloramodel_full import PQLoraModel
@@ -243,7 +243,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze',
                                     'fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg',
                                     'ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg',
-                                    'feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg',
+                                    'feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg'
                                     ]:
             from models.dual_pqlora_freeze_full.dual_pqloramodel_freeze_full import Dual_PQLorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -430,7 +430,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, PQLoraFullLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',]:
+    elif training_args.mode in ['fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg','fedmkt_fedMulti2pqfullfreeze_back_homoAgg',]:
         from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
         if data_args.is_multimodal:
             if 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -1032,7 +1032,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     m.lora2_P['default'].data = torch.ones_like(m.lora2_P['default'])
 
                     m.freeze_AB = True
-    elif training_args.mode in ['feddualMulti2pqfullfreeze_back','feddualMulti2pqfullfreeze_front','feddualMulti2pqfullfreeze_back_homoAgg']:
+    elif training_args.mode in ['feddualMulti2pqfullfreeze_back','feddualMulti2pqfullfreeze_front','feddualMulti2pqfullfreeze_back_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg',]:
         from models.dual_pqlora_freeze_full.dual_pqloralayer_freeze_full import PQLoraFullFreezeLayer
         if data_args.is_multimodal:
             if 'llama3.2_3B_vl' in model_args.model_name_or_path:
@@ -2273,7 +2273,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'fdlora_fedMultipqfullfreeze_homoAgg','fdlora_fedMulti05pqfullfreeze_homoAgg',
                                   'takfl_fedMultipqfullfreeze_homoAgg', 'takfl_fedMulti05pqfullfreeze_homoAgg',
                                   'fedmkt_fedMultipqfullfreeze_homoAgg', 'fedmkt_fedMulti05pqfullfreeze_homoAgg',
-                                  'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg',
+                                  'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg','fedmkt_fedMulti2pqfullfreeze_back_homoAgg',
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if 'llama3.2_1B_vl' in model_args.model_name_or_path:
@@ -2402,7 +2402,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'fedquadMultipqfullfreeze_moe', 'fedquadMultipqfullfreeze_homoAgg_moe', 'fedquadMultipqfullfreeze_include_moe', 'fedquadMultipqfullfreeze_include_homoAgg_moe',
                                     'fedquadMulti05pqfullfreeze_moe', 'fedquadMulti05pqfullfreeze_homoAgg_moe', 'fedquadMulti05pqfullfreeze_include_moe', 'fedquadMulti05pqfullfreeze_include_homoAgg_moe',
                                     'feddualMulti2pqfullfreeze_back','feddualMulti2pqfullfreeze_front','feddualMulti2pqfullfreeze_back_homoAgg','feddualMulti2pqfullfreeze_back_moe','feddualMulti2pqfullfreeze_back_homoAgg_moe',
-                                    'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg',
+                                    'perada_feddualMultipqfullfreeze','perada_feddualMulti05pqfullfreeze','feddat_Multipqfullfreeze', 'feddat_Multi05pqfullfreeze','fedsim_feddualMultipqfullfreeze_homoAgg','fedsim_feddualMulti05pqfullfreeze_homoAgg','ditto_feddualMultipqfullfreeze_homoAgg','ditto_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMultipqfullfreeze_homoAgg','feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
                                     'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
@@ -2855,7 +2855,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                               'fedsim','fedsim_hetero','fedsim_feddualMultipqfullfreeze_homoAgg', 'fedsim_feddualMulti05pqfullfreeze_homoAgg', 'feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe', 
                               'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
-                              'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg',
+                              'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg',
                               'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                               ]:
         for k in new_global_state_dict.keys():

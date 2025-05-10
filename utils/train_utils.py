@@ -2276,7 +2276,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   'fedMultipqfullfreeze_homoAgg_sft', 'fedMultipqfullfreeze_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg_sft', 'fedMulti2pqfullfreeze_back_homoAggOnly_sft','fedMulti2pqfullfreeze_back_homoAgg','fedmkt_fedMulti2pqfullfreeze_back_homoAgg',
                                   ]:
             if training_args.load_pretrained_orthnorm:
-                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                if not data_args.is_multimodal:
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
                     else:
@@ -2408,7 +2413,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                                     ]:
             if training_args.load_pretrained_orthnorm:
-                if 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                if not data_args.is_multimodal:
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
                     else:

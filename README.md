@@ -18,13 +18,15 @@ pip install -U scikit-learn
 llava 1b (4block): gdrive files download 1_sNX5TjuDjr9Sw4zOimlHxee8RAAljcs
 llava 3b (4block): gdrive files download 1xCewPkTCfMAjWSix7q8AiJnpAIbhbDOx
 llava 8b (4block): gdrive files download 1LmhTUJBGSfF2mWWcjF7YDUzrVWEXYTBP
-llava 1b (8block): gdrive files download 1rd6IqWIgO2aLhMWFC1dtvES3qswSRo_Z
-llava 3b (8block): gdrive files download 1xpXVsfdAtVKJumLa1kHwNQIidnQEzTGF
+llava 1b (8block): gdrive files download 1_iUI_KmCTKhwXI_l7cJ-C1O21XpEwOS7
+llava 3b (8block): gdrive files download 1xt3-Y-HGshNTsK-4EyOrD7G2BsPMxIk4
 
 qwen 0.5b (4block): gdrive files download 1z0zr3Iat5bsIXZCisekdSDOAeXxjwblK
 qwen 1.5b (4block): gdrive files download 13j55g6kdkRlQ5ddhHee5qwbVSiVweiYw
 qwen 3b (4block): gdrive files download 194uQ6Dsq9fMTkqjzCZ2LrToTxVjSYUtP
 
+llama 1b (4block): gdrive files download 1zSN14FDncBRdKXwq2S0a_hpU_eAZMMjq
+llama 3b (4block): gdrive files download 13J_P8AmWW49e8ojRazuaHHay4ke60G0r
 ```
 
     - blockwise (4 layers) - A random

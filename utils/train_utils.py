@@ -265,7 +265,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe', 'feddualMultipqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMulti05pqfullfreeze_moe', 'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe', 'feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMulti2pqfullfreeze_back_homoAgg_moe', 'feddualMulti2pqfullfreeze_back_moe',
-                                    'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss'
+                                    'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
+                                    'feddualMultipqfullfreeze32_homoAgg_moe','feddualMultipqfullfreeze64_homoAgg_moe','feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
                                     ]:
             from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -1315,6 +1316,64 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 for n, m in layer.named_modules():
                     if isinstance(m, PQMOELoraFullFreezeLayer):
                         m.use_pq = False
+
+    elif training_args.mode in ['feddualMultipqfullfreeze32_homoAgg_moe','feddualMultipqfullfreeze64_homoAgg_moe','feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',]:
+        from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
+        last_layer = len(total_layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        if '32' in training_args.mode:
+            r = 32
+        elif '64' in training_args.mode:
+            r = 64
+        elif '256' in training_args.mode:
+            r = 256
+        elif '512' in training_args.mode:
+            r = 512
+        elif '1024' in training_args.mode:
+            r = 1024
+        for idx, layer in enumerate(total_layers):
+            if idx in target_layers:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                        m.r['default'] = r
+                        m.lora_alpha['default'] = r*2
+                        m.lora1_A['default'] = nn.Linear(m.in_features, r, bias=False)
+                        m.lora1_B['default'] = nn.Linear(r, m.out_features, bias=False)
+                        m.lora2_A['default'] = copy.deepcopy(m.lora1_A['default'])
+                        m.lora2_B['default'] = copy.deepcopy(m.lora1_B['default'])
+                        
+                        m.lora1_P['default'] = nn.Parameter(torch.eye((r)))  # Initialized to 1
+                        m.lora1_Q['default'] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
+                        m.lora2_P['default'] = nn.Parameter(torch.eye((r)))  # Initialized to 1
+                        m.lora2_Q['default'] = nn.Parameter(torch.zeros((1,r))) # Initialized to 0
+                        
+                        init_A = torch.empty_like(m.lora1_A['default'].weight)
+                        nn.init.kaiming_uniform_(init_A, a=math.sqrt(5))
+                        # Assign the same values to both lora1 and lora2
+                        m.lora1_A['default'].weight.data.copy_(init_A)
+                        m.lora2_A['default'].weight.data.copy_(init_A)
+                        
+                        init_B = torch.empty_like(m.lora1_B['default'].weight)
+                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        m.lora1_B['default'].weight.data.copy_(init_B)
+                        m.lora2_B['default'].weight.data.copy_(init_B)
+                        
+                        m.lora1_A['default'].weight.requires_grad = False
+                        m.lora2_A['default'].weight.requires_grad = False
+                        m.lora1_B['default'].weight.requires_grad = False
+                        m.lora2_B['default'].weight.requires_grad = False
+                        
+                        nn.init.zeros_(m.lora1_P['default'])
+                        nn.init.zeros_(m.lora2_P['default'])
+                        nn.init.zeros_(m.lora1_Q['default'])
+                        nn.init.zeros_(m.lora2_Q['default'])
+                        
+                        m.freeze_AB = True
+            else:
+                for n, m in layer.named_modules():
+                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                        m.use_pq = False
+
     elif training_args.mode in ['feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeA_homoAgg_moe2']:
         from models.dual_pqlora_freezeA_full_moe.dual_pqloralayer_freezeA_full_moe import PQMOELoraFullFreezeALayer
         last_layer = len(total_layers) // 4
@@ -2411,6 +2470,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
                                     'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
+                                    'feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
@@ -2867,6 +2927,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'ditto','ditto_feddualMultipqfullfreeze_homoAgg', 'ditto_feddualMulti05pqfullfreeze_homoAgg',
                               'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg',
                               'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
+                              'feddualMultipqfullfreeze32_homoAgg_moe','feddualMultipqfullfreeze64_homoAgg_moe','feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

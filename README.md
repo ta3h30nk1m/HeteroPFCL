@@ -32,7 +32,7 @@ new
 llava 1b (4block): gdrive files download 1TAeiWq36ewrwVCgId3TKpXTxnRu4rDtN
 llava 3b (4block): gdrive files download 1ppeB7CxiD8yhaAWY5Gvz4OpUPA7yQc5_
 
-llava 1b (8block): gdrive files downlaod 18shu4ixvCJCu1eAMbbMCTFuLocJk7ZFf
+llava 1b (8block): gdrive files download 18shu4ixvCJCu1eAMbbMCTFuLocJk7ZFf
 llava 3b (8block): gdrive files download 1i1T-oZT_e2jqOL-NgDXrhX1d3OnBTDfZ
 
 ```

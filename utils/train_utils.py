@@ -267,6 +267,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMulti2pqfullfreeze_back_homoAgg_moe', 'feddualMulti2pqfullfreeze_back_moe',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
                                     'feddualMultipqfullfreeze32_homoAgg_moe','feddualMultipqfullfreeze64_homoAgg_moe','feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
+                                    'feddualMultipqfullfreeze_excludemean_homoAgg_moe',
                                     ]:
             from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -1273,7 +1274,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, TriplePQLoraFullFreezeLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAgg_normalize_moe',]:
+    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMultipqfullfreeze_excludemean_homoAgg_moe',]:
         from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -2471,6 +2472,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     'feddualMulti2pfullfreeze_back','feddualMultipfullfreeze_homoAgg_moe', 'feddualMulti05pfullfreeze_homoAgg_moe',
                                     'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                                     'feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
+                                    'feddualMultipqfullfreeze_excludemean_homoAgg_moe',
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
@@ -2928,6 +2930,7 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
                               'feddpa','feddpa_feddualMultipqfullfreeze_homoAgg', 'feddpa_feddualMulti05pqfullfreeze_homoAgg','feddpa_feddualMulti2pqfullfreeze_back_homoAgg',
                               'feddualMultipqfullfreezeA_homoAgg_moe','feddualMultipqfullfreezeB_homoAgg_moe','feddualMultipqfull_homoAgg_moe','feddualMultipqfull_homoAgg_moe2','feddualMultipqfull_homoAggOnly_moe','feddualMultipqfullfreezeA_homoAgg_moe2','feddualMulti2pqfullfreezeA_back_homoAgg_moe2','feddualMulti2pqfull_back_homoAgg_moe2',
                               'feddualMultipqfullfreeze32_homoAgg_moe','feddualMultipqfullfreeze64_homoAgg_moe','feddualMultipqfullfreeze256_homoAgg_moe','feddualMultipqfullfreeze512_homoAgg_moe','feddualMultipqfullfreeze1024_homoAgg_moe',
+                              'feddualMultipqfullfreeze_excludemean_homoAgg_moe',
                               ]:
         for k in new_global_state_dict.keys():
             if 'lora2' in k or 'ia3_l_2' in k or 'ia3_generator_2' in k or 'lang_prompt_ia3_pool_2' in k \

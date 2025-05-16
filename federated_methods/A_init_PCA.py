@@ -60,7 +60,7 @@ logger = logging.get_logger(__name__)
 
 from eval_VLM_CL import anytime_evaluation
 
-def A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True):
+def A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True, take_input=True):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     trainer = LLaVATrainer_A_PCA_Init(model=model,
@@ -69,12 +69,13 @@ def A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, mode
         model2 = model2,
         train_A=train_A,
         data_args=data_args,
+        take_input=take_input,
         **data_module,
         )
     return trainer
 
 class LLaVATrainer_A_PCA_Init(LLaVATrainer):
-    def __init__(self, model2, train_A,data_args,**kwargs):
+    def __init__(self, model2, train_A,data_args,take_input=True,**kwargs):
         super(LLaVATrainer_A_PCA_Init, self).__init__(**kwargs)
         self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
         self.train_A = train_A
@@ -83,10 +84,23 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         self.lora_inputs = []
         self.lora_inputs2 = []
         # Define a simple function to store the output of a layer
-        def hook_fn(module, input, output):
+        def hook_fn_i(module, input, output):
             self.lora_inputs.append(input)
-        def hook_fn2(module, input, output):
+        def hook_fn2_i(module, input, output):
             self.lora_inputs2.append(input)
+        def hook_fn_o(module, input, output):
+            self.lora_inputs.append(output)
+        def hook_fn2_o(module, input, output):
+            self.lora_inputs2.append(output)
+            
+        
+        if take_input:
+            hook_fn = hook_fn_i
+            hook_fn2 = hook_fn2_i
+        else:
+            hook_fn = hook_fn_o
+            hook_fn2 = hook_fn2_o
+        
         
         if self.data_args.is_multimodal:
             last_layer = len(self.model.base_model.language_model.model.layers) // 4
@@ -115,6 +129,13 @@ class LLaVATrainer_A_PCA_Init(LLaVATrainer):
         # elif 'Optimal8' in self.args.mode:
         #     self.target_layers = [5,7,11,14,18,20,23,27]
         #     self.target_layers2 = [5,6,8,9,11,12,14,15]
+        
+        # if 'front' in self.args.mode:
+        #     self.target_layers = [6,9,12,15,18,21,24,27]
+        # elif 'back' in self.args.mode:
+        #     self.target_layers = [2,5,8,11,14,17,20,27]
+        # self.target_layers = [3,7,11,15,19,23,27,31]
+        # self.target_layers2 = [1,3,5,7,9,11,13,15]
         
         self.lora_A_input_1b = []
         self.lora_A_input_3b = []

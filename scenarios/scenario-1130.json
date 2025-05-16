@@ -7,27 +7,27 @@
             {"dataset": "VISION","subset_id": 40, "type":"multi-choice"},
             {"dataset": "FashionIQ","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 1,
         "datasets":[
-            {"dataset": "PatternCom","subset_id": 40,"type":"multi-choice"},
+            {"dataset": "VSR","subset_id": 40,"type":"multi-choice"},
             {"dataset": "VISION","subset_id": 41, "type":"multi-choice"},
             {"dataset": "Fashion200K","subset_id": 43, "type":"multi-choice"},
             {"dataset": "NLVR2","subset_id": 40,"type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 2,
         "datasets":[
-            {"dataset": "HQ_Edit","subset_id": 40,"type":"multi-choice"},
+            {"dataset": "SEED-Bench-2","subset_id": 42,"type":"multi-choice"},
             {"dataset": "Fashion200K","subset_id": 42, "type":"multi-choice"},
             {"dataset": "NLVR2","subset_id": 41,"type":"multi-choice"},
             {"dataset": "CIRR","subset_id": 41,"type":"multi-choice"} 
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
 
     {
@@ -38,7 +38,7 @@
             {"dataset": "Bongard-HOI","subset_id": 41, "type":"multi-choice"},
             {"dataset": "MIT-States","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 4,
@@ -48,7 +48,7 @@
             {"dataset": "COMICS_Dialogue","subset_id": 40, "type":"multi-choice"},
             {"dataset": "IRFL","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 5,
@@ -58,47 +58,47 @@
             {"dataset": "IRFL","subset_id": 43, "type":"multi-choice"},
             {"dataset": "Bongard-HOI","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
 
     {
         "client_id": 6,
         "datasets":[
-            {"dataset": "HRVQA","subset_id": 49, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 40, "type":"multi-choice"},
             {"dataset": "iconqa","subset_id": 42, "type":"open-ended", "metric":"F1"},
             {"dataset": "Co-Instruct-DB","subset_id": 45, "type":"multi-choice"},
-            {"dataset": "AQUA","subset_id": 40, "type":"open-ended", "metric":"F1"}
+            {"dataset": "SEED-Bench-2","subset_id": 41, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 7,
         "datasets":[
             {"dataset": "TQA","subset_id": 40, "type":"multi-choice"},
-            {"dataset": "HRVQA","subset_id": 42, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 43, "type":"multi-choice"},
             {"dataset": "iconqa","subset_id": 41, "type":"multi-choice"},
             {"dataset": "Co-Instruct-DB","subset_id": 41, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 8,
         "datasets":[
             {"dataset": "Co-Instruct-DB","subset_id": 40, "type":"multi-choice"},
             {"dataset": "dvqa","subset_id": 40, "type":"multi-choice"},
-            {"dataset": "HRVQA","subset_id": 47, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 41, "type":"multi-choice"},
             {"dataset": "iconqa","subset_id": 43, "type":"open-ended", "metric":"F1"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     },
     {
         "client_id": 9,
         "datasets":[
             {"dataset": "iconqa","subset_id": 40, "type":"multi-choice"},
             {"dataset": "Co-Instruct-DB","subset_id": 46, "type":"multi-choice"},
-            {"dataset": "WebQA","subset_id": 40, "type":"open-ended", "metric":"F1"},
-            {"dataset": "HRVQA","subset_id": 45, "type":"multi-choice"}
+            {"dataset": "SEED-Bench-2","subset_id": 40, "type":"multi-choice"},
+            {"dataset": "WCVQA","subset_id": 42, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_3B_vl"
+        "model_id": "thkim0305/qwen2.5_0.5B_vl"
     }
 ]

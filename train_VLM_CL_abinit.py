@@ -166,11 +166,13 @@ def main():
     # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
     # llm models: meta-llama/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-3B-Instruct meta-llama/Llama-3.1-8B-Instruct
     # model2 = models["thkim0305/llama3.2_1B_vl"]
-    model2 = models["meta-llama/Llama-3.2-1B-Instruct"]
+    # model2 = models['thkim0305/qwen2.5_0.5B_vl']
+    model2 = models["meta-llama/Llama-3.2-1B"]
     
     # data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     data_path = 'chatbotIT.json'
+    # data_path = 'dataset/llava_finetune/llava_v1_5_mix665k_updated.json'
     public_datalist = json.load(open(data_path, "r"))
     
     # Filter out items without the "image" key
@@ -179,105 +181,164 @@ def main():
     random.shuffle(public_datalist)
 
     ##### A_PCA init #####
-    public_datalist_ = public_datalist[:1000]
+    # public_datalist_ = public_datalist[:200]
     
-    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
-                                                tokenizer=tokenizer,
-                                                processor=processor,
-                                                data_args=copy.deepcopy(new_data_args))
+    # data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+    #                                             tokenizer=tokenizer,
+    #                                             processor=processor,
+    #                                             data_args=copy.deepcopy(new_data_args))
     
     # train bigger model
     # model = models["thkim0305/llama3.2_3B_vl"]
-    model = models["meta-llama/Llama-3.2-3B-Instruct"]
-    from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
-    trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
-
-    results = trainer.train()
-
-    lora_A_input_1bs = trainer.lora_A_input_1b
-    lora_A_input_3bs = trainer.lora_A_input_3b
+    # model = models['thkim0305/qwen2.5_1.5B_vl']
+    # model = models['thkim0305/qwen2.5_3B_vl']
+    # model = models["thkim0305/llama3.1_8B_vl"]
+    # model = models["meta-llama/Llama-3.2-3B"]
+    model = models["meta-llama/Llama-3.1-8B"]
+    model = model.to(torch.bfloat16)
+    model2= model2.to(torch.bfloat16)
     
-    layer_name_1b = trainer.layer_name_1b
-    layer_name_3b = trainer.layer_name_3b
+    # from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
+    # trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
+
+    # results = trainer.train()
+
+    # lora_A_input_1bs = trainer.lora_A_input_1b
+    # lora_A_input_3bs = trainer.lora_A_input_3b
     
-    state_dict = get_peft_state_maybe_zero_3(
-        model.named_parameters(), training_args.lora_bias
-    )
+    # layer_name_1b = trainer.layer_name_1b
+    # layer_name_3b = trainer.layer_name_3b
     
-    state_dict2 = get_peft_state_maybe_zero_3(
-        model2.named_parameters(), training_args.lora_bias
-    )
-    lora_r = 16
-    for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
-        _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=lora_r)
-        _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=lora_r)
-
-        with torch.no_grad():
-            print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :lora_r]", V_3b[:, :lora_r].shape)
-            print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :lora_r]", V_1b[:, :lora_r].shape)
-            state_dict[layer_name_3b[idx]] = V_3b[:, :lora_r].to(torch.bfloat16).T
-            state_dict2[layer_name_1b[idx]] = V_1b[:, :lora_r].to(torch.bfloat16).T
-
-
-    output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")
-    torch.save(state_dict2, output_dir2)
+    # state_dict = get_peft_state_maybe_zero_3(
+    #     model.named_parameters(), training_args.lora_bias
+    # )
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_3b_PCA_orthnormal_init.pth")
-    torch.save(state_dict, output_dir)
+    # state_dict2 = get_peft_state_maybe_zero_3(
+    #     model2.named_parameters(), training_args.lora_bias
+    # )
+    # lora_r = 128
+    # for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
+    #     _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=lora_r)
+    #     _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=lora_r)
 
-    trainer.deepspeed.empty_partition_cache()
-    trainer.accelerator.free_memory()
-    del trainer, lora_A_input_1bs, lora_A_input_3bs
-    model = model.cpu()
-    gc.collect()
-    torch.cuda.empty_cache()
+    #     with torch.no_grad():
+    #         print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :lora_r]", V_3b[:, :lora_r].shape)
+    #         print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :lora_r]", V_1b[:, :lora_r].shape)
+    #         state_dict[layer_name_3b[idx]] = V_3b[:, :lora_r].to(torch.bfloat16).T
+    #         state_dict2[layer_name_1b[idx]] = V_1b[:, :lora_r].to(torch.bfloat16).T
 
-    ##### A init #####
-    model.load_state_dict(state_dict, strict=False) 
+
+    # # output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")
+    # output_dir2 = os.path.join(training_args.state_dir, f"qwen_0.5b_PCA_orthnormal_init.pth")
+    # torch.save(state_dict2, output_dir2)
+    
+    # # output_dir = os.path.join(training_args.state_dir, f"llava_3b_PCA_orthnormal_init.pth")
+    # output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_PCA_orthnormal_init.pth")
+    # torch.save(state_dict, output_dir)
+
+    # trainer.deepspeed.empty_partition_cache()
+    # trainer.accelerator.free_memory()
+    # del trainer, lora_A_input_1bs, lora_A_input_3bs
+    # model = model.cpu()
+    # gc.collect()
+    # torch.cuda.empty_cache()
+
+    # ##### A init #####
+    # model.load_state_dict(state_dict, strict=False) 
+    
+    # load pretrained 1b weight
+    # state_dict2 = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
+    # state_dict2 = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
+    # state_dict2 = torch.load('llava_1b_blockwise_half_pca_init.pth', map_location='cpu')
+    # state_dict2 = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+    # state_dict2 = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
+    # state_dict2 = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+    state_dict2= torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
     model2.load_state_dict(state_dict2, strict=False) 
 
-    public_datalist_ = public_datalist[2000:10000]
+    # public_datalist_ = public_datalist[2000:7000]
+    # public_datalist_ = public_datalist[1000:10000]
     
-    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
-                                                tokenizer=tokenizer,
-                                                processor=processor,
-                                                data_args=copy.deepcopy(new_data_args))
     
-    # train bigger model
-    # model = models["thkim0305/llama3.2_3B_vl"]
-    model = models["meta-llama/Llama-3.2-3B-Instruct"]
-    from federated_methods.AB_init import ABInit_create_trainer
-    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
+    # data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+    #                                             tokenizer=tokenizer,
+    #                                             processor=processor,
+    #                                             data_args=copy.deepcopy(new_data_args))
+    
+    # # train bigger model
+    # # model = models["thkim0305/llama3.2_3B_vl"]
+    # # model = models["thkim0305/qwen2.5_1.5B_vl"]
+    # # model = models['thkim0305/qwen2.5_3B_vl']
+    # # model = models["thkim0305/llama3.1_8B_vl"]
+    # # model = models["meta-llama/Llama-3.2-3B-Instruct"]
+    # from federated_methods.AB_init import ABInit_create_trainer
+    # trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
 
-    results = trainer.train()
+    # results = trainer.train()
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_A.pth")
-    state_dict = get_peft_state_maybe_zero_3(
-        model.named_parameters(), training_args.lora_bias
-    )
-    non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-        model.named_parameters()
-    )
-    state_dict.update(non_lora_state_dict)
+    # output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_A.pth")
+    # # output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_orthnormal_init_FT_A.pth")
+    # state_dict = get_peft_state_maybe_zero_3(
+    #     model.named_parameters(), training_args.lora_bias
+    # )
+    # non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+    #     model.named_parameters()
+    # )
+    # state_dict.update(non_lora_state_dict)
     
-    torch.save(state_dict, output_dir)
+    # torch.save(state_dict, output_dir)
+    # ##################################################
+    # target_layers = [6,13,20,27]
+    # # target_layers = [7,15,23,31]
+    # # target_layers = [8,17,26,35]
+    # # target_layers = [2,5,8,11,14,17,20,27]
+    # target_layers = [3,7,11,15,19,23,27,31]
+    # prefix_ = 'base_model.model.model.layers'
+    # # prefix_ = 'base_model.model.language_model.model.layers'
+    # mid_insert = ['self_attn.k_proj','self_attn.q_proj','self_attn.v_proj','self_attn.o_proj', 'mlp.gate_proj','mlp.up_proj','mlp.down_proj']
+    # for i in target_layers:
+    #     for mid in mid_insert:
+    #         A_key = prefix_ + f'.{i}.' + mid + '.lora_A.default.weight'
+    #         B_key = prefix_ + f'.{i}.' + mid + '.lora_B.default.weight'
+            
+    #         A = state_dict[A_key]
+    #         # B = state_dict[B_key]
+            
+    #         # A_, B_ = orthogonalize_lora_pair(A, B)
+            
+    #         # state_dict[A_key] = A_
+    #         # state_dict[B_key] = B_
+            
+    #         A_, err = closest_row_orthonormal(A)
+    #         print(err)
+    #         # avg_cos, fro_dev = orthogonality_metrics(A_)
+    #         # print(f"Avg |cosine| similarity: {avg_cos:.4e}")
+    #         # print(f"Fro. deviation / n    : {fro_dev:.4e}")
+    #         state_dict[A_key] = A_
     
-    trainer.deepspeed.empty_partition_cache()
-    trainer.accelerator.free_memory()
-    del trainer
-    model = model.cpu()
-    gc.collect()
-    torch.cuda.empty_cache()
+    # torch.save(state_dict, output_dir)
     
+    # model.load_state_dict(state_dict, strict=False) 
+    # ##############################################
+    # trainer.deepspeed.empty_partition_cache()
+    # trainer.accelerator.free_memory()
+    # del trainer
+    # model = model.cpu()
+    # gc.collect()
+    # torch.cuda.empty_cache()
 
+    state_dict = torch.load('client_states_debug_8b_multi_llm_llama_abinit_lr5e-4_nopca_AensureOrth/llava_3b_orthnormal_init_FT_A.pth',map_location='cpu')
+    model.load_state_dict(state_dict, strict=False) 
     ##### B init #####
-    public_datalist_ = public_datalist[10000:11000]
-    
+    public_datalist_ = public_datalist[10000:10500]
+    # public_datalist_ = public_datalist[7000:7100]
+    # public_datalist_ = public_datalist[7000:7080]
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(new_data_args))
-    
+    # model = model.to(torch.bfloat16)
+    # model2= model2.to(torch.bfloat16)
     trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = False)
 
     results = trainer.train()
@@ -342,21 +403,40 @@ def main():
             state_dict[layer_name_3b[idx]] = (mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
             
     for key in state_dict.keys():
-        if 'lora_P' in key:
+        if 'lora_P' in key or 'lora_Q' in key:
             state_dict[key] = torch.zeros_like(state_dict[key])
     
     for key in state_dict2.keys():
-        if 'lora_P' in key:
+        if 'lora_P' in key or 'lora_Q' in key:
             state_dict2[key] = torch.zeros_like(state_dict2[key])
     
-    output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_orthnormal_init.pth")
-    
+    output_dir2 = os.path.join(training_args.state_dir, f"llama_1b_random_init.pth")
+    # output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_random_init.pth")
+    # output_dir2 = os.path.join(training_args.state_dir, f"qwen_0.5b_random_init.pth")
     torch.save(state_dict2, output_dir2)
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_AB.pth")
+    output_dir = os.path.join(training_args.state_dir, f"llama_8b_random_init_FT_AB.pth")
+    # output_dir = os.path.join(training_args.state_dir, f"llava_3b_random_init_FT_AB.pth")
+    # output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_orthnormal_init_FT_AB.pth")
     torch.save(state_dict, output_dir)
     return
     ################################################################################################
+
+def closest_row_orthonormal(A: torch.Tensor) -> torch.Tensor:
+    """
+    Replace A (r × d, r ≤ d) by the closest matrix whose rows are orthonormal.
+
+    Returns
+    -------
+    A_ortho  # same shape as A, satisfies A_ortho @ A_ortho.T == I_r
+    fro_error  # ‖A_ortho − A‖_F  (optional diagnostic)
+    """
+    orig_dtype = A.dtype
+    # SVD in float32 for stability
+    U, _, Vt = torch.linalg.svd(A.float(), full_matrices=False)
+    A_ortho = (U @ Vt).to(orig_dtype)
+    fro_error = torch.norm(A_ortho - A.float(), p='fro').item()
+    return A_ortho, fro_error
 
 def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
                                 data_args) -> Dict:

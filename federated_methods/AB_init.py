@@ -105,6 +105,20 @@ class LLaVATrainerABInit(LLaVATrainer):
             self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
             last_layer2 = len(self.model2.base_model.model.model.layers) // 4
             self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+        
+        
+        # if 'front' in self.args.mode:
+            # self.target_layers = [6,9,12,15,18,21,24,27]
+        # elif 'back' in self.args.mode:
+            # self.target_layers = [2,5,8,11,14,17,20,27]
+        # self.target_layers2 = [1,3,5,7,9,11,13,15]
+        # self.target_layers = [3,7,11,15,19,23,27,31]
+        
+        
+        # self.target_layers = [2,5,8,11,14,17,20,27]
+        # self.target_layers = [3,7,11,15,19,23,27,35]
+        # self.target_layers2 = [2,5,8,11,14,17,20,23]
+        
         # self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
         # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
         # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
@@ -299,6 +313,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                             # Compute loss as mean squared cosine similarity (to encourage orthogonality)
                             cos_loss += (cosine_sim_matrix[mask] ** 2).mean()  # Mean squared cosine similarity
                             layer_cnt += 1
+            print(f"l2 loss: {loss} | cosine_loss: {cos_loss} / {layer_cnt} * 0.5")
             loss += 0.5*cos_loss / layer_cnt
         else:
             loss *= 0

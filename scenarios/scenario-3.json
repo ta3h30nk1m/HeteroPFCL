@@ -27,7 +27,7 @@
             {"dataset": "NLVR2","subset_id": 41,"type":"multi-choice"},
             {"dataset": "CIRR","subset_id": 41,"type":"multi-choice"} 
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
 
     {
@@ -38,7 +38,7 @@
             {"dataset": "Bongard-HOI","subset_id": 41, "type":"multi-choice"},
             {"dataset": "MIT-States","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 4,
@@ -48,7 +48,7 @@
             {"dataset": "COMICS_Dialogue","subset_id": 40, "type":"multi-choice"},
             {"dataset": "IRFL","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 5,
@@ -58,7 +58,7 @@
             {"dataset": "IRFL","subset_id": 43, "type":"multi-choice"},
             {"dataset": "Bongard-HOI","subset_id": 40, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
 
     {
@@ -69,7 +69,7 @@
             {"dataset": "Co-Instruct-DB","subset_id": 45, "type":"multi-choice"},
             {"dataset": "SEED-Bench-2","subset_id": 41, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 7,
@@ -79,7 +79,7 @@
             {"dataset": "iconqa","subset_id": 41, "type":"multi-choice"},
             {"dataset": "Co-Instruct-DB","subset_id": 41, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     },
     {
         "client_id": 8,
@@ -99,6 +99,6 @@
             {"dataset": "SEED-Bench-2","subset_id": 40, "type":"multi-choice"},
             {"dataset": "WCVQA","subset_id": 42, "type":"multi-choice"}
         ],
-        "model_id": "thkim0305/llama3.2_1B_vl"
+        "model_id": "thkim0305/llama3.2_3B_vl"
     }
 ]

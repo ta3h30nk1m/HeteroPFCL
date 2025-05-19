@@ -11,6 +11,13 @@ pip install peft==0.14.0 bitsandbytes pandas kornia opencv-python timm torch_opt
 pip install -U scikit-learn
 ```
 
+- scenario
+    - scenario-0~5: DRAKE
+    - scenario-7~12: unseen
+    - scenario-20~24: HFLB
+    - scenario-60~ : fed-aya
+    -scenario-70~ : fed-llm
+
 - init weight for 1B, 3B
 
     - final core

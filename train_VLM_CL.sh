@@ -1,24 +1,40 @@
 #!/bin/bash
-# CIL CONFIG
-NOTE="sft_bs4_saveoptim_lr2e-5_sc75_4tasks_5rounds_fixitr100_T0125_decay099"
-MODE="sft"
-MODEL_ARCH="llama3_8b" # llava gemma_vl
-RND_SEED=1
+##SBATCH --time=120:00:00
+## SBATCH -p dell_rtx3090
+##SBATCH -p suma_rtx4090
+#SBATCH -p suma_a6000
+#SBATCH --job-name=train
+#SBATCH --gres=gpu:1
+##SBATCH --exclude=node25
+
+ulimit -u 200000
+source ~/.bashrc
+ml purge
+conda init bash
+conda activate fcl2
+
+export CUBLAS_WORKSPACE_CONFIG=:16:8
+
+# CIL CONFIG fedsim_feddualMultipqfullfreeze_homoAgg
+NOTE="NEW_feddualMultipqfullfreeze_homoAgg_moe_NOCONT_bs4_saveoptim_lr2e-5_5e-5_sc4_4tasks_5rounds_fixitr92_T0125_decay099_SEED2"
+MODE="feddualMultipqfullfreeze_homoAgg_moe"
+MODEL_ARCH="llama3_3b" # llava gemma_vl
+RND_SEED=2
 
 # fed args
-SCENARIO=75
+SCENARIO=4
 NUM_ROUNDS=5
 NUM_TASKS=4
 NUM_CLIENTS=10
 MODEL_MAX_LEN=20000
-NUM_ITER=100
+NUM_ITER=92
 
 ###
 ANYTIME_EVAL=False
 ANYTIME_EVAL_FREQ=1
 ##
 MEMORY_SIZE=100000
-IS_STREAMONLY=False
+IS_STREAMONLY=False #################!!!!!!!!!!!!
 
 LORA_ENABLE=True
 IA3_ENABLE=False
@@ -26,10 +42,10 @@ IA3_ENABLE=False
 USE_TASK_ID=False
 USE_PROMPT=False
 
-SAVE_OPTIM=True
+SAVE_OPTIM=True ##########
 
-USE_TASK_VECTOR=False
-USE_FISHER=False
+USE_TASK_VECTOR=True
+USE_FISHER=True
 
 GENERATOR_OUTPUT_SIZE=1024
 GENERATOR_HIDDEN_DIM=8
@@ -37,16 +53,20 @@ GENERATOR_HIDDEN_FEATURE=8
 KEY_EMBED_SIZE=64
 POOL_SIZE=4
 PROMPT_TOP_K=1
-EMA_RATIO=0.9
+EMA_RATIO=0.95
 
-BATCHSIZE=4
+BATCHSIZE=1
+
+IS_MULTIMODAL=True
+ONLINE_T=0.125
+ONLINE_DECAY_RATIO=0.99
 
 LR=2e-5
-MM_PROJECTOR_LR=2e-5 #3e-4
+MM_PROJECTOR_LR=5e-5 #3e-4
 FINAL_LR=$LR #3e-4
 MM_FINAL_LR=$MM_PROJECTOR_LR #3e-4
 OPT_NAME="adamw_torch" # adam8bit_bnb adamw_torch
-SCHED_NAME="constant" #cosine
+SCHED_NAME="constant" #constant cosine #################!!!!!!!!!!!!!!!!!!
 WARMUP_RATIO=0.1 # SHOULD BE 0.03 / NUM_ROUNDS
 DECAY_RATIO=0.9
 
@@ -79,11 +99,11 @@ fi
 # --master_port 29500
 # --num_gpus=4
 
-# LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr4e-5_sc5_4tasks_5rounds_fixitr100_t0.2_memonly_rank32/round15_task_vector_local_weights.pth"
-LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
+LOAD_CHECKPOINT="client_states_feddualMultipqfullfreeze_pca_bs4_saveoptim_lr2e-5_1e-4_sc122_4tasks_5rounds_fixitr100_T0125_decay099/round20_task_vector_local_weights.pth"
+# LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29500 \
+deepspeed --master_port 29710 \
     --include localhost:0 \
     train_VLM_CL.py \
     --deepspeed ./deepspeed_script/zero2.json \
@@ -99,7 +119,7 @@ deepspeed --master_port 29500 \
     --gradient_checkpointing True \
     --num_train_epochs 1 \
     --num_iter $NUM_ITER \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 4 \
     --bits $BITS \
     --bf16 True \
     --tf32 True \
@@ -138,10 +158,23 @@ deepspeed --master_port 29500 \
     --use_fisher $USE_FISHER \
     --fedours False \
     --is_hetero_model True \
-    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
+    --load_pretrained_orthnorm True \
+    --A_ensure_orth True \
+    --randomize_B False \
+    --save_per_step False \
+    --softmax_temp 0.5 \
+    --fisher_freq 10 \
+    --is_multimodal $IS_MULTIMODAL \
+    --online_stream_T $ONLINE_T \
+    --online_stream_count_decay_ratio $ONLINE_DECAY_RATIO \
+    --is_continual False \
+    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type
 #  --load_checkpoint $LOAD_CHECKPOINT \
     # --lora_r 32 \
     # --lora_alpha 64 \
+    # --lora_r 16 \
+    # --lora_alpha 32 \
+    # --is_multimodal False \

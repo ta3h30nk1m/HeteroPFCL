@@ -473,7 +473,7 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                     
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
-
+                    torch.cuda.empty_cache()
                     if (
                         args.logging_nan_inf_filter
                         and not is_torch_xla_available()

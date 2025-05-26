@@ -226,6 +226,7 @@ def main():
             
             model_list[model_id] = global_state_dict
             
+            model = model.cpu()
             models[model_id] = model
             
             model_ids[model_id] = [client_id]
@@ -249,6 +250,8 @@ def main():
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids, 'models':models}
     extra_state_dict_dict['LAYER_INDEX'] = LAYER_INDEX
+    
+    torch.cuda.empty_cache()
     
     if training_args.fedours:
         logger.info(f'load task vector {training_args.load_checkpoint}')

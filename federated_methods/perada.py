@@ -129,26 +129,26 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
             loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch,update_adapter=update_adapter)
 
         del inputs
-        # if (
-        #     self.args.torch_empty_cache_steps is not None
-        #     and self.state.global_step % self.args.torch_empty_cache_steps == 0
-        # ):
-        #     if is_torch_xpu_available():
-        #         torch.xpu.empty_cache()
-        #     elif is_torch_mlu_available():
-        #         torch.mlu.empty_cache()
-        #     elif is_torch_musa_available():
-        #         torch.musa.empty_cache()
-        #     elif is_torch_npu_available():
-        #         torch.npu.empty_cache()
-        #     elif is_torch_mps_available(min_version="2.0"):
-        #         torch.mps.empty_cache()
-        #     elif is_torch_hpu_available():
-        #         logger.warning(
-        #             "`torch_empty_cache_steps` is set but HPU device/backend does not support empty_cache()."
-        #         )
-        #     else:
-        torch.cuda.empty_cache()
+        if (
+            self.args.torch_empty_cache_steps is not None
+            and self.state.global_step % self.args.torch_empty_cache_steps == 0
+        ):
+            if is_torch_xpu_available():
+                torch.xpu.empty_cache()
+            elif is_torch_mlu_available():
+                torch.mlu.empty_cache()
+            elif is_torch_musa_available():
+                torch.musa.empty_cache()
+            elif is_torch_npu_available():
+                torch.npu.empty_cache()
+            elif is_torch_mps_available(min_version="2.0"):
+                torch.mps.empty_cache()
+            elif is_torch_hpu_available():
+                logger.warning(
+                    "`torch_empty_cache_steps` is set but HPU device/backend does not support empty_cache()."
+                )
+            else:
+                torch.cuda.empty_cache()
 
         kwargs = {}
 

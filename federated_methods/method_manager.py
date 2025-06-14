@@ -31,6 +31,8 @@ from federated_methods.takfl import TAKFL_aggregate_state_dict
 from federated_methods.fedmkt import FEDMKT_aggregate_state_dict
 from federated_methods.feddpa import feddpa_create_trainer
 
+from federated_methods.fedours_smoothglobal import fedours_smooth_create_trainer, fedours_smooth_load_state_dict
+
 def dummy_function(*args):
     return {}
 
@@ -53,6 +55,9 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
     
     elif mode in ['fedours_pqgrad_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_load_state_dict, fedours_pqgrad_create_trainer, OURS_aggregate_state_dict
+    
+    elif mode in ['fedours_moe_smooth_linearC', 'fedours_moe_smooth_linear', 'fedours_moe_smooth_ema',]:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedours_smooth_load_state_dict, fedours_smooth_create_trainer, OURS_aggregate_state_dict
     
     elif mode in ['feddualMultipqfullfreeze_pqgrad_homoAgg','feddualMultipqfullfreeze_pqgrad_homoAgg_moe']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAgg_load_state_dict, fedours_pqgrad_create_trainer, OURS_aggregate_state_dict

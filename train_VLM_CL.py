@@ -408,9 +408,13 @@ def main():
             extra_state_dict_dict['tokenizer'] = tokenizer
             if training_args.use_task_id:
                 extra_state_dict_dict['task_id'] = task_id
-
-            load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
+            
+            new_global_state_dict = None
+            new_global_state_dict = load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
             print('model loading done')
+            
+            if new_global_state_dict is not None:
+                extra_state_dict_dict['new_global_state_dict'] = new_global_state_dict
             
             if training_args.fedours:
                 global_state_dict = global_state_dict_list[client_id]
@@ -605,7 +609,7 @@ def main():
             #             square_matrix = state_dict[k].to(torch.float32)
             #             print(k, torch.det(square_matrix))
             
-            if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(total_rounds/20) == 0:
+            if (training_args.local_rank == 0 or training_args.local_rank == -1) and (curr_round+1)%(5) == 0:
                 torch.save(state_dict, output_dir)
             
             if 'fedquad' in training_args.mode and not training_args.immediate_ema_update:

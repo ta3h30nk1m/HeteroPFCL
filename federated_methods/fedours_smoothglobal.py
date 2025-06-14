@@ -840,7 +840,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                                             interpolated_param = (1 - alpha) * self.initial_global_weights[k] + alpha * new_param
                                             cur_global_weights[k].copy_(interpolated_param)
                                 elif args.mode == 'fedours_moe_smooth_ema':
-                                    for k, smooth_param in self.new_global_state_dict:
+                                    for k, smooth_param in self.new_global_state_dict.items():
                                         cur_global_weights[k].copy_(self.ema_ratio*cur_global_weights[k] + (1-self.ema_ratio)*smooth_param)
                         ##############################################################################################################
                         

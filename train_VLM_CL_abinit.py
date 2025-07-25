@@ -64,7 +64,6 @@ def main():
     np.random.seed(training_args.seed)
     random.seed(training_args.seed)
     
-    
     train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
     # select functions

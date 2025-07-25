@@ -8,6 +8,7 @@ import models.llava.conversation as conversation_lib_llava
 from peft.tuners.lora import LoraLayer
 from functools import reduce
 import torch.nn.utils as nn_utils
+from transformers import AutoModelForImageClassification, AutoImageProcessor
 
 from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
 
@@ -33,22 +34,27 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 
     # load tokenizer
     # for llava
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        cache_dir=training_args.cache_dir,
-        model_max_length=training_args.model_max_length,
-        padding_side="right",
-        use_fast=False,
-    )
+    if not data_args.is_vision:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=False,
+        )
 
-    if tokenizer.unk_token is not None and tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.unk_token
-    
-    if training_args.is_eval:
-        tokenizer.padding_side = "left"
-    
-    processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
-    
+        if tokenizer.unk_token is not None and tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.unk_token
+        
+        if training_args.is_eval:
+            tokenizer.padding_side = "left"
+        
+        processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
+    else:
+        tokenizer=None
+        processor = AutoImageProcessor.from_pretrained(model_args.model_name_or_path) # same processor in small, base, tiny 
+
+
     if data_args.is_multimodal:
         if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
             if 'fedsim' in training_args.mode:
@@ -96,7 +102,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if getattr(model, 'vision_tower', None) is not None:
         model.vision_tower.requires_grad_(False)
     
-    if tokenizer.pad_token is None:
+    if tokenizer is not None and tokenizer.pad_token is None:
         smart_tokenizer_and_embedding_resize(
             special_tokens_dict=dict(pad_token="[PAD]"),
             tokenizer=tokenizer,
@@ -134,7 +140,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 target_modules=find_all_linear_names(model),
                 lora_dropout=training_args.lora_dropout,
                 bias=training_args.lora_bias,
-                task_type=TaskType.IMAGE_CLASSIFICATION,
+                task_type=TaskType.FEATURE_EXTRACTION,
                 inference_mode=False
             )
         else:
@@ -387,15 +393,18 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if getattr(processor, 'image_processor', None) is not None:
         data_args.image_processor = processor.image_processor
 
-    model.config.tokenizer_padding_side = tokenizer.padding_side
-    model.config.tokenizer_model_max_length = tokenizer.model_max_length
+    if tokenizer is not None:
+        model.config.tokenizer_padding_side = tokenizer.padding_side
+        model.config.tokenizer_model_max_length = tokenizer.model_max_length
 
     # freeze some layers
     if data_args.is_multimodal:
         total_layers = model.base_model.language_model.model.layers
     else:
-        total_layers = model.base_model.model.model.layers
-    
+        if data_args.is_nlp:
+            total_layers = model.base_model.model.model.layers
+        elif data_args.is_vision:
+            total_layers = model.vit.encoder.layer
     
     # FIXME             
     if training_args.mode in ['sft_only_B_train', 'fedavg_only_B_train', 'fedours_only_B_train', 'fedours_tv_only_B_train']:

@@ -141,7 +141,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 lora_dropout=training_args.lora_dropout,
                 bias=training_args.lora_bias,
                 task_type=TaskType.FEATURE_EXTRACTION,
-                inference_mode=False
+                inference_mode=False,
+                exclude_modules=r".*classifier.*"
             )
         else:
             lora_config = LoraConfig(
@@ -353,8 +354,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['fedMultipqfullfreeze_ABinit', 'fedMulti2pqfullfreeze_ABinit','fedOptimal2pqfullfreeze_ABinit','fedOptimal4pqfullfreeze_ABinit','fedOptimal8pqfullfreeze_ABinit',
                                    'fedMultipqfullfreeze256_ABinit', 'fedMultipqfullfreeze512_ABinit', 'fedMultipqfullfreeze1024_ABinit']:
             from models.pqlora_full_init.pqloramodel_full_init import PQLoraModel
+            from models.pqlora_full_init.pqloramodel_full_init_vit import PQLoraModel_ViT
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
+            if data_args.is_vision:
+                PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel_ViT
+            else:
+                PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
             lora_config.peft_type = 'PQLORAINIT'
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)

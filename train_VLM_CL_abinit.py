@@ -10,7 +10,7 @@ import transformers
 from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del
 
 from federated_methods.method_manager import select_method
-from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset, ViTSupervisedDataset, DataCollatorForImageClassification
 from typing import Dict
 
 import copy
@@ -164,16 +164,17 @@ def main():
     ##############################################################################################
     # VLM models: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
     # llm models: meta-llama/Llama-3.2-1B-Instruct, meta-llama/Llama-3.2-3B-Instruct, meta-llama/Llama-3.1-8B-Instruct
-    # vision models: google/vit-tiny-patch16-224, google/vit-small-patch16-224, google/vit-base-patch16-224
+    # vision models: WinKawaks/vit-tiny-patch16-224, WinKawaks/vit-small-patch16-224, google/vit-base-patch16-224
     # model2 = models["thkim0305/llama3.2_1B_vl"]
     # model2 = models['thkim0305/qwen2.5_0.5B_vl']
     # model2 = models["meta-llama/Llama-3.2-1B"]
     # model2 = models["meta-llama/Llama-3.2-1B"]
-    model2 = models["google/vit-tiny-patch16-224"]
+    model2 = models["WinKawaks/vit-tiny-patch16-224"]
 
     # data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
-    data_path = 'chatbotIT.json'
+    data_path = 'imagenet_val.json'
+    image_folder = 'dataset/imagenet'
     # data_path = 'dataset/llava_finetune/llava_v1_5_mix665k_updated.json'
     public_datalist = json.load(open(data_path, "r"))
     
@@ -197,11 +198,10 @@ def main():
     # model = models["thkim0305/llama3.1_8B_vl"]
     # model = models["meta-llama/Llama-3.2-3B"]
     # model = models["meta-llama/Llama-3.1-8B"]
-    model = models["google/vit-small-patch16-224"]
+    model = models["WinKawaks/vit-small-patch16-224"]
     # model = models["google/vit-base-patch16-224"]
     model = model.to(torch.bfloat16)
     model2= model2.to(torch.bfloat16)
-    
     # from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
     # trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
 
@@ -261,21 +261,27 @@ def main():
     # state_dict2= torch.load('vit_tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
     # model2.load_state_dict(state_dict2, strict=False) 
 
-    public_datalist_ = public_datalist[2000:7000]
+    public_datalist_ = public_datalist[:100]
+    # public_datalist_ = public_datalist[2000:7000]
     # public_datalist_ = public_datalist[1000:10000]
     
-    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+    if data_args.is_vision:
+        data_module = make_vision_supervised_data_module(client_data=public_datalist_, # sub_dataset
+                                                processor=processor,
+                                                data_args=copy.deepcopy(new_data_args), 
+                                                image_folder=image_folder)
+    else:
+        data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(new_data_args))
-    
     # # train bigger model
     # # model = models["thkim0305/llama3.2_3B_vl"]
     # # model = models["thkim0305/qwen2.5_1.5B_vl"]
     # # model = models['thkim0305/qwen2.5_3B_vl']
     # # model = models["thkim0305/llama3.1_8B_vl"]
     # # model = models["meta-llama/Llama-3.2-3B-Instruct"]
-    # model = models["google/vit-small-patch16-224"]
+    # model = models["WinKawaks/vit-small-patch16-224"]
     from federated_methods.AB_init import ABInit_create_trainer
     trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
     results = trainer.train()
@@ -338,10 +344,18 @@ def main():
     public_datalist_ = public_datalist[10000:10500]
     # public_datalist_ = public_datalist[7000:7100]
     # public_datalist_ = public_datalist[7000:7080]
-    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+
+    if data_args.is_vision:
+        data_module = make_vision_supervised_data_module(client_data=public_datalist_, # sub_dataset
+                                                processor=processor,
+                                                data_args=copy.deepcopy(new_data_args), 
+                                                image_folder=image_folder)
+    else:
+        data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(new_data_args))
+                                                
     # model = model.to(torch.bfloat16)
     # model2= model2.to(torch.bfloat16)
     trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = False)
@@ -442,6 +456,15 @@ def closest_row_orthonormal(A: torch.Tensor) -> torch.Tensor:
     A_ortho = (U @ Vt).to(orig_dtype)
     fro_error = torch.norm(A_ortho - A.float(), p='fro').item()
     return A_ortho, fro_error
+
+def make_vision_supervised_data_module(client_data, processor, data_args, image_folder):
+    train_dataset = ViTSupervisedDataset(client_data, processor, data_args = data_args, image_folder = image_folder)
+    data_collator = DataCollatorForImageClassification()
+    return dict(
+        train_dataset=train_dataset,
+        eval_dataset=None,
+        data_collator=data_collator
+    )
 
 def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
                                 data_args) -> Dict:

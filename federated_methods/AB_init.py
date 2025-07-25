@@ -7,6 +7,7 @@ import torch.distributed as dist
 from torch.utils.data import RandomSampler
 from packaging import version
 from torch import nn
+
 from utils.train_utils import load_deepspeed
 from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
@@ -23,7 +24,8 @@ from transformers.trainer_utils import (
 from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
-from transformers import Trainer
+from transformers import Trainer, TrainerState, TrainingArguments
+
 import bitsandbytes
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
@@ -63,15 +65,293 @@ from eval_VLM_CL import anytime_evaluation
 def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
-    trainer = LLaVATrainerABInit(model=model,
-        tokenizer=tokenizer,
-        args=training_args,
-        model2 = model2,
-        train_A=train_A,
-        data_args=data_args,
-        **data_module,
+    if data_args.is_multimodal or data_args.is_nlp:
+        trainer = LLaVATrainerABInit(model=model,
+            tokenizer=tokenizer,
+            args=training_args,
+            model2 = model2,
+            train_A=train_A,
+            data_args=data_args,
+            **data_module,
+            )
+
+    elif data_args.is_vision:
+        trainer = ViTTrainerABInit(
+            model=model,
+            tokenizer=None,
+            args=training_args,
+            model2=model2,
+            train_A=train_A,
+            data_args=data_args,
+            **data_module,
         )
     return trainer
+
+
+
+class ViTTrainerABInit(Trainer):
+    def __init__(self, model2, train_A, data_args, **kwargs):
+        super().__init__(**kwargs)
+        self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
+        self.train_A = train_A
+        self.data_args=data_args
+        self.hooks = []
+        self.lora_outputs = []
+        self.lora_targets = []
+        # Define a simple function to store the output of a layer
+        def hook_fn_A1(module, input, output):
+            # Store the output for further processing
+            self.lora_outputs.append(output)
+        def hook_fn_A2(module, input, output):
+            # Store the output for further processing
+            self.lora_targets.append(output)
+        def hook_fn_B1(module, input, output):
+            # Store the output for further processing
+            self.lora_outputs.append(output.detach().cpu())
+        def hook_fn_B2(module, input, output):
+            # Store the output for further processing
+            self.lora_targets.append(output.detach().cpu())
+
+        last_layer = len(self.model.base_model.vit.encoder.layer) // 4
+        self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+        last_layer2 = len(self.model2.base_model.vit.encoder.layer) // 4
+        self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+
+        if train_A:
+            # only makes lora_A for target layers trainable
+            for idx, layer in enumerate(self.model.base_model.vit.encoder.layer):
+                if idx in self.target_layers:
+                    for n, p in layer.named_parameters():
+                        print("A", n)
+                        if 'lora_A' in n:
+                            p.requires_grad = True
+                        else:
+                            p.requires_grad = False
+                    
+                    for n, m in layer.named_modules():
+                        if 'lora_A.default' in n:
+                            self.hooks.append(m.register_forward_hook(hook_fn_A1))
+                else:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = False
+            # only makes lora_A for target layers trainable
+            for idx, layer in enumerate(self.model2.base_model.vit.encoder.layer):
+                if idx in self.target_layers2:
+                    for n, m in layer.named_modules():
+                        if 'lora_A.default' in n:
+                            self.hooks.append(m.register_forward_hook(hook_fn_A2))                    
+        else:
+            # only makes lora_B for target layers trainable
+            self.lora_B_output_1b = []
+            self.lora_B_output_3b = []
+            self.layer_name_1b = []
+            self.layer_name_3b = []
+            
+            for n, p in self.model.named_parameters():
+                if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers:
+                    # print("!!", n)
+                    self.layer_name_3b.append(n)
+            for n, p in self.model2.named_parameters():
+                if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers2:
+                    # print("??", n)
+                    self.layer_name_1b.append(n)
+            for idx, layer in enumerate(self.model.base_model.vit.encoder.layer):
+                if idx in self.target_layers:
+                    for n, p in layer.named_parameters():
+                        if 'lora_P' in n:
+                            p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                        else:
+                            p.requires_grad = True
+                    for n, m in layer.named_modules():
+                        if 'lora_B.default' in n:
+                            self.hooks.append(m.register_forward_hook(hook_fn_B1))
+                else:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = False
+            
+            for idx, layer in enumerate(self.model2.base_model.vit.encoder.layer):
+                if idx in self.target_layers2:
+                    for n, p in layer.named_parameters():
+                        if 'lora_P' in n:
+                            p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
+                    for n, m in layer.named_modules():
+                        if 'lora_B.default' in n:
+                            self.hooks.append(m.register_forward_hook(hook_fn_B2))
+
+        self.model_accepts_loss_kwargs = False
+
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        self.lora_outputs = []
+        self.lora_targets = []
+
+        with torch.no_grad():
+            _ = self.model2(**inputs)
+
+        _ = model(**inputs)
+
+        if self.train_A:
+            # L2 loss between model and model2 outputs
+            l2_loss = 0
+            for output, target in zip(self.lora_outputs, self.lora_targets):
+                l2_loss += torch.mean((output - target.detach()) ** 2)
+
+            # Orthogonality loss for LoRA-A weights
+            cos_loss = 0
+            layer_cnt = 0
+            for idx, layer in enumerate(self.model.base_model.vit.encoder.layer):
+                if idx in self.target_layers:
+                    for name, p in layer.named_parameters():
+                        if 'lora_A' in name:
+                            weight = F.normalize(p, dim=0)
+                            sim = torch.matmul(weight.T, weight)
+                            r = weight.shape[1]
+                            mask = torch.ones((r, r), dtype=torch.bool, device=weight.device)
+                            mask.fill_diagonal_(0)
+                            cos_loss += (sim[mask] ** 2).mean()
+                            layer_cnt += 1
+
+            total_loss = l2_loss + 0.1 * (cos_loss / max(layer_cnt, 1))
+            print(f"[ViT Loss] L2: {l2_loss.item():.4f}, Cosine: {cos_loss.item():.4f} / {layer_cnt}")
+            loss = total_loss
+        else:
+            # Collecting outputs from model2 (teacher) and model (student) for LoRA-B alignment
+            if len(self.lora_B_output_1b) == 0:
+                for t in self.lora_targets:
+                    self.lora_B_output_1b.append(t.reshape(-1, t.size(-1)).detach().cpu())
+            else:
+                for i, t in enumerate(self.lora_targets):
+                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], t.reshape(-1, t.size(-1)).detach().cpu()), dim=0)
+
+            if len(self.lora_B_output_3b) == 0:
+                for o in self.lora_outputs:
+                    self.lora_B_output_3b.append(o.reshape(-1, o.size(-1)).detach().cpu())
+            else:
+                for i, o in enumerate(self.lora_outputs):
+                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], o.reshape(-1, o.size(-1)).detach().cpu()), dim=0)
+
+            # Dummy loss 
+            loss = 0
+            for idx, layer in enumerate(self.model.base_model.vit.encoder.layer):
+                if idx in self.target_layers:
+                    for name, p in layer.named_parameters():
+                        if 'lora_A' in name:
+                            weight = F.normalize(p, dim=0)
+                            sim = torch.matmul(weight.T, weight)
+                            r = weight.shape[1]
+                            mask = torch.ones((r, r), dtype=torch.bool, device=weight.device)
+                            mask.fill_diagonal_(0)
+                            loss += (sim[mask] ** 2).mean()
+
+            loss *= 0  # supervised loss는 무시
+
+        return (loss, outputs) if return_outputs else loss
+
+    def _inner_training_loop(
+        self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
+    ):
+        self.accelerator.free_memory()
+        self._train_batch_size = batch_size
+
+        train_dataloader = self.get_train_dataloader()
+        total_train_batch_size = batch_size * args.gradient_accumulation_steps * args.world_size
+        len_dataloader = len(train_dataloader)
+        num_update_steps_per_epoch = len_dataloader // args.gradient_accumulation_steps
+        num_update_steps_per_epoch = max(num_update_steps_per_epoch, 1)
+        max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
+        num_train_epochs = math.ceil(args.num_train_epochs)
+        num_train_samples = len_dataloader * args.num_train_epochs
+
+        self.create_optimizer_and_scheduler(num_training_steps=max_steps)
+        self.state = TrainerState()
+        self.model.train()
+
+        tr_loss = torch.tensor(0.0).to(args.device)
+        self._total_loss_scalar = 0.0
+        self._globalstep_last_logged = self.state.global_step
+        start_time = time.time()
+        grad_norm = None
+
+        for epoch in range(num_train_epochs):
+            for step, inputs in enumerate(train_dataloader):
+                with self.accelerator.accumulate(self.model):
+                    loss = self.compute_loss(self.model, inputs)
+                    loss.backward()
+
+                    if args.max_grad_norm is not None and args.max_grad_norm > 0:
+                        grad_norm = self.accelerator.clip_grad_norm_(
+                            self.model.parameters(), args.max_grad_norm
+                        )
+
+                    self.optimizer.step()
+                    self.lr_scheduler.step()
+                    self.model.zero_grad()
+                    self.state.global_step += 1
+                    tr_loss += loss.detach()
+
+                    # Logging
+                    if self.state.global_step % args.logging_steps == 0:
+                        # avg_loss = tr_loss.item() / (self.state.global_step - self._globalstep_last_logged)
+                        # print(f"[Step {self.state.global_step}] Avg Loss: {avg_loss:.4f}")
+                        print(f"[Step {self.state.global_step}] Loss: {loss.item():.4f}")
+                        self._globalstep_last_logged = self.state.global_step
+
+                if self.state.global_step >= max_steps:
+                    break
+            if self.state.global_step >= max_steps:
+                break
+
+        # Final metrics
+        train_loss = tr_loss.item() / max(1, self.state.global_step)
+        metrics = {
+            "train_loss": train_loss,
+            "train_runtime": time.time() - start_time,
+            "train_samples": num_train_samples,
+            "train_steps": self.state.global_step,
+        }
+
+        # Clean up
+        del self.lora_outputs, self.lora_targets
+        for hook in self.hooks:
+            hook.remove()
+
+        return TrainOutput(self.state.global_step, train_loss, metrics)
+
+    def create_optimizer(self):
+        opt_model = self.model
+        lora_params, base_params = [], []
+
+        for name, param in opt_model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if 'lora_P' in name or 'lora_Q' in name:
+                lora_params.append(param)
+            else:
+                base_params.append(param)
+
+        optimizer_grouped_parameters = [
+            {"params": base_params, "weight_decay": self.args.weight_decay},
+            {"params": lora_params, "lr": self.args.mm_projector_lr, "weight_decay": self.args.weight_decay},
+        ]
+
+        optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+        self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+        return self.optimizer
+
+    # def _load_optimizer_and_scheduler(self, checkpoint):
+    #     """Load optimizer and scheduler states (non-Deepspeed, ViT-focused)."""
+    #     if checkpoint is None:
+    #         return
+
+    #     # Only handle default case; remove complex deepspeed state handling
+    #     if self.is_deepspeed_enabled:
+    #         # You can add minimal deepspeed handling if still used.
+    #         logger.warning("Deepspeed is enabled, but full support is not included in this ViT-custom trainer.")
+    #         return
+
+    #     # Default HuggingFace behavior
+    #     super()._load_optimizer_and_scheduler(checkpoint)
+
 
 class LLaVATrainerABInit(LLaVATrainer):
     def __init__(self, model2, train_A,data_args,**kwargs):
@@ -101,11 +381,16 @@ class LLaVATrainerABInit(LLaVATrainer):
             last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
             self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
         else:
-            last_layer = len(self.model.base_model.model.model.layers) // 4
-            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-            last_layer2 = len(self.model2.base_model.model.model.layers) // 4
-            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
-        
+            if self.data_args.is_nlp:
+                last_layer = len(self.model.base_model.model.model.layers) // 4
+                self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                last_layer2 = len(self.model2.base_model.model.model.layers) // 4
+                self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+            elif self.data_args.is_vision:
+                last_layer = len(self.model.base_model.vit.encoder.layer) // 4
+                self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
+                last_layer2 = len(self.model2.base_model.vit.encoder.layer) // 4
+                self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
         
         # if 'front' in self.args.mode:
             # self.target_layers = [6,9,12,15,18,21,24,27]
@@ -162,27 +447,50 @@ class LLaVATrainerABInit(LLaVATrainer):
                             if 'lora_A.default' in n:
                                 self.hooks.append(m.register_forward_hook(hook_fn_A2))
             else:
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model.base_model.model.model.layers):
-                    if idx in self.target_layers:
-                        for n, p in layer.named_parameters():
-                            if 'lora_A' in n:
-                                p.requires_grad = True
-                            else:
+                if self.data_args.is_nlp:
+                    # only makes lora_A for target layers trainable
+                    for idx, layer in enumerate(self.model.base_model.model.model.layers):
+                        if idx in self.target_layers:
+                            for n, p in layer.named_parameters():
+                                if 'lora_A' in n:
+                                    p.requires_grad = True
+                                else:
+                                    p.requires_grad = False
+                            
+                            for n, m in layer.named_modules():
+                                if 'lora_A.default' in n:
+                                    self.hooks.append(m.register_forward_hook(hook_fn_A1))
+                        else:
+                            for n, p in layer.named_parameters():
                                 p.requires_grad = False
-                        
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A1))
-                    else:
-                        for n, p in layer.named_parameters():
-                            p.requires_grad = False
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model2.base_model.model.model.layers):
-                    if idx in self.target_layers2:
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A2))
+                    # only makes lora_A for target layers trainable
+                    for idx, layer in enumerate(self.model2.base_model.model.model.layers):
+                        if idx in self.target_layers2:
+                            for n, m in layer.named_modules():
+                                if 'lora_A.default' in n:
+                                    self.hooks.append(m.register_forward_hook(hook_fn_A2))
+                else:
+                    # only makes lora_A for target layers trainable
+                    for idx, layer in enumerate(self.model.base_model.vit.encoder.layer):
+                        if idx in self.target_layers:
+                            for n, p in layer.named_parameters():
+                                if 'lora_A' in n:
+                                    p.requires_grad = True
+                                else:
+                                    p.requires_grad = False
+                            
+                            for n, m in layer.named_modules():
+                                if 'lora_A.default' in n:
+                                    self.hooks.append(m.register_forward_hook(hook_fn_A1))
+                        else:
+                            for n, p in layer.named_parameters():
+                                p.requires_grad = False
+                    # only makes lora_A for target layers trainable
+                    for idx, layer in enumerate(self.model2.base_model.vit.encoder.layer):
+                        if idx in self.target_layers2:
+                            for n, m in layer.named_modules():
+                                if 'lora_A.default' in n:
+                                    self.hooks.append(m.register_forward_hook(hook_fn_A2))                    
         else:
             # only makes lora_B for target layers trainable
             self.lora_B_output_1b = []
@@ -293,7 +601,10 @@ class LLaVATrainerABInit(LLaVATrainer):
             if self.data_args.is_multimodal:
                 layers = self.model.base_model.language_model.model.layers
             else:
-                layers = self.model.base_model.model.model.layers
+                if self.data_args.is_nlp:    
+                    layers = self.model.base_model.model.model.layers
+                else:
+                    layers = self.model.base_model.vit.encoder.layer
             
             for idx, layer in enumerate(layers):
                 if idx in self.target_layers:

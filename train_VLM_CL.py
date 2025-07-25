@@ -86,6 +86,7 @@ def main():
     model_ids = {}
     model_list = {}
     models = {}
+    processors = {}
     global_state_dict_list = []
     local_state_dict_list = []
     old_local_state_dict_list = []
@@ -106,7 +107,7 @@ def main():
         else:
             new_model_args = copy.deepcopy(model_args)
             new_model_args.model_name_or_path = model_id
-            model, tokenizer, processor, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+            model, tokenizer_, processor_, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
             
             if training_args.load_checkpoint is not None and not training_args.fedours:
                 logger.info(f'load {training_args.load_checkpoint}')
@@ -228,24 +229,33 @@ def main():
             
             model = model.cpu()
             models[model_id] = model
-            
+            processors[model_id] = (tokenizer_, processor_)
             model_ids[model_id] = [client_id]
     
-    if data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    if data_args.is_multimodal and training_args.is_cross_model_series and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'thkim0305/qwen2.5_0.5B_vl'
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['thkim0305/qwen2.5_0.5B_vl'] = model2
+        processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
+    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
-        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
+        processors['rthkim0305/llama3.2_1B_vl'] = (tokenizer_, processor_)
     elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/qwen2.5_0.5B_vl'
-        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
+        processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
     elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
-        model2, _,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['meta-llama/Llama-3.2-1B'] = model2
+        processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
     
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids, 'models':models}
@@ -254,6 +264,7 @@ def main():
     torch.cuda.empty_cache()
     
     if training_args.fedours:
+        tokenizer, processor = processors[model_id]
         logger.info(f'load task vector {training_args.load_checkpoint}')
         tv_weights = torch.load(training_args.load_checkpoint, map_location='cpu')
         prev_task_vectors = tv_weights['task_vectors']
@@ -399,6 +410,7 @@ def main():
             new_data_args.model_name_for_dataarg = model_id
             # model,_,_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, new_data_args)
             model = models[model_id]
+            tokenizer, processor = processors[model_id]
             
             extra_state_dict_dict['client_id'] = client_id
             extra_state_dict_dict['curr_round'] = curr_round
@@ -533,7 +545,8 @@ def main():
             data_module = make_supervised_data_module(client_data=datalist, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
-                                                data_args=copy.deepcopy(new_data_args))
+                                                data_args=copy.deepcopy(new_data_args),
+                                                model_id=model_id)
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 logger.info(f'Round {curr_round} | train client {client_id} | num samples {len(sub_dataset)}')
@@ -546,12 +559,18 @@ def main():
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
                 extra_state_dict_dict['fisher_freq'] = training_args.fisher_freq
                 if data_args.is_multimodal:
-                    if 'thkim0305/llama3.2_1B_vl' in models.keys():
-                        extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
-                    elif 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
-                        extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl']
+                    if 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+                        # extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl']
+                        tokenizer2, processor2 = processors['thkim0305/qwen2.5_0.5B_vl']
+                        extra_state_dict_dict['model2'] = (models['thkim0305/qwen2.5_0.5B_vl'], tokenizer2, processor2, 'thkim0305/qwen2.5_0.5B_vl')
+                    elif 'thkim0305/llama3.2_1B_vl' in models.keys():
+                        # extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl']
+                        tokenizer2, processor2 = processors['thkim0305/llama3.2_1B_vl']
+                        extra_state_dict_dict['model2'] = (models['thkim0305/llama3.2_1B_vl'], tokenizer2, processor2, 'thkim0305/llama3.2_1B_vl')
                 else:
-                    extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
+                    # extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
+                    tokenizer2, processor2 = processors['meta-llama/Llama-3.2-1B']
+                    extra_state_dict_dict['model2'] = (models['meta-llama/Llama-3.2-1B'], tokenizer2, processor2, 'meta-llama/Llama-3.2-1B')
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
@@ -578,10 +597,10 @@ def main():
                     task_vectors[client_id] = trainer.task_vector
                     
                     if data_args.is_multimodal:
-                        if 'thkim0305/llama3.2_1B_vl' in models.keys():
-                            extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
-                        elif 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+                        if 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
                             extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl'].cpu()
+                        elif 'thkim0305/llama3.2_1B_vl' in models.keys():
+                            extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
                     else:
                         models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             

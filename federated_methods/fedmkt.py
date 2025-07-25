@@ -75,8 +75,8 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
     if layer_index == 5: # multimodal
         data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     else:
-        data_path = "dataset/FS_LLM_Instruct/dolly_meta.json"
-    # data_path = 'chatbotIT.json'
+        # data_path = "dataset/FS_LLM_Instruct/dolly_meta.json"
+        data_path = 'chatbotIT.json'
     public_datalist = json.load(open(data_path, "r"))[:training_args.num_serverdistill]
     random.shuffle(public_datalist)
     

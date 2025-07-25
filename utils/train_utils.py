@@ -2341,6 +2341,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                         state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
                     elif 'Llama-3.2-3B' in model_args.model_name_or_path:
                         state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    elif 'Llama-3.1-8B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
                 elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
@@ -3273,9 +3275,9 @@ def orthonormal_kaiming_uniform_init(m):
 from typing import Dict
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
 def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
-                                data_args) -> Dict:
+                                data_args, model_id=None) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor)
+    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor, model_id=model_id)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,

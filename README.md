@@ -79,6 +79,7 @@ qwen 3b (4block): gdrive files download 194uQ6Dsq9fMTkqjzCZ2LrToTxVjSYUtP
 
 llama 1b (4block): gdrive files download 1zSN14FDncBRdKXwq2S0a_hpU_eAZMMjq
 llama 3b (4block): gdrive files download 13J_P8AmWW49e8ojRazuaHHay4ke60G0r
+llama 8b (4block): gdrive files download 1HNM0D9OxLBFfNCVFdnZj98i7c0TAM5nD
 
 new
 llava 1b (4block): gdrive files download 1TAeiWq36ewrwVCgId3TKpXTxnRu4rDtN
@@ -87,6 +88,9 @@ llava 3b (4block): gdrive files download 1ppeB7CxiD8yhaAWY5Gvz4OpUPA7yQc5_
 llava 1b (8block): gdrive files download 18shu4ixvCJCu1eAMbbMCTFuLocJk7ZFf
 llava 3b (8block): gdrive files download 1i1T-oZT_e2jqOL-NgDXrhX1d3OnBTDfZ
 
+fsllm data - gdrive files download 1IZ6yrU5tIw44rqKUoblEJw3ROtmDCl1g
+fsllm testset - gdrive files download 1cFczfI93f-u_vjc1D2f6clA_Cx7twMEH
+chatbotit.json - gdrive files download 1Jk74xpVj7WXRWBzwBKBidh5iS884SGIn
 ```
 
     - blockwise (4 layers) - A random

@@ -165,3 +165,7 @@ class TrainingConfig(transformers.TrainingArguments):
     is_continual: bool = True
     
     iter_to_get_grad: int = 20
+    
+    gradient_ratio: float = 1.0
+    
+    is_cross_model_series: bool = False

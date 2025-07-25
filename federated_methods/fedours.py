@@ -56,6 +56,7 @@ if is_accelerate_available():
         from accelerate.utils import DeepSpeedSchedulerWrapper
 
 import warnings
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
 
 logger = logging.get_logger(__name__)
 
@@ -555,7 +556,11 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         self.fisher_cnt = 0
         self.fisher_freq = fisher_freq
         if model2 is not None:
+            model2, tokenizer2, processor2, model2_id = model2
             self.model2 = model2.cuda()
+            self.tokenizer2 = tokenizer2
+            self.processor2 = processor2
+            self.model2_id = model2_id
             self.input_penultimate = []
             self.hidden_states_before_norm = []
             self.hooks = []
@@ -574,7 +579,8 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
         if 'fedquad' in self.args.mode:
             self.ema_module1 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora3' in k}
             self.ema_module2 = {k: t.detach().clone().cuda() for k, t in self.model.named_parameters() if t.requires_grad and 'lora4' in k}
-    
+        self.grad_mismatch_loss = 0
+        
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # if self.curr_round > 0:
         #     curr_weights = {k: t.detach().clone() for k, t in model.module.named_parameters() if t.requires_grad}
@@ -977,6 +983,11 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         else contextlib.nullcontext
                     )
                     
+                    #############################################
+                    if self.data_args.get_prompt:
+                        batch_sources = inputs.pop('prompt', None)
+                    #############################################
+                    
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
 
@@ -1057,8 +1068,13 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                             # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                             #     p.requires_grad = True
                             
+                            datalist = LazySupervisedDataset(batch_sources, self.tokenizer2, self.data_args, self.processor2, model_id=self.model2_id)
+                            temp_dc = DataCollatorForSupervisedDataset(tokenizer=self.tokenizer2)
+                            temp_dataloader = torch.utils.data.DataLoader(datalist, batch_size=len(batch_sources), collate_fn=temp_dc)
+                            temp_inputs = next(iter(temp_dataloader))
+                            temp_inputs.pop('prompt', None)
                             with self.model2.disable_adapter():
-                                inputs = self._prepare_inputs(inputs)
+                                inputs = self._prepare_inputs(temp_inputs)
                                 with torch.no_grad():
                                     output = self.model2(**inputs)#.loss
                                 shift_labels = inputs['labels'][..., 1:]
@@ -1085,6 +1101,48 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                                 
                                 # grads = torch.cat(grads, dim=1)
                                 # grads = torch.cat(grads)
+                            # grad_ratio = int(grads.shape[0] * self.args.gradient_ratio)
+                            # self.fisher_cur += (grads[:grad_ratio]).detach()
+                            
+                            # Compute number of elements to mask (top-K% closest to zero)
+                            # k = int(grads.numel() * self.args.gradient_ratio)
+
+                            # # Get absolute values and flatten
+                            # abs_grads = grads.abs().flatten()
+
+                            # # Find the indices of the K smallest absolute gradient values
+                            # _, indices = torch.topk(abs_grads, k, largest=False)
+
+                            # # Create a mask of ones
+                            # mask = torch.ones_like(abs_grads)
+                            # mask[indices] = 0  # Set top-K% closest to zero to 0
+
+                            # # Reshape the mask back to grads shape
+                            # mask = mask.view_as(grads)
+
+                            # # Apply the mask
+                            # masked_grads = grads * mask
+                            
+                            # self.grad_mismatch_loss += torch.mean((grads - masked_grads)**2)
+                            
+                            # # self.fisher_cur += masked_grads.detach()
+                            
+                            # if self.args.gradient_noise_type == "gaussian":
+                            #     noise = torch.randn_like(grads) * self.args.gradient_noise_std
+
+                            # elif self.args.gradient_noise_type == "laplacian":
+                            #     #u = torch.rand_like(grads)
+                            #     lap = torch.distributions.Laplace(loc=0.0, scale=self.args.gradient_noise_std)
+                            #     noise = lap.sample(grads.shape).to(grads.device)
+                            #     #noise = self.args.gradient_noise_std * torch.sign(u - 0.5) * torch.log1p(-2 * (u - 0.5).abs())
+
+                            # else:
+                            #     raise ValueError(f"Unsupported noise type: {self.args.gradient_noise_type}")
+                            # noised_grads = grads + noise
+                            # self.grad_mismatch_loss += torch.mean(noise**2)
+                            # # Accumulate noised gradients
+                            # self.fisher_cur += noised_grads.detach()
+                            
                             self.fisher_cur += (grads).detach()
                             self.fisher_cnt += 1
                             

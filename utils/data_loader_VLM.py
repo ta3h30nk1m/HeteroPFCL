@@ -152,7 +152,8 @@ class LazySupervisedDataset(Dataset):
     def __init__(self, datalist,
                  tokenizer,
                  data_args,
-                 processor):
+                 processor,
+                 model_id=None):
         super(LazySupervisedDataset, self).__init__()
 
         self.tokenizer = tokenizer
@@ -160,7 +161,12 @@ class LazySupervisedDataset(Dataset):
         self.data_args = data_args
         self.processor = processor
         
-        self.conv = conversation_lib_llava.default_conversation.copy()
+        if model_id and 'llama' in model_id.lower():
+            self.conv = conversation_lib_llava.conv_templates['llama3'].copy()
+        elif model_id and 'qwen' in model_id.lower():
+            self.conv = conversation_lib_llava.conv_templates['qwen'].copy()
+        else:
+            self.conv = conversation_lib_llava.default_conversation.copy()
         
         assistant_start = self.conv.roles[1]
         eot_token = self.conv.sep
@@ -201,7 +207,7 @@ class LazySupervisedDataset(Dataset):
         source = self.datalist[i]
         
         if self.data_args.get_prompt:
-            qs = source["conversations"][0]['value']
+            qs = copy.deepcopy(source)
         
         conversation = []
         for j in range(len(source["conversations"])):

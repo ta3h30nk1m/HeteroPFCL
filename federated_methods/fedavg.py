@@ -234,7 +234,11 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
         self.fisher_freq = fisher_freq
         self.hooks = []
         if model2 is not None:
+            model2, tokenizer2, processor2, model2_id = model2
             self.model2 = model2.cuda()
+            self.tokenizer2 = tokenizer2
+            self.processor2 = processor2
+            self.model2_id = model2_id
             self.input_penultimate = []
             self.hidden_states_before_norm = []
             def hook_fn(module, input, output):

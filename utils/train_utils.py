@@ -73,20 +73,25 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 token=ACCESS_TOKEN
             )
     else:
-        if 'llama' in model_args.model_name_or_path.lower():
-            model = CustomLlamaForCausalLM.from_pretrained(
-                model_args.model_name_or_path,
-                torch_dtype=compute_dtype,
-                use_flash_attention_2=True,
-                token=ACCESS_TOKEN
-            )
-        else:
-            model = AutoModelForCausalLM.from_pretrained(
-                model_args.model_name_or_path,
-                torch_dtype=compute_dtype,
-                use_flash_attention_2=True,
-                token=ACCESS_TOKEN
-            )
+        if data_args.is_nlp:
+            if 'llama' in model_args.model_name_or_path.lower():
+                model = CustomLlamaForCausalLM.from_pretrained(
+                    model_args.model_name_or_path,
+                    torch_dtype=compute_dtype,
+                    use_flash_attention_2=True,
+                    token=ACCESS_TOKEN
+                )
+            else:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_args.model_name_or_path,
+                    torch_dtype=compute_dtype,
+                    use_flash_attention_2=True,
+                    token=ACCESS_TOKEN
+                )
+        if data_args.is_vision:
+            # AutoModelForImageClassification.from_pretrained(model_name)
+            model = AutoModelForImageClassification.from_pretrained(model_args.model_name_or_path)
+
     model.config.use_cache = False
     if getattr(model, 'vision_tower', None) is not None:
         model.vision_tower.requires_grad_(False)
@@ -120,17 +125,28 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             model.to(torch.float16)
     
     if training_args.lora_enable:
-        from peft import LoraConfig, get_peft_model
-        
-        lora_config = LoraConfig(
-            r=training_args.lora_r,
-            lora_alpha=training_args.lora_alpha,
-            target_modules=find_all_linear_names(model),
-            lora_dropout=training_args.lora_dropout,
-            bias=training_args.lora_bias,
-            task_type="CAUSAL_LM",
-            exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
-        )
+        from peft import LoraConfig, get_peft_model, TaskType
+
+        if data_args.is_vision:
+            lora_config = lora_config = LoraConfig(
+                r=training_args.lora_r,
+                lora_alpha=training_args.lora_alpha,
+                target_modules=find_all_linear_names(model),
+                lora_dropout=training_args.lora_dropout,
+                bias=training_args.lora_bias,
+                task_type=TaskType.IMAGE_CLASSIFICATION,
+                inference_mode=False
+            )
+        else:
+            lora_config = LoraConfig(
+                r=training_args.lora_r,
+                lora_alpha=training_args.lora_alpha,
+                target_modules=find_all_linear_names(model),
+                lora_dropout=training_args.lora_dropout,
+                bias=training_args.lora_bias,
+                task_type="CAUSAL_LM",
+                exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
+            )
         
         if training_args.mode in ['fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero',
@@ -2337,12 +2353,21 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
-                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                    elif 'Llama-3.1-8B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    if data_args.is_nlp:
+                        if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                        elif 'Llama-3.1-8B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    else:
+                        if 'vit-tiny' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'vit-small' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-small_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'vit-base' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-base_blockwise_orthnormal_init_new.pth', map_location='cpu')
+
                 elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
@@ -2478,17 +2503,27 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
-                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                    elif 'Llama-3.1-8B' in model_args.model_name_or_path:
-                        state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    if data_args.is_nlp:
+                        if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                        elif 'Llama-3.1-8B' in model_args.model_name_or_path:
+                            state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    elif data_args.is_vision:
+                        if 'vit-tiny' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'vit-small' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-small_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        elif 'vit-base' in model_args.model_name_or_path:
+                            state_dict = torch.load('vit-base_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        
                 elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
                     else:
                         state_dict = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                        
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         if training_args.A_ensure_orth:

@@ -15,6 +15,8 @@ class DataArguments:
                            metadata={"help": "Path to the training data."})
     lazy_preprocess: bool = False
     is_multimodal: bool = True
+    is_vision: bool = False
+    is_nlp: bool = False
     image_folder: Optional[str] = field(default=None)
     image_aspect_ratio: str = 'pad'
     model_name_for_dataarg: Optional[str] = field(default=None)

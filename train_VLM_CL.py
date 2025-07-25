@@ -251,11 +251,21 @@ def main():
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
         processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
     elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
-        new_model_args = copy.deepcopy(model_args)
-        new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
-        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-        models['meta-llama/Llama-3.2-1B'] = model2
-        processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
+        if data_args.is_nlp and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
+            new_model_args = copy.deepcopy(model_args)
+            new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
+            model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+            models['meta-llama/Llama-3.2-1B'] = model2
+            processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
+        elif data_args.is_vision:
+            # model2 = torchvision_models.mobilenet_v2(pretrained=True)
+            # models['mobilenet_v2'] = model2
+            # model_name = "google/vit-tiny-patch16-224"  # small/base
+            # model = AutoModelForImageClassification.from_pretrained(model_name)
+            new_model_args = copy.deepcopy(model_args)
+            new_model_args.model_name_or_path = 'google/vit-tiny-patch16-224'
+            model2, _ , _, _ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+            models['google/vit-base-patch16-224'] = model2
     
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids, 'models':models}

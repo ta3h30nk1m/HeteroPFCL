@@ -163,12 +163,15 @@ def main():
     extra_state_dict_dict = {'model_ids':model_ids}
     
     ##############################################################################################
-    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
-    # llm models: meta-llama/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-3B-Instruct meta-llama/Llama-3.1-8B-Instruct
+    # VLM models: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
+    # llm models: meta-llama/Llama-3.2-1B-Instruct, meta-llama/Llama-3.2-3B-Instruct, meta-llama/Llama-3.1-8B-Instruct
+    # vision models: google/vit-tiny-patch16-224, google/vit-small-patch16-224, google/vit-base-patch16-224
     # model2 = models["thkim0305/llama3.2_1B_vl"]
     # model2 = models['thkim0305/qwen2.5_0.5B_vl']
-    model2 = models["meta-llama/Llama-3.2-1B"]
-    
+    # model2 = models["meta-llama/Llama-3.2-1B"]
+    # model2 = models["meta-llama/Llama-3.2-1B"]
+    model2 = models["google/vit-tiny-patch16-224"]
+
     # data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
     data_path = 'chatbotIT.json'
@@ -188,13 +191,15 @@ def main():
     #                                             processor=processor,
     #                                             data_args=copy.deepcopy(new_data_args))
     
-    # train bigger model
+    ### train bigger model ###
     # model = models["thkim0305/llama3.2_3B_vl"]
     # model = models['thkim0305/qwen2.5_1.5B_vl']
     # model = models['thkim0305/qwen2.5_3B_vl']
     # model = models["thkim0305/llama3.1_8B_vl"]
     # model = models["meta-llama/Llama-3.2-3B"]
-    model = models["meta-llama/Llama-3.1-8B"]
+    # model = models["meta-llama/Llama-3.1-8B"]
+    model = models["google/vit-small-patch16-224"]
+    # model = models["google/vit-base-patch16-224"]
     model = model.to(torch.bfloat16)
     model2= model2.to(torch.bfloat16)
     
@@ -243,27 +248,27 @@ def main():
     # gc.collect()
     # torch.cuda.empty_cache()
 
-    # ##### A init #####
+    # ##### A init (L2 Loss) #####
     # model.load_state_dict(state_dict, strict=False) 
     
-    # load pretrained 1b weight
+    # load pretrained small-model (e.g., 1B) weight
     # state_dict2 = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
     # state_dict2 = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
     # state_dict2 = torch.load('llava_1b_blockwise_half_pca_init.pth', map_location='cpu')
     # state_dict2 = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
     # state_dict2 = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
     # state_dict2 = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-    state_dict2= torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-    model2.load_state_dict(state_dict2, strict=False) 
+    # state_dict2= torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+    # state_dict2= torch.load('vit_tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
+    # model2.load_state_dict(state_dict2, strict=False) 
 
-    # public_datalist_ = public_datalist[2000:7000]
+    public_datalist_ = public_datalist[2000:7000]
     # public_datalist_ = public_datalist[1000:10000]
     
-    
-    # data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
-    #                                             tokenizer=tokenizer,
-    #                                             processor=processor,
-    #                                             data_args=copy.deepcopy(new_data_args))
+    data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                data_args=copy.deepcopy(new_data_args))
     
     # # train bigger model
     # # model = models["thkim0305/llama3.2_3B_vl"]
@@ -271,10 +276,10 @@ def main():
     # # model = models['thkim0305/qwen2.5_3B_vl']
     # # model = models["thkim0305/llama3.1_8B_vl"]
     # # model = models["meta-llama/Llama-3.2-3B-Instruct"]
-    # from federated_methods.AB_init import ABInit_create_trainer
-    # trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
-
-    # results = trainer.train()
+    # model = models["google/vit-small-patch16-224"]
+    from federated_methods.AB_init import ABInit_create_trainer
+    trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
+    results = trainer.train()
     
     # output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_A.pth")
     # # output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_orthnormal_init_FT_A.pth")
@@ -327,8 +332,9 @@ def main():
     # gc.collect()
     # torch.cuda.empty_cache()
 
-    state_dict = torch.load('client_states_debug_8b_multi_llm_llama_abinit_lr5e-4_nopca_AensureOrth/llava_3b_orthnormal_init_FT_A.pth',map_location='cpu')
-    model.load_state_dict(state_dict, strict=False) 
+    # state_dict = torch.load('client_states_debug_8b_multi_llm_llama_abinit_lr5e-4_nopca_AensureOrth/llava_3b_orthnormal_init_FT_A.pth',map_location='cpu')
+    # model.load_state_dict(state_dict, strict=False) 
+
     ##### B init #####
     public_datalist_ = public_datalist[10000:10500]
     # public_datalist_ = public_datalist[7000:7100]

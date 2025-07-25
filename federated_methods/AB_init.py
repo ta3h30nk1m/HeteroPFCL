@@ -92,24 +92,23 @@ def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, 
 class ViTTrainerABInit(Trainer):
     def __init__(self, model2, train_A, data_args, **kwargs):
         super().__init__(**kwargs)
-        self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
+        self.model2 = model2.cuda() if model2 is not None else None 
         self.train_A = train_A
         self.data_args=data_args
         self.hooks = []
         self.lora_outputs = []
         self.lora_targets = []
-        # Define a simple function to store the output of a layer
+
         def hook_fn_A1(module, input, output):
-            # Store the output for further processing
             self.lora_outputs.append(output)
+
         def hook_fn_A2(module, input, output):
-            # Store the output for further processing
             self.lora_targets.append(output)
+
         def hook_fn_B1(module, input, output):
-            # Store the output for further processing
             self.lora_outputs.append(output.detach().cpu())
+            
         def hook_fn_B2(module, input, output):
-            # Store the output for further processing
             self.lora_targets.append(output.detach().cpu())
 
         last_layer = len(self.model.base_model.vit.encoder.layer) // 4

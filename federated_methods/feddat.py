@@ -241,7 +241,7 @@ class LLaVATrainerFEDDAT(LLaVATrainerFEDAVG):
         model.train()
         if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
             self.optimizer.train()
-
+        inputs.pop('prompt', None)
         inputs = self._prepare_inputs(inputs)
         if is_sagemaker_mp_enabled():
             loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)

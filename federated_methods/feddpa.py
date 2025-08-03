@@ -471,6 +471,8 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                         else contextlib.nullcontext
                     )
                     
+                    inputs.pop('prompt', None)
+                    
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
                     

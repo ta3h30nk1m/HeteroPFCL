@@ -15,8 +15,6 @@ class DataArguments:
                            metadata={"help": "Path to the training data."})
     lazy_preprocess: bool = False
     is_multimodal: bool = True
-    is_vision: bool = False
-    is_nlp: bool = False
     image_folder: Optional[str] = field(default=None)
     image_aspect_ratio: str = 'pad'
     model_name_for_dataarg: Optional[str] = field(default=None)
@@ -36,6 +34,10 @@ class TrainingConfig(transformers.TrainingArguments):
     eval_iter: int = field(default=None)
     zeroshot: bool = False
     eval_all: bool = False
+    eval_client_start: int = field(default=None)
+    eval_client_end: int = field(default=None)
+    eval_client_eval_start: int = field(default=None)
+    eval_client_eval_end: int = field(default=None)
     
     num_iter:int = field(default=100)
 
@@ -55,7 +57,7 @@ class TrainingConfig(transformers.TrainingArguments):
 
     # federated learning
     num_clients: int = 5
-    num_rounds: int = 20
+    num_rounds: float = 20
     num_tasks: int = 4
     iter_per_round: int = 1
     state_dir: str = field(default="./client_states")
@@ -160,7 +162,7 @@ class TrainingConfig(transformers.TrainingArguments):
     
     fisher_freq: int = 5
     
-    num_serverdistill: int = 200
+    num_serverdistill: int = 80
     
     load_pretrained_cca: bool = False
     
@@ -169,5 +171,7 @@ class TrainingConfig(transformers.TrainingArguments):
     iter_to_get_grad: int = 20
     
     gradient_ratio: float = 1.0
+    gradient_noise_type: str = "gaussian"
+    gradient_noise_std: float = 0.0
     
     is_cross_model_series: bool = False

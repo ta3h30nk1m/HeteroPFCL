@@ -8,7 +8,6 @@ import models.llava.conversation as conversation_lib_llava
 from peft.tuners.lora import LoraLayer
 from functools import reduce
 import torch.nn.utils as nn_utils
-from transformers import AutoModelForImageClassification, AutoImageProcessor
 
 from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
 
@@ -34,27 +33,22 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 
     # load tokenizer
     # for llava
-    if not data_args.is_vision:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=False,
-        )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        model_max_length=training_args.model_max_length,
+        padding_side="right",
+        use_fast=False,
+    )
 
-        if tokenizer.unk_token is not None and tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.unk_token
-        
-        if training_args.is_eval:
-            tokenizer.padding_side = "left"
-        
-        processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
-    else:
-        tokenizer=None
-        processor = AutoImageProcessor.from_pretrained(model_args.model_name_or_path) # same processor in small, base, tiny 
-
-
+    if tokenizer.unk_token is not None and tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.unk_token
+    
+    if training_args.is_eval:
+        tokenizer.padding_side = "left"
+    
+    processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
+    
     if data_args.is_multimodal:
         if 'llava' in model_args.model_name_or_path.lower() or 'vl' in model_args.model_name_or_path.lower():
             if 'fedsim' in training_args.mode:
@@ -69,6 +63,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     model_args.model_name_or_path,
                     torch_dtype=compute_dtype,
                     use_flash_attention_2=True,
+                    quantization_config = bnb_model_from_pretrained_args if bnb_model_from_pretrained_args else None,
                     token=ACCESS_TOKEN
                 )
         else:
@@ -79,37 +74,32 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 token=ACCESS_TOKEN
             )
     else:
-        if data_args.is_nlp:
-            if 'llama' in model_args.model_name_or_path.lower():
-                model = CustomLlamaForCausalLM.from_pretrained(
-                    model_args.model_name_or_path,
-                    torch_dtype=compute_dtype,
-                    use_flash_attention_2=True,
-                    token=ACCESS_TOKEN
-                )
-            else:
-                model = AutoModelForCausalLM.from_pretrained(
-                    model_args.model_name_or_path,
-                    torch_dtype=compute_dtype,
-                    use_flash_attention_2=True,
-                    token=ACCESS_TOKEN
-                )
-        if data_args.is_vision:
-            # AutoModelForImageClassification.from_pretrained(model_name)
-            model = AutoModelForImageClassification.from_pretrained(model_args.model_name_or_path)
-
+        if 'llama' in model_args.model_name_or_path.lower():
+            model = CustomLlamaForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
+            )
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                use_flash_attention_2=True,
+                token=ACCESS_TOKEN
+            )
     model.config.use_cache = False
     if getattr(model, 'vision_tower', None) is not None:
         model.vision_tower.requires_grad_(False)
     
-    if tokenizer is not None and tokenizer.pad_token is None:
+    if tokenizer.pad_token is None:
         smart_tokenizer_and_embedding_resize(
             special_tokens_dict=dict(pad_token="[PAD]"),
             tokenizer=tokenizer,
             model=model,
         )
-    
-    model = model.to(training_args.device)
+    if bnb_model_from_pretrained_args is None:
+        model = model.to(training_args.device)
     
     if training_args.bits in [4, 8]:
         from peft import prepare_model_for_kbit_training
@@ -124,36 +114,24 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 output.requires_grad_(True)
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
-    if training_args.bits == 16:
+    if bnb_model_from_pretrained_args is None and training_args.bits == 16:
         if training_args.bf16:
             model.to(torch.bfloat16)
         if training_args.fp16:
             model.to(torch.float16)
     
     if training_args.lora_enable:
-        from peft import LoraConfig, get_peft_model, TaskType
-
-        if data_args.is_vision:
-            lora_config = lora_config = LoraConfig(
-                r=training_args.lora_r,
-                lora_alpha=training_args.lora_alpha,
-                target_modules=find_all_linear_names(model),
-                lora_dropout=training_args.lora_dropout,
-                bias=training_args.lora_bias,
-                task_type=TaskType.FEATURE_EXTRACTION,
-                inference_mode=False,
-                exclude_modules=r".*classifier.*"
-            )
-        else:
-            lora_config = LoraConfig(
-                r=training_args.lora_r,
-                lora_alpha=training_args.lora_alpha,
-                target_modules=find_all_linear_names(model),
-                lora_dropout=training_args.lora_dropout,
-                bias=training_args.lora_bias,
-                task_type="CAUSAL_LM",
-                exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
-            )
+        from peft import LoraConfig, get_peft_model
+        
+        lora_config = LoraConfig(
+            r=training_args.lora_r,
+            lora_alpha=training_args.lora_alpha,
+            target_modules=find_all_linear_names(model),
+            lora_dropout=training_args.lora_dropout,
+            bias=training_args.lora_bias,
+            task_type="CAUSAL_LM",
+            exclude_modules=r".*vision_tower.*|.*multi_modal_projector.*", 
+        )
         
         if training_args.mode in ['fedours', 'fedours_tv', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_excludemean','fedours_self',
                                   'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero','fedours_hetero',
@@ -174,7 +152,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['TRIPQFULLFREEZELORA'] = Triple_PQLorafreezeModel
             lora_config.peft_type = 'TRIPQFULLFREEZELORA'
         
-        elif training_args.mode in ['fedours_moe', 'fedours_include_moe','fedours_excludemean_include_moe', 'fedours_hetero_moe', 'fedours_pqgrad_moe','fedours_moe_smooth_linearC', 'fedours_moe_smooth_linear', 'fedours_moe_smooth_ema',]:
+        elif training_args.mode in ['fedours_moe', 'fedours_include_moe','fedours_excludemean_include_moe', 'fedours_hetero_moe', 'fedours_pqgrad_moe','fedours_moe_smooth_linearC', 'fedours_moe_smooth_linear', 'fedours_moe_smooth_ema','fedours_moe_NBS',]:
             from models.duallora_moe.dualmoeloramodel import DualMOELoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
             PEFT_TYPE_TO_MODEL_MAPPING['DUALMOELORA'] = DualMOELoraModel
@@ -285,7 +263,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             PEFT_TYPE_TO_MODEL_MAPPING['DUALPMOEFullFreezeLORA'] = Dual_PMOELorafreezeModel
             lora_config.peft_type = 'DUALPMOEFullFreezeLORA'
         
-        elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe', 'feddualMultipqfullfreeze_homoAgg_normalize_moe',
+        elif training_args.mode in ['feddualMultipqfullfreeze_moe', 'feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe', 'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMultipqfullfreeze_homoAgg_moe_NBS',
                                     'feddualMulti05pqfullfreeze_moe', 'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe', 'feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMulti2pqfullfreeze_back_homoAgg_moe', 'feddualMulti2pqfullfreeze_back_moe',
                                     'feddualMultipqfullfreeze_homoAgg_moe_Taskloss', 'feddualMultipqfullfreeze_homoAgg_moe_KLloss',
@@ -354,12 +332,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['fedMultipqfullfreeze_ABinit', 'fedMulti2pqfullfreeze_ABinit','fedOptimal2pqfullfreeze_ABinit','fedOptimal4pqfullfreeze_ABinit','fedOptimal8pqfullfreeze_ABinit',
                                    'fedMultipqfullfreeze256_ABinit', 'fedMultipqfullfreeze512_ABinit', 'fedMultipqfullfreeze1024_ABinit']:
             from models.pqlora_full_init.pqloramodel_full_init import PQLoraModel
-            from models.pqlora_full_init.pqloramodel_full_init_vit import PQLoraModel_ViT
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            if data_args.is_vision:
-                PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel_ViT
-            else:
-                PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
+            PEFT_TYPE_TO_MODEL_MAPPING['PQLORAINIT'] = PQLoraModel
             lora_config.peft_type = 'PQLORAINIT'
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
@@ -398,18 +372,15 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if getattr(processor, 'image_processor', None) is not None:
         data_args.image_processor = processor.image_processor
 
-    if tokenizer is not None:
-        model.config.tokenizer_padding_side = tokenizer.padding_side
-        model.config.tokenizer_model_max_length = tokenizer.model_max_length
+    model.config.tokenizer_padding_side = tokenizer.padding_side
+    model.config.tokenizer_model_max_length = tokenizer.model_max_length
 
     # freeze some layers
     if data_args.is_multimodal:
         total_layers = model.base_model.language_model.model.layers
     else:
-        if data_args.is_nlp:
-            total_layers = model.base_model.model.model.layers
-        elif data_args.is_vision:
-            total_layers = model.vit.encoder.layer
+        total_layers = model.base_model.model.model.layers
+    
     
     # FIXME             
     if training_args.mode in ['sft_only_B_train', 'fedavg_only_B_train', 'fedours_only_B_train', 'fedours_tv_only_B_train']:
@@ -1304,7 +1275,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     if isinstance(m, TriplePQLoraFullFreezeLayer):
                         m.use_pq = False
     
-    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMultipqfullfreeze_excludemean_homoAgg_moe','feddualMultipqfullfreeze_pqgrad_homoAgg_moe']:
+    elif training_args.mode in ['feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMultipqfullfreeze_excludemean_homoAgg_moe','feddualMultipqfullfreeze_pqgrad_homoAgg_moe','feddualMultipqfullfreeze_homoAgg_moe_NBS',]:
         from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
         last_layer = len(total_layers) // 4
         target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
@@ -2367,21 +2338,12 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                   ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
-                    if data_args.is_nlp:
-                        if 'Llama-3.2-1B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'Llama-3.2-3B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                        elif 'Llama-3.1-8B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                    else:
-                        if 'vit-tiny' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'vit-small' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-small_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'vit-base' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-base_blockwise_orthnormal_init_new.pth', map_location='cpu')
-
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    elif 'Llama-3.1-8B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
                 elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
@@ -2487,7 +2449,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
         elif training_args.mode in ['feddualMultipqfullfreeze', 'feddualMultipqfullfreeze_tv', 'feddualMultipqfullfreeze_excludemean','feddualMultipqfullfreeze_pqgrad','feddualMultipqfullfreeze_pqfisher','feddualMultipqfullfreeze_pqgrad_homoAgg','feddualMultipqfullfreeze_pqgrad_homoAgg_moe',
                                     'feddualMultipqfullfreezeA', 'feddualMultipqfullfreezeA_tv', 'feddualMultipqfullfreezeA_excludemean','feddualMultipqfull','feddualMultipqfull2',
                                     'feddualMultipqfreezeA', 'feddualMultipqfreezeA_excludemean','feddualMultipqfullfreezeA2','feddualMulti2pqfullfreezeA_back2','feddualMulti2pqfull_back2',
-                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
+                                    'feddualMultipqfullfreeze_include', 'feddualMultipqfullfreeze_tv_include', 'feddualMultipqfullfreeze_excludemean_include','feddualMultipqfullfreeze_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAgg_moe_NBS',
                                     'feddualMultipqfullfreeze_homoAgg_normalize_moe','feddualMulti05pqfullfreeze_homoAgg_normalize_moe',
                                     'feddualMultipqfullfreeze256','feddualMultipqfullfreeze512','feddualMultipqfullfreeze1024',
                                     'feddualMultipqfullfreeze256_tv','feddualMultipqfullfreeze512_tv','feddualMultipqfullfreeze1024_tv'
@@ -2517,27 +2479,29 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                                     ]:
             if training_args.load_pretrained_orthnorm:
                 if not data_args.is_multimodal:
-                    if data_args.is_nlp:
-                        if 'Llama-3.2-1B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'Llama-3.2-3B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                        elif 'Llama-3.1-8B' in model_args.model_name_or_path:
-                            state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                    elif data_args.is_vision:
-                        if 'vit-tiny' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-tiny_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'vit-small' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-small_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        elif 'vit-base' in model_args.model_name_or_path:
-                            state_dict = torch.load('vit-base_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        
+                    if 'Llama-3.2-1B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                    elif 'Llama-3.2-3B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                    elif 'Llama-3.1-8B' in model_args.model_name_or_path:
+                        state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
+                elif training_args.is_cross_model_series:
+                    if 'llama3.2_3B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_3b_qwen_init.pth', map_location='cpu')
+                    elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('qwen_1.5b_random_init.pth', map_location='cpu')
+                    elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
+                    elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('qwen_3b_qwen_init.pth', map_location='cpu')
+                    elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
+                        state_dict = torch.load('llava_1b_qwen_init.pth', map_location='cpu')
+                    
                 elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
                     else:
                         state_dict = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                        
                 elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     if 'Multi2' in training_args.mode and 'back' in training_args.mode:
                         if training_args.A_ensure_orth:
@@ -2967,9 +2931,9 @@ def get_keys_to_del(training_args, new_global_state_dict, data_args):
     keys_to_del = []
     layer_index = 5 if data_args.is_multimodal else 4
     if training_args.mode in ['fedours', 'fedours_tv', 'fedours_excludemean', 'fedours_include', 'fedours_tv_include', 'fedours_excludemean_include', 'fedours_excludemean_hetero', 'fedours_pqgrad_moe','fedours_moe_smooth_linearC', 'fedours_moe_smooth_linear', 'fedours_moe_smooth_ema',
-                              'fedours_moe','fedours_include_moe','fedours_excludemean_include_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'fedours_hetero_moe', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly',
+                              'fedours_moe','fedours_include_moe','fedours_excludemean_include_moe', 'fedours_only_B_train', 'fedours_tv_only_B_train', 'fedours_hetero', 'fedours_hetero_moe', 'feddualMultipqfullfreeze_homoAgg', 'feddualMultipqfullfreeze_excludemean_homoAgg','feddualMultipqfullfreeze_homoAggOnly','fedours_moe_NBS',
                               'feddualMulti05pqfullfreeze_homoAgg', 'feddualMulti05pqfullfreeze_excludemean_homoAgg','fedours_self','feddualMulti05pqfullfreeze_homoAggOnly','feddualMulti05pqfullfreeze_homoAggOnly_moe','feddualMultipqfullfreeze_homoAggOnly_moe',
-                              'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_homoAgg_moe',
+                              'feddualMulti05pqfullfreeze_homoAgg_moe','feddualMulti05pqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAgg_moe','feddualMultipqfullfreeze_include_homoAgg_moe','feddualMultipqfullfreeze_homoAgg_moe_NBS',
                               'fedquad_grad', 'fedquad_grad_include', 'fedquad_excludemean', 'fedquad_excludemean_include',
                               'fedquad_grad_moe', 'fedquad_grad_include_moe', 'fedquad_excludemean_moe', 'fedquad_excludemean_include_moe',
                               'fedquadMultipqfullfreeze_homoAgg','fedquadMultipqfullfreeze_include_homoAgg','fedquadMulti05pqfullfreeze_homoAgg','fedquadMulti05pqfullfreeze_include_homoAgg',

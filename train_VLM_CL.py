@@ -28,7 +28,7 @@ def main():
         (ModelArguments, DataArguments, TrainingConfig))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))    
-    bnb_model_from_pretrained_args = {}
+    bnb_model_from_pretrained_args = None
     if training_args.bits in [4, 8]:
         bnb_model_from_pretrained_args.update(dict(
             device_map={"": training_args.device},
@@ -234,8 +234,14 @@ def main():
     
     if data_args.is_multimodal and training_args.is_cross_model_series and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit       = True,      # or  load_in_8bit=True
+            bnb_4bit_quant_type= "nf4",     # "fp4" or "nf4"; ignore for 8‑bit
+            bnb_4bit_compute_dtype = torch.bfloat16,  # compute in bf16 (or fp16)
+            bnb_4bit_use_double_quant = True,         # slightly slower / less RAM
+        )
         new_model_args.model_name_or_path = 'thkim0305/qwen2.5_0.5B_vl'
-        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_config, data_args)
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
         processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
     elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
@@ -251,24 +257,14 @@ def main():
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
         processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
     elif not data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
-        if data_args.is_nlp and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
-            new_model_args = copy.deepcopy(model_args)
-            new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
-            model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-            models['meta-llama/Llama-3.2-1B'] = model2
-            processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
-        elif data_args.is_vision:
-            # model2 = torchvision_models.mobilenet_v2(pretrained=True)
-            # models['mobilenet_v2'] = model2
-            # model_name = "google/vit-tiny-patch16-224"  # small/base
-            # model = AutoModelForImageClassification.from_pretrained(model_name)
-            new_model_args = copy.deepcopy(model_args)
-            new_model_args.model_name_or_path = 'google/vit-tiny-patch16-224'
-            model2, _ , _, _ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-            models['google/vit-base-patch16-224'] = model2
+        new_model_args = copy.deepcopy(model_args)
+        new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
+        model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
+        models['meta-llama/Llama-3.2-1B'] = model2
+        processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
     
     del model_list
-    extra_state_dict_dict = {'model_ids':model_ids, 'models':models}
+    extra_state_dict_dict = {'model_ids':model_ids, 'models':models, 'processors':processors}
     extra_state_dict_dict['LAYER_INDEX'] = LAYER_INDEX
     
     torch.cuda.empty_cache()
@@ -317,7 +313,7 @@ def main():
     final_lr = training_args.final_lr
     mm_final_lr = training_args.mm_final_lr
     
-    total_rounds = training_args.num_rounds * training_args.num_tasks
+    total_rounds = int(training_args.num_rounds * training_args.num_tasks)
     last_task_id = [-1 for _ in range(training_args.num_clients)]
     fisher_olds = [None for _ in range(training_args.num_clients)]
     task_vectors = [None for _ in range(training_args.num_clients)]
@@ -670,6 +666,90 @@ def main():
         torch.save(tv_weight, path)
     logger.info("total done\n")
 
+# def get_datalists(args, scenario_num):
+#     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
+#         scenario = json.load(fp)
+    
+#     if args.is_incremental_client_scenario:
+#         incremental_setup = scenario[0]
+#         assert args.num_rounds == incremental_setup['num_rounds']
+#         assert args.num_tasks == incremental_setup['num_tasks']
+#         assert args.num_rounds * args.num_tasks == len(incremental_setup['num_active_clients'])
+        
+#         scenario = scenario[1:]
+#     else:
+#         incremental_setup = {
+#             "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
+#         }
+#     assert args.num_clients == len(scenario)
+
+#     train_datalists = {}
+#     test_datalists = {}
+    
+#     max_iterations = args.num_iter
+#     rounds_per_task = args.num_rounds
+
+#     for client_data in scenario:
+#         client_id = client_data['client_id']
+#         train_datalist = []
+#         test_datalist = []
+        
+#         if args.is_continual: # PFCL
+#             for task_id, data in enumerate(client_data['datasets']):
+#                 if data['dataset'] == 'dummy':
+#                     for i in range(rounds_per_task):
+#                         train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
+#                     test_datalist.append({'data':[],'type':''})
+#                     continue
+#                 with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
+#                     datalist = json.load(fp)
+#                 random.shuffle(datalist)
+#                 samplenum_per_rounds = int(len(datalist) / rounds_per_task)
+#                 num_iter = max_iterations #max(int(max_iterations*samplenum_per_rounds/2000), 2) # 10000 / 5 = 2000
+#                 for i in range(rounds_per_task):
+#                     train_datalist.append(
+#                         {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
+#                         'num_iter': num_iter,
+#                         'task_id': task_id,
+#                         'model_id': client_data['model_id']})
+#                 with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
+#                     datalist = json.load(fp)
+#                 test_datalist.append({
+#                     "data_name": f"{data['dataset']}-{data['subset_id']}",
+#                     "type": data['type'],
+#                     "data": datalist,
+#                     "train_start_round": rounds_per_task*task_id})
+                
+#                 train_datalists[client_id] = train_datalist
+#             test_datalists[client_id] = test_datalist
+#         else: # PFL
+#             combined_datalist = []
+#             for task_id, data in enumerate(client_data['datasets']):
+#                 with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
+#                     datalist = json.load(fp)
+#                 combined_datalist.extend(datalist)
+#             random.shuffle(combined_datalist)
+#             if scenario_num == 285 or scenario_num == 295 or scenario_num == 286:
+#                 new_combined_datalist = []
+#                 for _ in range(11*(args.num_rounds * args.num_tasks)):
+#                     temp = copy.deepcopy(combined_datalist)
+#                     random.shuffle(temp)
+#                     new_combined_datalist.extend(temp)
+#                 combined_datalist = new_combined_datalist
+#                 # combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
+#             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
+#             num_iter = max_iterations
+#             for i in range(args.num_rounds * args.num_tasks):
+#                 train_datalist.append(
+#                     {'datalist':combined_datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
+#                     'num_iter': num_iter,
+#                     'task_id': 0,
+#                     'model_id': client_data['model_id']})
+#             train_datalists[client_id] = train_datalist
+#             test_datalists[client_id] = test_datalist
+
+#     return train_datalists, test_datalists, incremental_setup
+
 def get_datalists(args, scenario_num):
     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
         scenario = json.load(fp)
@@ -683,7 +763,7 @@ def get_datalists(args, scenario_num):
         scenario = scenario[1:]
     else:
         incremental_setup = {
-            "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
+            "num_active_clients": [args.num_clients,]*int(args.num_rounds * args.num_tasks)
         }
     assert args.num_clients == len(scenario)
 
@@ -699,32 +779,108 @@ def get_datalists(args, scenario_num):
         test_datalist = []
         
         if args.is_continual: # PFCL
+            # Calculate total number of rounds
+            total_rounds = int(rounds_per_task * len(client_data['datasets']))
+            
+            # Load all task datasets first
+            task_datasets = []
             for task_id, data in enumerate(client_data['datasets']):
                 if data['dataset'] == 'dummy':
-                    for i in range(rounds_per_task):
-                        train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
-                    test_datalist.append({'data':[],'type':''})
-                    continue
-                with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-                    datalist = json.load(fp)
-                random.shuffle(datalist)
-                samplenum_per_rounds = int(len(datalist) / rounds_per_task)
-                num_iter = max_iterations #max(int(max_iterations*samplenum_per_rounds/2000), 2) # 10000 / 5 = 2000
-                for i in range(rounds_per_task):
-                    train_datalist.append(
-                        {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
-                        'num_iter': num_iter,
+                    task_datasets.append({
                         'task_id': task_id,
-                        'model_id': client_data['model_id']})
+                        'is_dummy': True,
+                        'data': [],
+                        'dataset_info': data
+                    })
+                else:
+                    with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
+                        datalist = json.load(fp)
+                    random.shuffle(datalist)
+                    task_datasets.append({
+                        'task_id': task_id,
+                        'is_dummy': False,
+                        'data': datalist,
+                        'dataset_info': data
+                    })
+            
+            # Create rounds by distributing task data proportionally
+            for round_idx in range(total_rounds):
+                # Calculate which task(s) this round spans
+                round_start = round_idx / rounds_per_task  # fractional task position
+                round_end = (round_idx + 1) / rounds_per_task
+                
+                round_data = []
+                primary_task_id = int(round_start)  # The main task for this round
+                
+                # Handle case where round spans multiple tasks
+                start_task = int(round_start)
+                end_task = int(round_end)
+                
+                if start_task == end_task:
+                    # Round is entirely within one task
+                    task_info = task_datasets[start_task]
+                    if not task_info['is_dummy']:
+                        task_data = task_info['data']
+                        # Calculate which portion of this task belongs to this round
+                        task_progress_start = round_start - start_task
+                        task_progress_end = round_end - start_task
+                        print(task_progress_start, task_progress_end)
+                        start_idx = int(task_progress_start * len(task_data))
+                        end_idx = int(task_progress_end * len(task_data))
+                        round_data = task_data[start_idx:end_idx]
+                else:
+                    # Round spans multiple tasks
+                    for task_idx in range(start_task, end_task + 1):
+                        if task_idx >= len(task_datasets):
+                            break
+                            
+                        task_info = task_datasets[task_idx]
+                        if task_info['is_dummy']:
+                            continue
+                            
+                        task_data = task_info['data']
+                        
+                        if task_idx == start_task:
+                            # First task: from round_start to end of task
+                            task_progress_start = round_start - task_idx
+                            start_idx = int(task_progress_start * len(task_data))
+                            round_data.extend(task_data[start_idx:])
+                        elif task_idx == end_task:
+                            # Last task: from beginning to round_end
+                            task_progress_end = round_end - task_idx
+                            end_idx = int(task_progress_end * len(task_data))
+                            round_data.extend(task_data[:end_idx])
+                        else:
+                            # Middle task: entire task
+                            round_data.extend(task_data)
+                # Ensure we have a valid primary task ID
+                primary_task_id = min(primary_task_id, len(client_data['datasets']) - 1)
+                
+                num_iter = max_iterations
+                train_datalist.append({
+                    'datalist': round_data,
+                    'num_iter': num_iter,
+                    'task_id': primary_task_id,
+                    'model_id': client_data['model_id']
+                })
+            
+            # Create test datalists (unchanged logic for test data)
+            for task_id, data in enumerate(client_data['datasets']):
+                if data['dataset'] == 'dummy':
+                    test_datalist.append({'data': [], 'type': ''})
+                    continue
+                    
                 with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
                     datalist = json.load(fp)
+                
                 test_datalist.append({
                     "data_name": f"{data['dataset']}-{data['subset_id']}",
                     "type": data['type'],
                     "data": datalist,
-                    "train_start_round": rounds_per_task*task_id})
-                
-                train_datalists[client_id] = train_datalist
+                    "train_start_round": int(rounds_per_task * task_id)
+                })
+            
+            train_datalists[client_id] = train_datalist
             test_datalists[client_id] = test_datalist
         else: # PFL
             combined_datalist = []

@@ -619,6 +619,8 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         else contextlib.nullcontext
                     )
                     
+                    inputs.pop('prompt', None)  # remove prompt to avoid memory leak
+                    
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
 

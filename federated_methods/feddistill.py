@@ -60,13 +60,16 @@ import warnings
 logger = logging.get_logger(__name__)
 
 from utils.train_utils import make_supervised_data_module, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
 import json
 import random
 import gc
+from utils.align_tokens import transform_step_logits
 
 def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
     model_ids = kwargs['model_ids']
     models = kwargs['models']
+    processors = kwargs['processors']
     layer_index = kwargs['LAYER_INDEX']
     
     # fedavg first
@@ -138,14 +141,18 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
     
     
     # get public dataset
-    data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
-    # data_path = 'chatbotIT.json'
-    public_datalist = json.load(open(data_path, "r"))[:200]
+    if layer_index == 5: # multimodal
+        data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
+    else:
+        # data_path = "dataset/FS_LLM_Instruct/dolly_meta.json"
+        data_path = 'chatbotIT.json'
+    public_datalist = json.load(open(data_path, "r"))[:training_args.num_serverdistill]
     random.shuffle(public_datalist)
 
     for model_id, homo_client_ids in model_ids.items():
         print(f"Aggregate model {model_id}")
         model = models[model_id]
+        tokenizer, processor = processors[model_id]
         global_state_dict = global_state_dict_list[homo_client_ids[0]]
         
         # FIXME: Handle case with dual module
@@ -158,8 +165,9 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
                                                 tokenizer=kwargs['tokenizer'],
                                                 processor=kwargs['processor'],
-                                                data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = feddistill_create_trainer(model, kwargs['tokenizer'], training_args, data_module, models, model_ids, local_state_dict_list, model_id, kwargs)
+                                                data_args=copy.deepcopy(kwargs['data_args']),
+                                                model_id=model_id)
+        trainer = feddistill_create_trainer(model, kwargs['tokenizer'], training_args, data_module, models, processors, model_ids, local_state_dict_list, model_id, kwargs)
         results = trainer.train()
         
         state_dict = get_peft_state_maybe_zero_3(
@@ -181,7 +189,7 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
         gc.collect()
         torch.cuda.empty_cache()
 
-def feddistill_create_trainer(model, tokenizer, training_args, data_module, models, model_ids, local_state_dict_list, cur_model_id, extra_state_dict_dict):
+def feddistill_create_trainer(model, tokenizer, training_args, data_module, models, processors, model_ids, local_state_dict_list, cur_model_id, extra_state_dict_dict):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
     ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
@@ -196,6 +204,7 @@ def feddistill_create_trainer(model, tokenizer, training_args, data_module, mode
         data_args=extra_state_dict_dict['data_args'],
         
         models=models,
+        processors=processors,
         model_ids=model_ids,
         local_state_dict_list=local_state_dict_list,
         cur_model_id=cur_model_id,
@@ -215,18 +224,24 @@ def kl_loss(output, target, temp=2):
     l_kl = F.kl_div(p, q, reduction="batchmean") #FIXME
     # l_kl = l_kl * temp**2
     return l_kl
+def _topk_per_step(logits: torch.Tensor, k: int = 128):
+    """returns two python lists: [ [v1…vk], … ], [ [i1…ik], … ]"""
+    topv, topi = torch.topk(logits, k, dim=-1)          # (B, L, k)
+    return topv.cpu().tolist(), topi.cpu().tolist()
 
 class LLaVATrainerDistill(LLaVATrainerFEDAVG):
-    def __init__(self, models,model_ids,local_state_dict_list,cur_model_id,**kwargs):
+    def __init__(self, models,processors,model_ids,local_state_dict_list,cur_model_id,**kwargs):
         super(LLaVATrainerDistill, self).__init__(**kwargs)
         
         self.models = models
+        self.processors = processors
         self.model_ids = model_ids
         self.local_state_dict_list = local_state_dict_list
         self.cur_model_id=cur_model_id
         
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         target_logits = 0
+        prompts = inputs.pop('prompt', None)
         with torch.no_grad():
             cur_state_dict = get_peft_state_maybe_zero_3(model.module.named_parameters(), self.args.lora_bias)
             
@@ -241,10 +256,70 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
                         else:
                             model2 = self.models[model_id].cuda()
                             model2.load_state_dict(local_state_dict, strict=False)
-                            _, outputs = super(LLaVATrainerDistill, self).compute_loss(model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-                            target_logits += outputs.logits / len(self.local_state_dict_list)
-                            self.models[model_id] = model2.cpu()
+                            # if different family
+                            if ('qwen' in model_id and 'llama' in self.cur_model_id) \
+                            or ('llama' in model_id and 'qwen' in self.cur_model_id):
+                                print('cross family distllation')
+                                tokenizer2, processor2 = self.processors[model_id]
 
+                                datalist = LazySupervisedDataset(prompts, tokenizer2, self.data_args, processor2, model_id=model_id)
+                                temp_dc = DataCollatorForSupervisedDataset(tokenizer=tokenizer2)
+                                temp_dataloader = torch.utils.data.DataLoader(datalist, batch_size=len(prompts), collate_fn=temp_dc)
+                                temp_inputs = next(iter(temp_dataloader))
+                                temp_inputs.pop('prompt', None)
+                                temp_inputs = self._prepare_inputs(temp_inputs)
+                                _, outputs = super(LLaVATrainerDistill, self).compute_loss(model2, temp_inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+                                
+                                
+                                # token alignment
+                                teacher_logits = outputs.logits.softmax(-1)             # (B,L,V_t)
+                                step_probs, step_indices = _topk_per_step(teacher_logits)
+                                base_tok         = self.tokenizer                # student (e.g. llama)
+                                blend_tok        = tokenizer2                    # teacher (e.g. qwen)
+                                base_vocab       = base_tok.get_vocab()
+                                # blend2base_map   = {t: t for t in blend_tok.get_vocab()}  # identity is OK to start;
+                                                                                        # add hand‑crafted entries if needed
+                                if ('qwen' in model_id and 'llama' in self.cur_model_id):
+                                    blend2base_map = json.load(open('qwen2llama_vocab_mapping.json', 'r'))
+                                elif ('llama' in model_id and 'qwen' in self.cur_model_id):
+                                    blend2base_map = json.load(open('llama2qwen_vocab_mapping.json', 'r'))
+
+                                aligned_logits_batch = []
+                                for b in range(len(prompts)):
+                                    aligned_logits, aligned_indices = transform_step_logits(
+                                        base_model_tokenizer       = base_tok,
+                                        blending_model_tokenizer   = blend_tok,
+                                        base_model_vocab           = base_vocab,
+                                        base_model_input_ids       = inputs['input_ids'][b].tolist(),
+                                        blending_model_input_ids   = temp_inputs['input_ids'][b].tolist(),
+                                        blending_model_per_step_logits  = step_probs[b],
+                                        blending_model_per_step_indices = step_indices[b],
+                                        blending_to_base_mapping        = blend2base_map,
+                                        align_strategy                  = "greedy_dp",   # or "greedy_dp"
+                                    )
+
+                                    # scatter back into a dense tensor that matches base vocab
+                                    # dense = torch.zeros(
+                                    #     len(aligned_logits), len(base_vocab),
+                                    #     device=teacher_logits.device
+                                    # )
+                                    out_dim = model.module.get_output_embeddings().weight.size(0)      # 151 936 for Qwen
+                                    dense   = torch.zeros(len(aligned_logits), out_dim,
+                                                        device=teacher_logits.device)
+                                    for t, (logits_step, idx_step) in enumerate(zip(aligned_logits, aligned_indices)):
+                                        dense[t, idx_step] = torch.tensor(logits_step, device=dense.device)
+
+                                    aligned_logits_batch.append(dense)
+
+                                aligned_logits_batch = torch.stack(aligned_logits_batch)  # (B,L,V_s)
+
+                                # keep accumulating the KL target
+                                target_logits += aligned_logits_batch / len(self.local_state_dict_list)
+                                
+                            else:
+                                _, outputs = super(LLaVATrainerDistill, self).compute_loss(model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+                                target_logits += outputs.logits / len(self.local_state_dict_list)
+                            self.models[model_id] = model2.cpu()
             model.module.load_state_dict(cur_state_dict, strict=False)
             if hasattr(model.module, 'set_state'):
                 model.module.set_state('lora1')

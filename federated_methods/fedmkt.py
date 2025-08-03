@@ -56,6 +56,8 @@ if is_accelerate_available():
         from accelerate.utils import DeepSpeedSchedulerWrapper
 
 import warnings
+import itertools, json
+from utils.align_tokens import transform_step_logits
 
 logger = logging.get_logger(__name__)
 
@@ -64,11 +66,17 @@ import json
 import random
 import gc
 
+def _topk_per_step(logits: torch.Tensor, k: int = 128):
+    """Returns lists usable by transform_step_logits"""
+    topv, topi = torch.topk(logits, k, dim=-1)        # (B, L, k)
+    return topv.cpu().tolist(), topi.cpu().tolist()
+
 from torch.nn.functional import cross_entropy
 
 def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
     model_ids = kwargs['model_ids']
     models = kwargs['models']
+    processors = kwargs['processors']
     
     # get public dataset
     layer_index = kwargs['LAYER_INDEX']
@@ -87,6 +95,8 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         for model_id, homo_client_ids in model_ids.items():
             if client_id in homo_client_ids:
                 model = models[model_id]
+                tokenizer, processor = processors[model_id]
+                break
         
         with torch.no_grad():
             if 'zero3' in training_args.deepspeed:
@@ -95,11 +105,14 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(local_state_dict, strict=False) 
 
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
-                                                data_args=copy.deepcopy(kwargs['data_args']))
+                                                # tokenizer=kwargs['tokenizer'],
+                                                # processor=kwargs['processor'],
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                data_args=copy.deepcopy(kwargs['data_args']),
+                                                model_id=model_id)
         
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs, target_logits = None)
+        trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs, target_logits = None,model_id=model_id, processors=processors)
         results = trainer.train()
         client_pairs.append((trainer.public_losses, trainer.public_logits))
         
@@ -114,6 +127,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
     for model_id, homo_client_ids in model_ids.items():
         print(f"Aggregate model {model_id}")
         model = models[model_id]
+        tokenizer, processor = processors[model_id]
         global_state_dict = global_state_dict_list[homo_client_ids[0]]
         
         with torch.no_grad():
@@ -123,10 +137,13 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(global_state_dict, strict=False)  
         
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
+                                                # tokenizer=kwargs['tokenizer'],
+                                                # processor=kwargs['processor'],
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                model_id=model_id,
                                                 data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=None)
+        trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs,target_logits=None,model_id=model_id, processors=processors)
         results = trainer.train()
         global_losses = trainer.public_losses
         
@@ -158,10 +175,13 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                     model.load_state_dict(global_state_dict, strict=False)  
             
             data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                    tokenizer=kwargs['tokenizer'],
-                                                    processor=kwargs['processor'],
+                                                    # tokenizer=kwargs['tokenizer'],
+                                                    # processor=kwargs['processor'],
+                                                    tokenizer=tokenizer,
+                                                    processor=processor,
+                                                    model_id=model_id,
                                                     data_args=copy.deepcopy(kwargs['data_args']))
-            trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
+            trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs,target_logits=target_logits,model_id=model_id, processors=processors)
             results = trainer.train()
             
             state_dict = get_peft_state_maybe_zero_3(
@@ -188,6 +208,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
     for model_id, homo_client_ids in model_ids.items():
         print(f"Aggregate model {model_id}")
         model = models[model_id]
+        tokenizer, processor = processors[model_id]
         global_state_dict = global_state_dict_list[homo_client_ids[0]]
         
         with torch.no_grad():
@@ -197,10 +218,13 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(global_state_dict, strict=False)  
         
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
+                                                # tokenizer=kwargs['tokenizer'],
+                                                # processor=kwargs['processor'],
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                model_id=model_id,
                                                 data_args=copy.deepcopy(kwargs['data_args']))
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=None)
+        trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs,target_logits=None,model_id=model_id, processors=processors)
         results = trainer.train()
         global_losses[model_id] = (trainer.public_losses, trainer.public_logits)
         
@@ -210,13 +234,15 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         model = model.cpu()
         gc.collect()
         torch.cuda.empty_cache()
-    
+    print('client distill')
     for client_id in selected_ids:
         local_state_dict = local_state_dict_list[client_id]
         for model_id, homo_client_ids in model_ids.items():
             if client_id in homo_client_ids:
                 model = models[model_id]
+                tokenizer, processor = processors[model_id]
                 global_loss = global_losses[model_id]
+                break
         
         with torch.no_grad():
             if 'zero3' in training_args.deepspeed:
@@ -225,11 +251,14 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(local_state_dict, strict=False) 
 
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
+                                                # tokenizer=kwargs['tokenizer'],
+                                                # processor=kwargs['processor'],
+                                                tokenizer=tokenizer,
+                                                processor=processor,
+                                                model_id=model_id,
                                                 data_args=copy.deepcopy(kwargs['data_args']))
         
-        trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs, target_logits = None)
+        trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs, target_logits = None,model_id=model_id, processors=processors)
         results = trainer.train()
         client_loss = trainer.public_losses
         
@@ -255,10 +284,13 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                     model.load_state_dict(local_state_dict, strict=False)  
             
             data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                    tokenizer=kwargs['tokenizer'],
-                                                    processor=kwargs['processor'],
+                                                    # tokenizer=kwargs['tokenizer'],
+                                                    # processor=kwargs['processor'],
+                                                    tokenizer=tokenizer,
+                                                    processor=processor,
+                                                    model_id=model_id,
                                                     data_args=copy.deepcopy(kwargs['data_args']))
-            trainer = FEDMKT_create_trainer(model, kwargs['tokenizer'], training_args, data_module, kwargs,target_logits=target_logits)
+            trainer = FEDMKT_create_trainer(model, tokenizer, training_args, data_module, kwargs,target_logits=target_logits,model_id=model_id, processors=processors)
             results = trainer.train()
             
             state_dict = get_peft_state_maybe_zero_3(
@@ -273,7 +305,7 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
             local_state_dict_list[client_id] = local_state_dict
         
 
-def FEDMKT_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict,target_logits):
+def FEDMKT_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict,target_logits,model_id, processors):
     task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
     ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
@@ -286,21 +318,23 @@ def FEDMKT_create_trainer(model, tokenizer, training_args, data_module, extra_st
         test_datalist=extra_state_dict_dict['test_datalist'],
         processor=extra_state_dict_dict['processor'],
         data_args=extra_state_dict_dict['data_args'],
-        
+        model_id=model_id,
         target_logits=target_logits,
-        
+        processors=processors,
         **data_module,
         )
     return trainer
 
 class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
-    def __init__(self,target_logits=None,**kwargs):
+    def __init__(self,model_id=None,target_logits=None, processors=None,**kwargs):
         super(LLaVATrainerFEDMKT, self).__init__(**kwargs)
-        
+        self.model_id=model_id
         self.target_logits=target_logits
         self.count = 0
         self.public_losses = []
         self.public_logits = []
+        self.processors = processors
+        
         
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         _, outputs = super(LLaVATrainerFEDMKT, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
@@ -315,20 +349,75 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
             loss = loss_fct(
                 shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device)
             )
-            self.public_logits.append(shift_logits[shift_labels != -100].detach().cpu())
+            # self.public_logits.append(shift_logits[shift_labels != -100].detach().cpu())
+            self.public_logits.append({
+                "logits"     : shift_logits.detach().cpu(),        # (B,L‑1,V_client)
+                "input_ids"  : inputs["input_ids"][:,1:].cpu(),     # aligner will need them
+                "model_id"   : self.model_id,                  # pass in step 5
+            })
             self.public_losses.append(loss.detach())
             
             loss = loss * 0
         else:
-            target = self.target_logits[self.count]
+            target_pkg = self.target_logits[self.count]            # dict from step 3
+            teacher_logits  = target_pkg["logits"].to(pred_logits.device)   # (B',L-1,V_t)
+            teacher_modelid = target_pkg["model_id"]
+            teacher_ids     = target_pkg["input_ids"].to(pred_logits.device)
 
-            shift_logits = pred_logits[..., :-1, :].contiguous()
-            # target_logits = target_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
+            # student stuff
+            student_tok = self.tokenizer
+            student_vocab = student_tok.get_vocab()
+            student_ids = inputs["input_ids"][:,1:]
 
-            pred = shift_logits[shift_labels != -100]
-            # target = target_logits[shift_labels != -100].detach()
-            
+            if teacher_logits.size(-1) != pred_logits.size(-1):    # cross family
+                print('cross family')
+                blend_tok = self.processors[teacher_modelid][0]    # get tokenizer of teacher
+                # per‑step top‑k
+                step_probs, step_indices = _topk_per_step(teacher_logits.softmax(-1))
+
+                # optional handcrafted mapping if you have one on disk
+                # map_file = f"{teacher_modelid.split('.')[0]}2{self.model_id.split('.')[0]}_vocab_mapping.json"
+                if ('qwen' in teacher_modelid and 'llama' in self.model_id):
+                    blend2base_map = json.load(open('qwen2llama_vocab_mapping.json', 'r'))
+                elif ('llama' in teacher_modelid and 'qwen' in self.model_id):
+                    blend2base_map = json.load(open('llama2qwen_vocab_mapping.json', 'r'))
+                else:
+                    blend2base_map = None
+                # blend2base_map = json.load(open(map_file)) if os.path.exists(map_file) else None
+
+                aligned = []
+                for b in range(len(step_probs)):
+                    aligned_log, aligned_idx = transform_step_logits(
+                        base_model_tokenizer       = student_tok,
+                        blending_model_tokenizer   = blend_tok,
+                        base_model_vocab           = student_vocab,
+                        base_model_input_ids       = student_ids[b].tolist(),
+                        blending_model_input_ids   = teacher_ids[b].tolist(),
+                        blending_model_per_step_logits  = step_probs[b],
+                        blending_model_per_step_indices = step_indices[b],
+                        blending_to_base_mapping        = blend2base_map,
+                        align_strategy                  = "greedy_dp",
+                    )
+                    # dense = torch.zeros(len(aligned_log), len(student_vocab),
+                    #                     device=pred_logits.device)
+                    out_dim = model.module.get_output_embeddings().weight.size(0)
+                    dense   = torch.zeros(len(aligned_log), out_dim,
+                                        device=teacher_logits.device)
+                    for t,(logv,idxv) in enumerate(zip(aligned_log,aligned_idx)):
+                        dense[t,idxv] = torch.tensor(logv,device=dense.device)
+                    aligned.append(dense)
+
+                teacher_logits = torch.stack(aligned)              # (B',L-1,V_student)
+
+            # finally apply the →labels mask exactly as you do for pred
+            shift_logits   = pred_logits[...,:-1,:].contiguous()
+            # shift_teacher  = teacher_logits[...,:-1,:].contiguous()
+            shift_teacher  = teacher_logits.contiguous()
+            shift_labels   = labels[...,1:].contiguous()
+
+            pred   = shift_logits [shift_labels != -100]
+            target = shift_teacher[shift_labels != -100].detach()
+
             loss = cross_entropy(pred, target.to(pred.device))
         self.count += pred_logits.shape[0]
         return (loss, outputs) if return_outputs else loss
@@ -699,6 +788,8 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
                         and self.accelerator.distributed_type != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
                     )
+                    
+                    inputs.pop('prompt', None)
                     
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)

@@ -178,6 +178,7 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None,update_adapter='lora1'):
         labels = inputs['labels']
+        inputs.pop('prompt', None)
         if update_adapter=='lora1':
             with torch.no_grad():
                 model.module.set_state('lora1')

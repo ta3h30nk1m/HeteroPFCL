@@ -634,7 +634,7 @@ def main():
             #             square_matrix = state_dict[k].to(torch.float32)
             #             print(k, torch.det(square_matrix))
             
-            if (training_args.local_rank == 0 or training_args.local_rank == -1) and (curr_round+1)%(5) == 0:
+            if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(5) == 0:
                 torch.save(state_dict, output_dir)
             
             if 'fedquad' in training_args.mode and not training_args.immediate_ema_update:

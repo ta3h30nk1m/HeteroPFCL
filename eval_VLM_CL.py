@@ -461,6 +461,9 @@ def main():
         if training_args.eval_client is not None:
             if client_id != training_args.eval_client:
                 continue
+        if training_args.eval_client_start is not None and training_args.eval_client_end is not None:
+            if client_id < training_args.eval_client_start or client_id > training_args.eval_client_end:
+                continue
         # load client weight
         if not training_args.zeroshot:
             try:
@@ -495,6 +498,9 @@ def main():
                 model.set_state(training_args.set_state)
             
             for client_id_ in range(training_args.num_clients):
+                if training_args.eval_client_eval_start is not None and training_args.eval_client_eval_end is not None:
+                    if client_id_ < training_args.eval_client_eval_start or client_id_ > training_args.eval_client_eval_end:
+                        continue
                 test_datalist_ = test_datalists[client_id_]
                 for data_info in test_datalist_:
                     dataset = GenerationDataset(data_info['data'], tokenizer, data_args, processor)
@@ -646,7 +652,7 @@ def get_datalists(args, scenario_num):
                 "data_name": f"{data['dataset']}-{data['subset_id']}",
                 "type": data['type'] if 'type' in data else 'open-ended',
                 "model_id": client_data['model_id'],
-                "data": datalist,
+                "data": datalist if scenario_num not in [90,91,92,93] else datalist[:15],
                 "eval_cnt": eval_cnt})
             eval_cnt += len(datalist)
             

@@ -765,10 +765,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
-                    
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
 
                         # save client model
                         # if step % 5 == 0:
@@ -780,14 +776,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             if (self.args.local_rank == 0 or self.args.local_rank == -1):
                                 torch.save(state_dict, output_dir)
                         
-                        # anytime eval
-                        if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:
-                            eval_batch_size=8 # FIXME
-                            eval_start_time = time.time()
-                            args.eval_iter = (step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps
-                            anytime_eval_result = anytime_evaluation(model, self.tokenizer, self.processor, self.test_datalist, eval_batch_size, self.curr_round, self.client_id, args, 512, self.data_args, logger)
-                            print(f'eval elapse time {datetime.timedelta(seconds=int(time.time() - eval_start_time))}')
-                            breakpoint()
 
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time

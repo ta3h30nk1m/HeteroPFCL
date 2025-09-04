@@ -1,4 +1,3 @@
-from federated_methods.task_id import LLaVATrainerTaskId
 from federated_methods.fedavg import LLaVATrainerFEDAVG, get_grad_penultimate
 import contextlib
 import copy
@@ -246,82 +245,6 @@ def fedours_load_state_dict(model, global_state_dict, local_state_dict_list, cli
         else:
             model.load_state_dict(new_global_state_dict, strict=False) 
 
-def fedours_include_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # active clients
-            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
-            
-            if client_id not in active_clients_prev_round:
-                # FIXME: now simple averaging all local state dict of prev clients
-                new_global_state_dict = {}
-                for name in local_state_dict_list[client_id].keys():
-                    new_param = 0
-                    if 'lora1' in name:
-                        continue
-                    
-                    for id in active_clients_prev_round:
-                        new_param += local_state_dict_list[id][name] / len(active_clients_prev_round)
-                    
-                    new_global_state_dict[name] = new_param
-                    if 'lora2' in name:
-                        new_global_state_dict[name.replace('lora2', 'lora1')] = new_param
-            else:
-                # similarity matrix
-                sim = extra_state_dict_dict['task_similarity']
-                new_global_state_dict = {}
-                
-                weights = sim[client_id].clone()
-                
-                weights = (weights/training_args.softmax_temp).softmax(dim=0)
-                
-                sim_sum = weights.sum() #- weights[client_id]
-                
-                # # weights[client_id] = sim_sum
-                # # sim_sum += sim_sum
-                
-                for name in global_state_dict.keys():
-                    new_param = 0
-                    if 'lora1' in name:
-                        target_key = name.replace('lora1', 'lora2')
-                    elif 'ia3_l_1' in name:
-                        target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                    else: # lora3 or lora4 / lora5 or lora6
-                        if training_args.share_ema:
-                            if 'fedquad' in training_args.mode:
-                                target_key = name
-                            elif 'fedhexa' in training_args.mode:
-                                if 'lora5' in name:
-                                    target_key = name.replace('lora5', 'lora3')
-                                elif 'lora6' in name:
-                                    target_key = name.replace('lora6', 'lora4')
-                        else:
-                            new_global_state_dict[name] = local_state_dict_list[client_id][name]
-                            continue
-                    
-                    for id in active_clients_prev_round:
-                        # if id == client_id:
-                        #     continue
-                        # if training_args.is_hetero_model:
-                        #     breakpoint()
-                        # else:
-                        new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                        
-                    new_global_state_dict[name] = new_param
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
 
 def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
     # first load loca model and then load global model
@@ -387,91 +310,6 @@ def fedours_hetero_load_state_dict(model, global_state_dict, local_state_dict_li
                         new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
                         
                     new_global_state_dict[name] = new_param
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-def fedours_self_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-            
-        # old local -> current global
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                if 'lora1' in name:
-                    target_key = name.replace('lora1', 'lora2')
-                elif 'ia3_l_1' in name:
-                    target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                
-                new_global_state_dict[name] = local_state_dict_list[client_id][target_key]
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
-        else:
-            new_global_state_dict = global_state_dict
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(new_global_state_dict, model, strict=False)
-        else:
-            model.load_state_dict(new_global_state_dict, strict=False) 
-
-
-def fedsim_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict=None):
-    # first load loca model and then load global model
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(local_state_dict_list[client_id], model, strict=False)
-        else:
-            model.load_state_dict(local_state_dict_list[client_id], strict=False)  
-        
-        model_ids = extra_state_dict_dict['model_ids']
-        
-        for model_id, homo_ids in model_ids.items():
-            if client_id in homo_ids:
-                homo_client_ids = homo_ids
-        active_homo_ids = [id for id in homo_client_ids if id in extra_state_dict_dict['selected_ids_prev_round']]
-        # gradient based similarity wegithed averaging (exclude own)
-        if extra_state_dict_dict['curr_round'] > 0 and 'task_similarity' in extra_state_dict_dict:
-            # similarity matrix
-            sim = extra_state_dict_dict['task_similarity']
-            new_global_state_dict = {}
-            
-            weights = sim[client_id].clone()
-            
-            active_clients_prev_round = extra_state_dict_dict['selected_ids_prev_round']
-            for id in active_clients_prev_round:
-                if id not in active_homo_ids:
-                    weights[id] = -1e9
-            
-            weights = (weights/training_args.softmax_temp).softmax(dim=0)
-            
-            sim_sum = weights.sum() #- weights[client_id]
-            
-            # # weights[client_id] = sim_sum
-            # # sim_sum += sim_sum
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                target_key = name
-                
-                for id in active_homo_ids:
-                    new_param += weights[id]*local_state_dict_list[id][target_key] / sim_sum
-                    
-                new_global_state_dict[name] = new_param
-            # if (training_args.local_rank == 0 or training_args.local_rank == -1):
-            #     output_dir = os.path.join(training_args.state_dir, f"{client_id}_client_global_model_round{extra_state_dict_dict['curr_round']}.pth")
-            #     torch.save(new_global_state_dict, output_dir)
         else:
             new_global_state_dict = global_state_dict
         if 'zero3' in training_args.deepspeed:
@@ -1160,9 +998,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
                         
                         ##############################################################################################################
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+                        
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
@@ -1311,7 +1147,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
             # curronly
             # self.fisher_old = (self.fisher_cur.detach().cpu()/self.fisher_cnt)
             self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
-
+        print('Gradient Mismatch Loss:', self.grad_mismatch_loss / self.fisher_cnt)
         for hook in self.hooks:
             hook.remove()
         self.model.activate_all()

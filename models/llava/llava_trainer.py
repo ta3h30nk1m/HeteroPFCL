@@ -20,7 +20,6 @@ from torch.utils.data import DataLoader
 from transformers.utils import is_datasets_available
 from transformers.trainer_utils import seed_worker
 from transformers.optimization import get_scheduler
-from models.wsd import get_wsd_sched, get_decay_steps
 
 if is_datasets_available():
     import datasets
@@ -352,21 +351,13 @@ class LLaVATrainer(Trainer):
             num_training_steps (int): The number of training steps to do.
         """
         if self.lr_scheduler is None:
-            if self.args.is_wsd:
-                self.lr_scheduler = get_wsd_sched(
-                    optimizer=self.optimizer if optimizer is None else optimizer,
-                    num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
-                    num_decay_steps=get_decay_steps(num_training_steps, self.args.decay_ratio),
-                    num_training_steps=num_training_steps,
-                )
-            else:
-                self.lr_scheduler = get_scheduler(
-                    self.args.lr_scheduler_type,
-                    optimizer=self.optimizer if optimizer is None else optimizer,
-                    num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
-                    num_training_steps=num_training_steps,
-                    scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
-                )
+            self.lr_scheduler = get_scheduler(
+                self.args.lr_scheduler_type,
+                optimizer=self.optimizer if optimizer is None else optimizer,
+                num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
+                num_training_steps=num_training_steps,
+                scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
+            )
             self._created_lr_scheduler = True
         return self.lr_scheduler
 

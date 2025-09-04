@@ -68,7 +68,7 @@ def main():
     if training_args.local_rank == 0 or training_args.local_rank == -1: 
         logger.info(training_args)
     
-    train_datalists, test_datalists, incremental_setup = get_datalists(training_args, training_args.scenario)
+    train_datalists, test_datalists = get_datalists(training_args, training_args.scenario)
     
     # select functions
     set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules = select_method(training_args.mode)
@@ -339,38 +339,14 @@ def main():
             torch.save(tv_weight, path)
             
             # task vector layerwise cosine sim
-            if 'tv' in training_args.mode:
-                sims = []
-                for layer_name in task_vectors[0].keys():
-                    task_vector = F.normalize(torch.stack([task_vectors[i][layer_name] for i in range(incremental_setup['num_active_clients'][curr_round-1])], dim=0), dim=-1)
-                    sim = torch.matmul(task_vector,
-                                    torch.transpose(task_vector, 1, 0))
-                    if sim.sum() != 0:
-                        sim = torch.transpose(sim, 1, 0)
-                        sims.append(sim)
-                sim = torch.stack(sims, dim=0).mean(dim=0)
-            elif 'excludemean' in training_args.mode:
-                sim = torch.ones(incremental_setup['num_active_clients'][curr_round-1], incremental_setup['num_active_clients'][curr_round-1])
-            else:
-                # vectorize cosine sim and then average them
-                sims = []
-                if 'pqgrad' in training_args.mode or 'pqfisher' in training_args.mode:
-                    for grad_idx in range(len(task_vectors[0])):
-                        task_vector = F.normalize(torch.stack([tv[grad_idx] for tv in task_vectors[:incremental_setup['num_active_clients'][curr_round-1]]], dim=0), dim=-1)
-                        sim = torch.matmul(task_vector,
-                                        torch.transpose(task_vector, 1, 0))
-                        sim = torch.transpose(sim, 1, 0)
-                        sims.append(sim)
+            for grad_idx in range(task_vectors[0].shape[-1]):
+                task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:]], dim=0), dim=-1)
+                sim = torch.matmul(task_vector,
+                                torch.transpose(task_vector, 1, 0))
+                sim = torch.transpose(sim, 1, 0)
+                sims.append(sim)
                 
-                else:
-                    for grad_idx in range(task_vectors[0].shape[-1]):
-                        task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:incremental_setup['num_active_clients'][curr_round-1]]], dim=0), dim=-1)
-                        sim = torch.matmul(task_vector,
-                                        torch.transpose(task_vector, 1, 0))
-                        sim = torch.transpose(sim, 1, 0)
-                        sims.append(sim)
-                
-                sim = torch.stack(sims, dim=0).mean(dim=0)
+            sim = torch.stack(sims, dim=0).mean(dim=0)
             # sim = torch.ones(10,10)
             
             extra_state_dict_dict['task_similarity'] = sim
@@ -378,26 +354,19 @@ def main():
             print(sim)
         
         # clients turn
-        # cids = np.arange(training_args.num_clients).tolist()
-        # num_selection = int(round(training_args.num_clients*frac_clients)) 
-        # selected_ids = sorted(random.sample(cids, num_selection)) 
-        num_selection = incremental_setup['num_active_clients'][curr_round]
-        selected_ids_prev_round = list(range(incremental_setup['num_active_clients'][curr_round-1]))
-        selected_ids = list(range(incremental_setup['num_active_clients'][curr_round]))
+        cids = np.arange(training_args.num_clients).tolist()
+        num_selection = int(round(training_args.num_clients*frac_clients)) 
+        selected_ids = sorted(random.sample(cids, num_selection)) 
         
         if training_args.local_rank == 0 or training_args.local_rank == -1: 
             logger.info(f"Round {curr_round} | selected_ids: {selected_ids}\n")
         
         extra_state_dict_dict['selected_ids'] = selected_ids
-        extra_state_dict_dict['selected_ids_prev_round'] = selected_ids_prev_round
         extra_state_dict_dict['num_selection'] = num_selection
         
         # selected_ids = cids
         training_args.learning_rate = init_lr - lr_step*curr_round
         training_args.mm_projector_lr = mm_init_lr - mm_lr_step*curr_round
-        if curr_round > 0 and training_args.is_wsd:
-            training_args.warmup_ratio = 0
-            training_args.warmup_steps = 0
         for idx in range(num_selection):
             client_id = selected_ids[idx]
             
@@ -586,29 +555,16 @@ def main():
                 fisher_olds[client_id] = trainer.fisher_old
             
             if training_args.use_task_vector:
-                if 'tv' in training_args.mode:
-                    new_task_vectors={}
-                    if 'pq' in training_args.mode:
-                        for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-                            if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
-                                new_task_vectors[n] = p.clone().detach().cpu().flatten() - original_weights[n]
-                    else:
-                        for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-                            if 'lora' in n:
-                                new_task_vectors[n] = p.clone().detach().cpu().flatten() - original_weights[n]
-                    task_vectors[client_id] = new_task_vectors
-                elif 'excludemean' in training_args.mode:
-                    task_vectors[client_id] = torch.ones(1)
+                
+                task_vectors[client_id] = trainer.task_vector
+                
+                if data_args.is_multimodal:
+                    if 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
+                        extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl'].cpu()
+                    elif 'thkim0305/llama3.2_1B_vl' in models.keys():
+                        extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
                 else:
-                    task_vectors[client_id] = trainer.task_vector
-                    
-                    if data_args.is_multimodal:
-                        if 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
-                            extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl'].cpu()
-                        elif 'thkim0305/llama3.2_1B_vl' in models.keys():
-                            extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
-                    else:
-                        models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
+                    models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")
@@ -637,12 +593,6 @@ def main():
             if (training_args.local_rank == 0 or training_args.local_rank == -1):# and (curr_round+1)%(5) == 0:
                 torch.save(state_dict, output_dir)
             
-            if 'fedquad' in training_args.mode and not training_args.immediate_ema_update:
-                for k, v in trainer.ema_module1.items():
-                    state_dict[k] = v.detach().cpu()
-                for k, v in trainer.ema_module2.items():
-                    state_dict[k] = v.detach().cpu()
-            
             local_state_dict_list[client_id] = copy.deepcopy(state_dict)
             
             # local_state_dict = getattr(trainer, 'global_weight', None)
@@ -666,105 +616,10 @@ def main():
         torch.save(tv_weight, path)
     logger.info("total done\n")
 
-# def get_datalists(args, scenario_num):
-#     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
-#         scenario = json.load(fp)
-    
-#     if args.is_incremental_client_scenario:
-#         incremental_setup = scenario[0]
-#         assert args.num_rounds == incremental_setup['num_rounds']
-#         assert args.num_tasks == incremental_setup['num_tasks']
-#         assert args.num_rounds * args.num_tasks == len(incremental_setup['num_active_clients'])
-        
-#         scenario = scenario[1:]
-#     else:
-#         incremental_setup = {
-#             "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
-#         }
-#     assert args.num_clients == len(scenario)
-
-#     train_datalists = {}
-#     test_datalists = {}
-    
-#     max_iterations = args.num_iter
-#     rounds_per_task = args.num_rounds
-
-#     for client_data in scenario:
-#         client_id = client_data['client_id']
-#         train_datalist = []
-#         test_datalist = []
-        
-#         if args.is_continual: # PFCL
-#             for task_id, data in enumerate(client_data['datasets']):
-#                 if data['dataset'] == 'dummy':
-#                     for i in range(rounds_per_task):
-#                         train_datalist.append({'datalist':[],'model_id':client_data['model_id']})
-#                     test_datalist.append({'data':[],'type':''})
-#                     continue
-#                 with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-#                     datalist = json.load(fp)
-#                 random.shuffle(datalist)
-#                 samplenum_per_rounds = int(len(datalist) / rounds_per_task)
-#                 num_iter = max_iterations #max(int(max_iterations*samplenum_per_rounds/2000), 2) # 10000 / 5 = 2000
-#                 for i in range(rounds_per_task):
-#                     train_datalist.append(
-#                         {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
-#                         'num_iter': num_iter,
-#                         'task_id': task_id,
-#                         'model_id': client_data['model_id']})
-#                 with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
-#                     datalist = json.load(fp)
-#                 test_datalist.append({
-#                     "data_name": f"{data['dataset']}-{data['subset_id']}",
-#                     "type": data['type'],
-#                     "data": datalist,
-#                     "train_start_round": rounds_per_task*task_id})
-                
-#                 train_datalists[client_id] = train_datalist
-#             test_datalists[client_id] = test_datalist
-#         else: # PFL
-#             combined_datalist = []
-#             for task_id, data in enumerate(client_data['datasets']):
-#                 with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-#                     datalist = json.load(fp)
-#                 combined_datalist.extend(datalist)
-#             random.shuffle(combined_datalist)
-#             if scenario_num == 285 or scenario_num == 295 or scenario_num == 286:
-#                 new_combined_datalist = []
-#                 for _ in range(11*(args.num_rounds * args.num_tasks)):
-#                     temp = copy.deepcopy(combined_datalist)
-#                     random.shuffle(temp)
-#                     new_combined_datalist.extend(temp)
-#                 combined_datalist = new_combined_datalist
-#                 # combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
-#             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
-#             num_iter = max_iterations
-#             for i in range(args.num_rounds * args.num_tasks):
-#                 train_datalist.append(
-#                     {'datalist':combined_datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
-#                     'num_iter': num_iter,
-#                     'task_id': 0,
-#                     'model_id': client_data['model_id']})
-#             train_datalists[client_id] = train_datalist
-#             test_datalists[client_id] = test_datalist
-
-#     return train_datalists, test_datalists, incremental_setup
-
 def get_datalists(args, scenario_num):
     with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
         scenario = json.load(fp)
     
-    if args.is_incremental_client_scenario:
-        incremental_setup = scenario[0]
-        assert args.num_rounds == incremental_setup['num_rounds']
-        assert args.num_tasks == incremental_setup['num_tasks']
-        assert args.num_rounds * args.num_tasks == len(incremental_setup['num_active_clients'])
-        
-        scenario = scenario[1:]
-    else:
-        incremental_setup = {
-            "num_active_clients": [args.num_clients,]*int(args.num_rounds * args.num_tasks)
-        }
     assert args.num_clients == len(scenario)
 
     train_datalists = {}
@@ -889,14 +744,6 @@ def get_datalists(args, scenario_num):
                     datalist = json.load(fp)
                 combined_datalist.extend(datalist)
             random.shuffle(combined_datalist)
-            if scenario_num == 285 or scenario_num == 295 or scenario_num == 286:
-                new_combined_datalist = []
-                for _ in range(11*(args.num_rounds * args.num_tasks)):
-                    temp = copy.deepcopy(combined_datalist)
-                    random.shuffle(temp)
-                    new_combined_datalist.extend(temp)
-                combined_datalist = new_combined_datalist
-                # combined_datalist = combined_datalist*11*(args.num_rounds * args.num_tasks)
             samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
             num_iter = max_iterations
             for i in range(args.num_rounds * args.num_tasks):
@@ -908,7 +755,7 @@ def get_datalists(args, scenario_num):
             train_datalists[client_id] = train_datalist
             test_datalists[client_id] = test_datalist
 
-    return train_datalists, test_datalists, incremental_setup
+    return train_datalists, test_datalists
 
 if __name__ == "__main__":
     main()

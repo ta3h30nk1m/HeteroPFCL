@@ -313,5 +313,10 @@ def main():
         with open(results_file, "w") as f:
             json.dump([results, {"accuracy":weighted_acc}], f)
         
+        model = model.cpu()
+        del model
+        torch.cuda.empty_cache()
+        gc.collect()
+        
 if __name__ == "__main__":
     main()

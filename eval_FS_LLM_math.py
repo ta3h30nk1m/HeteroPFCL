@@ -391,5 +391,10 @@ def main():
         predictions.append({"accuracy":sum(answers)/len(answers)})
         with open(f"./eval_results/{training_args.mode}/{training_args.note}/client{client_id}_round{training_args.round_to_eval}_math.json", 'w', encoding='utf-8') as fp:
             json.dump(predictions, fp, indent=4, ensure_ascii=False)
+        
+        model = model.cpu()
+        del model
+        torch.cuda.empty_cache()
+        gc.collect()
 if __name__ == "__main__":
     main()

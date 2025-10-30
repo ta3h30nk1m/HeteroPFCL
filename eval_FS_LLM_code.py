@@ -3,6 +3,7 @@ import os
 import random
 import re
 import string
+import gc
 
 import numpy as np
 import torch
@@ -292,6 +293,12 @@ def main():
         for line in result.stdout:
             fp.write(line.decode())
         fp.close()
+        
+        model = model.cpu()
+        del model
+        torch.cuda.empty_cache()
+        gc.collect()
+        
         
 if __name__ == "__main__":
     main()

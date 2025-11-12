@@ -418,6 +418,8 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
                 if '8block' in training_args.mode:
                     state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
+                else:
+                    state_dict = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
             elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
                 if '8block' in training_args.mode:
                     state_dict = torch.load('llava_3b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')

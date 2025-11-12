@@ -339,6 +339,7 @@ def main():
             torch.save(tv_weight, path)
             
             # task vector layerwise cosine sim
+            sims = []
             for grad_idx in range(task_vectors[0].shape[-1]):
                 task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:]], dim=0), dim=-1)
                 sim = torch.matmul(task_vector,

@@ -1,24 +1,26 @@
 #!/bin/bash
-# CIL CONFIG
-NOTE="debug"
-MODE="feddualMultipqfullfreeze"
-MODEL_ARCH="llama3_1b" # llava gemma_vl
+#!/bin/bash
+
+# CIL CONFIG fedsim_feddualMultipqfullfreeze_homoAgg
+NOTE="ICLR_REBUTTAL_sft_bs32_saveoptim_lr1e-4_3e-4_sc4_2tasks_5rounds_fixtir94_T0125_decay099_SEED1"
+MODE="fedmkt"
+MODEL_ARCH="llama3_3b" # llavea gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=999
-NUM_ROUNDS=1
-NUM_TASKS=1
-NUM_CLIENTS=2
+SCENARIO=4
+NUM_ROUNDS=5
+NUM_TASKS=2
+NUM_CLIENTS=4
 MODEL_MAX_LEN=20000
-NUM_ITER=100
+NUM_ITER=2
 
 ###
 ANYTIME_EVAL=False
 ANYTIME_EVAL_FREQ=1
 ##
 MEMORY_SIZE=100000
-IS_STREAMONLY=False
+IS_STREAMONLY=False #################!!!!!!!!!!!!
 
 LORA_ENABLE=True
 IA3_ENABLE=False
@@ -26,7 +28,7 @@ IA3_ENABLE=False
 USE_TASK_ID=False
 USE_PROMPT=False
 
-SAVE_OPTIM=True
+SAVE_OPTIM=True ##########
 
 USE_TASK_VECTOR=False
 USE_FISHER=False
@@ -37,16 +39,20 @@ GENERATOR_HIDDEN_FEATURE=8
 KEY_EMBED_SIZE=64
 POOL_SIZE=4
 PROMPT_TOP_K=1
-EMA_RATIO=0.9
+EMA_RATIO=0.95
 
-BATCHSIZE=2
+BATCHSIZE=1
 
-LR=2e-5
-MM_PROJECTOR_LR=1e-4 #3e-4
+IS_MULTIMODAL=False
+ONLINE_T=0.125
+ONLINE_DECAY_RATIO=0.99
+
+LR=1e-4
+MM_PROJECTOR_LR=3e-4 #3e-4
 FINAL_LR=$LR #3e-4
 MM_FINAL_LR=$MM_PROJECTOR_LR #3e-4
 OPT_NAME="adamw_torch" # adam8bit_bnb adamw_torch
-SCHED_NAME="cosine" #cosine
+SCHED_NAME="cosine" #constant cosine #################!!!!!!!!!!!!!!!!!!
 WARMUP_RATIO=0.1 # SHOULD BE 0.03 / NUM_ROUNDS
 DECAY_RATIO=0.9
 
@@ -79,13 +85,13 @@ fi
 # --master_port 29500
 # --num_gpus=4
 
-# LOAD_CHECKPOINT="client_states_fedours_bs4_saveoptim_lr4e-5_sc5_4tasks_5rounds_fixitr100_t0.2_memonly_rank32/round15_task_vector_local_weights.pth"
-LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
+LOAD_CHECKPOINT="client_states_feddualMultipqfullfreeze_pca_bs4_saveoptim_lr2e-5_1e-4_sc122_4tasks_5rounds_fixitr100_T0125_decay099/round20_task_vector_local_weights.pth"
+# LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29509 \
-    --include localhost:9 \
-    CKA_compute.py \
+deepspeed --master_port 29715 \
+    --include localhost:0 \
+    train_t5_CL.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
     --model_name_for_dataarg $MODEL_NAME \
@@ -99,7 +105,7 @@ deepspeed --master_port 29509 \
     --gradient_checkpointing True \
     --num_train_epochs 1 \
     --num_iter $NUM_ITER \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 32 \
     --bits $BITS \
     --bf16 True \
     --tf32 True \
@@ -138,11 +144,26 @@ deepspeed --master_port 29509 \
     --use_fisher $USE_FISHER \
     --fedours False \
     --is_hetero_model True \
-    --load_pretrained_pca True \
-    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
+    --load_pretrained_lora False \
+    --save_per_step False \
+    --softmax_temp 0.5 \
+    --fisher_freq 10 \
+    --is_multimodal $IS_MULTIMODAL \
+    --online_stream_T $ONLINE_T \
+    --online_stream_count_decay_ratio $ONLINE_DECAY_RATIO \
+    --is_continual True \
+    --get_prompt True \
+    --is_cross_model_series False \
+    --is_t5model True \
+    --lora_r 32 \
+    --lora_alpha 8 \
+    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type
 #  --load_checkpoint $LOAD_CHECKPOINT \
     # --lora_r 32 \
     # --lora_alpha 64 \
+    # --lora_r 16 \
+    # --lora_alpha 32 \
+    # --is_multimodal False \

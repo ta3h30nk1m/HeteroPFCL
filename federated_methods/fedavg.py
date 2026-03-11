@@ -58,49 +58,8 @@ if is_accelerate_available():
 
 logger = logging.get_logger(__name__)
 
-from eval_VLM_CL import anytime_evaluation
-
-@torch.no_grad()
-def get_grad_penultimate(logit, label, weight_last, input_penultimate, norm_layer, hidden_states_before_norm):
-    # Compute probabilities using softmax
-    prob = F.softmax(logit, dim=-1).to(torch.bfloat16)
-    
-    # One-hot encode the label
-    oh_label = F.one_hot(label.long(), num_classes=logit.shape[-1]).to(torch.bfloat16)
-
-    # Compute the gradient for the last layer
-    delta = (prob - oh_label) / logit.size(0)
-    
-    # Now, compute the gradient for the penultimate layer
-    grad_penultimate_layer = torch.matmul(delta, weight_last)  # Grad w.r.t. the output of the penultimate layer
-    
-    hidden_states = hidden_states_before_norm.to(torch.float32)
-    variance = hidden_states.pow(2).mean(-1, keepdim=True)
-    norm_factor = torch.rsqrt(variance + norm_layer.variance_epsilon)
-    
-    grad_normalized_hidden_states  = norm_layer.weight * norm_factor * ( 1 - hidden_states * hidden_states / ((variance + norm_layer.variance_epsilon) * hidden_states.size(-1)) )
-    
-    grad = grad_penultimate_layer * grad_normalized_hidden_states.to(torch.bfloat16)
-    
-    # Compute the gradient w.r.t the weights of the penultimate layer using the input to that layer (penultimate input)
-    # grad_weights_penultimate = torch.matmul(grad[:,:1].T, input_penultimate) # col # Backprop through penultimate
-    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate[:,:1]) # row  # Backprop through penultimate
-    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate).mean(dim=-1).view(-1)
-    grad_weights_penultimate = torch.matmul(grad.T, input_penultimate)
-    
-    return grad_weights_penultimate
-
-
 def fedavg_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
     model_to_load = global_state_dict
-    with torch.no_grad():
-        if 'zero3' in training_args.deepspeed:
-            load_deepspeed(model_to_load, model, strict=False)
-        else:
-            model.load_state_dict(model_to_load, strict=False)  
-
-def fedavg_memefficient_load_state_dict(model, global_state_dict, local_state_dict_list, client_id, training_args, extra_state_dict_dict):
-    model_to_load = torch.load(global_state_dict)
     with torch.no_grad():
         if 'zero3' in training_args.deepspeed:
             load_deepspeed(model_to_load, model, strict=False)
@@ -132,89 +91,16 @@ def fedavg_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
     layer_index = kwargs['LAYER_INDEX']
     
     # fedavg first
-    if 'Multi' in training_args.mode:
-        for model_id, homo_client_ids in model_ids.items():
-            global_state_dict = global_state_dict_list[homo_client_ids[0]]
-            
-            # only use active clients
-            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
-            
-            cur_layer_num = []
-            for k in global_state_dict.keys():
-                if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[layer_index]))
-            cur_layer_num = sorted(list(set(cur_layer_num)))
-            if 'Multi05' in training_args.mode:
-                cur_layer_num = [len(cur_layer_num)//2 -1, len(cur_layer_num) -1]
-            elif 'Multi' in training_args.mode:
-                cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1]
-            elif 'Multi2' in training_args.mode:
-                if layer_index == 5: # multimodal model
-                    if len(cur_layer_num) == 16:
-                        cur_layer_num = [1,3,5,7,9,11,13,15]
-                    elif len(cur_layer_num) == 28:
-                        if 'front' in training_args.mode:
-                            cur_layer_num = [6,9,12,15,18,21,24,27]
-                        elif 'back' in training_args.mode:
-                            cur_layer_num = [2,5,8,11,14,17,20,27]
-            else:
-                raise ValueError('wrong mode')
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                target_key = name
-                splited = target_key.split('.')
-                if int(splited[layer_index]) in cur_layer_num:
-                    if 'lora_P' not in target_key and 'lora_Q' not in target_key and 'lora1_P' not in target_key and 'lora1_Q' not in target_key:
-                        continue
-                    for id in selected_ids:
-                        splited = target_key.split('.')
-                        # if layer number is different
-                        layer_num = []
-                        for k in local_state_dict_list[id].keys():
-                            if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[layer_index]))
-                        
-                        if 'Multi05' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 2
-                            target_layers = [layer_num*1 -1,layer_num*2 -1]
-                        elif 'Multi' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 4
-                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                        elif 'Multi2' in training_args.mode:
-                            if layer_index == 5: # multimodal model
-                                if layer_num == 16:
-                                    target_layers = [1,3,5,7,9,11,13,15]
-                                elif layer_num == 28:
-                                    if 'front' in training_args.mode:
-                                        target_layers = [6,9,12,15,18,21,24,27]
-                                    elif 'back' in training_args.mode:
-                                        target_layers = [2,5,8,11,14,17,20,27]
-                        if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            idx = cur_layer_num.index(int(splited[layer_index]))
-                            splited[layer_index] = str(target_layers[idx])
-                            new_target_key = '.'.join(splited)
-                        else:
-                            new_target_key = target_key
-                    
-                        new_param += local_state_dict_list[id][new_target_key] / len(selected_ids)
-                else:
-                    for id in active_homo_ids:
-                        new_param += local_state_dict_list[id][target_key] / len(active_homo_ids)
-                global_state_dict[name] = new_param
-            for i in homo_client_ids:
-                global_state_dict_list[i] = global_state_dict
-    else:
-        for model_id, homo_client_ids in model_ids.items():
-            global_state_dict = global_state_dict_list[homo_client_ids[0]]
-            
-            # only use active clients
-            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
-            
-            for key in global_state_dict.keys():
-                global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
-            for i in homo_client_ids:
-                global_state_dict_list[i] = global_state_dict
+    for model_id, homo_client_ids in model_ids.items():
+        global_state_dict = global_state_dict_list[homo_client_ids[0]]
+        
+        # only use active clients
+        active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
+        
+        for key in global_state_dict.keys():
+            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
+        for i in homo_client_ids:
+            global_state_dict_list[i] = global_state_dict
     
 
 class LLaVATrainerFEDAVG(LLaVATrainer):
@@ -678,94 +564,17 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                         self.optimizer.step()
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
-                        
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
                             # Delay optimizer scheduling until metrics are generated
                             if not isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                                 self.lr_scheduler.step()
-                        model.zero_grad()
-                        ##############################################################################################################
-                        # compute fisher online
-                        # ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 5 == 0:
-                        # if step % self.fisher_freq == 0:
-                        self.input_penultimate = []
-                        self.hidden_states_before_norm = []
-                        if 'ours' in args.mode and ((step-args.gradient_accumulation_steps+1)) % self.fisher_freq == 0:
-                            torch.cuda.empty_cache()
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = True
-                            with self.model2.disable_adapter():
-                                inputs = self._prepare_inputs(inputs)
-
-                                with torch.no_grad():
-                                    output = self.model2(**inputs)#.loss
-                                
-                                shift_labels = inputs['labels'][..., 1:]
-                                
-                                if self.data_args.is_multimodal:
-                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                                self.model2.base_model.language_model.lm_head.weight,
-                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                                self.model2.base_model.language_model.model.norm,
-                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                else:
-                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
-                                                                self.model2.base_model.model.lm_head.weight,
-                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
-                                                                self.model2.base_model.model.model.norm,
-                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                # output.loss.backward()
-                                # grads = []
-                                # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                #     grads.append(p.grad)
-                                #     # grads.append(p.grad[:,self.grad_subsample_idx])
-                                # # for layer in self.model.base_model.model.model.layers:
-                                # #     for p in layer.mlp.down_proj.base_layer.parameters():
-                                # #         grads.append(p.grad[:,self.grad_subsample_idx])
-                                
-                                # # grads = torch.cat(grads, dim=1)
-                                # grads = torch.cat(grads)
-                            self.fisher_cur += (grads).detach()
-                            self.fisher_cnt += 1
-                            
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = False
-                            # for layer in self.model.base_model.model.model.layers:
-                            #     for p in layer.mlp.down_proj.base_layer.parameters():
-                            #         p.requires_grad = False
-                            
-                            if args.mode == 'fedMultipqfullfreeze_ours':
-                                if self.data_args.is_multimodal:
-                                    last_layer = len(self.model2.base_model.language_model.model.layers) // 4
-                                    target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-                                    for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                                        if idx in target_layers:
-                                            for n, p in layer.named_parameters():
-                                                if 'lora_A' in n or 'lora_B' in n:
-                                                    p.requires_grad = False
-                                else:
-                                    last_layer = len(self.model2.base_model.model.model.layers) // 4
-                                    target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-                                    for idx, layer in enumerate(self.model2.base_model.model.model.layers):
-                                        if idx in target_layers:
-                                            for n, p in layer.named_parameters():
-                                                if 'lora_A' in n or 'lora_B' in n:
-                                                    p.requires_grad = False
-                            self.model2.zero_grad()
-                            model.zero_grad()
-                            torch.cuda.empty_cache()
-                          
-                        ##############################################################################################################
                         
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
 
+                        ########################################################################################################################################################################################################
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
@@ -775,7 +584,7 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                             
                             if (self.args.local_rank == 0 or self.args.local_rank == -1):
                                 torch.save(state_dict, output_dir)
-                        
+                        ########################################################################################################################################################################################################
 
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
@@ -883,10 +692,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
             self._save_optimizer_and_scheduler(output_dir)
         ##############################################################################################################
         
-        if 'ours' in args.mode:
-            self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
-            self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
-        
         for hook in self.hooks:
             hook.remove()
         
@@ -910,8 +715,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                                or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
-                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                                 or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.learning_rate,
@@ -920,8 +723,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                            or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
-                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                             or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
@@ -929,11 +730,6 @@ class LLaVATrainerFEDAVG(LLaVATrainer):
                 },
             ]
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-            
-            if self.args.use_hypergradient:
-                from models.AdamW_HD import AdamW_HD
-                optimizer_cls = AdamW_HD
-                optimizer_kwargs['hypergrad_lr'] = self.args.hypergrad_lr
             
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":

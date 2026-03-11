@@ -1,4 +1,4 @@
-from federated_methods.fedavg import LLaVATrainerFEDAVG, get_grad_penultimate
+from federated_methods.fedavg import LLaVATrainerFEDAVG
 import contextlib
 import copy
 import functools
@@ -20,20 +20,17 @@ from transformers.trainer_utils import (
     has_length,
     speed_metrics,
 )
-from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
+from transformers.trainer_pt_utils import get_model_param_count
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
 from transformers import Trainer
-import bitsandbytes
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
     _is_peft_model, 
     TRAINER_STATE_NAME,
     is_torch_xla_available,
     is_accelerate_available,
-    is_deepspeed_available,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS, SCHEDULER_NAME
+    is_deepspeed_available
 )
 from transformers.integrations import hp_params
 from transformers.trainer_callback import TrainerState, ExportableState
@@ -59,8 +56,6 @@ import warnings
 logger = logging.get_logger(__name__)
 
 def perada_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
-    task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
-    ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     # PERADA do two steps per batch
@@ -74,8 +69,6 @@ def perada_create_trainer(model, tokenizer, training_args, data_module, extra_st
         test_datalist=extra_state_dict_dict['test_datalist'],
         processor=extra_state_dict_dict['processor'],
         data_args=extra_state_dict_dict['data_args'],
-        task_id = task_id,
-        ema_ratio=ema_ratio,
         task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
         fisher_old=extra_state_dict_dict['fisher_old'] if 'fisher_old' in extra_state_dict_dict else None,
         fisher_freq=extra_state_dict_dict['fisher_freq'] if 'fisher_freq' in extra_state_dict_dict else 5,
@@ -97,15 +90,10 @@ def kl_loss(output, target, temp=2):
     return l_kl
 
 class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
-    def __init__(self, task_id, ema_ratio=0.996, task_vector=None, fisher_old=None, fisher_freq=5, model2=None,**kwargs):
+    def __init__(self, task_vector=None, fisher_old=None, fisher_freq=5, model2=None,**kwargs):
         super(LLaVATrainerPERADA, self).__init__(**kwargs)
-        self.task_id = task_id
-        self.ema_ratio = ema_ratio
-        # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
         self.global_model_weights = {k:t.detach().clone().cuda() for k, t in self.model.named_parameters() if 'lora1' in k and t.requires_grad}
-        self.mu = 0.1
         
-        self.prompt_ema_ratio = 0.99
         self.task_vector=task_vector.cuda() if task_vector is not None and 'tv' not in self.args.mode else None
         self.fisher_old = fisher_old #{k:p.cuda() for k, p in fisher_old.items()} if fisher_old is not None else None
         self.fisher_cur = 0
@@ -206,6 +194,12 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
     ):
+        '''
+        most lines are original transformer trainer code
+        lines surrounded with
+        ##############################################################################################################
+        are added lines
+        '''
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
         if self.args.auto_find_batch_size:
@@ -287,7 +281,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                 debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
         # ##############################################################################################################
-        # OURS:
         self.model.set_state('lora2')
         self.model.activate_all()
         # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
@@ -699,11 +692,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                         self.optimizer.step()
                         
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
-                        
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
 
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
@@ -816,15 +804,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
         if self.neftune_noise_alpha is not None:
             self._deactivate_neftune(self.model)
 
-        # remove momentum for l2p before saving
-        if 'L2P' in self.args.mode and self.task_id is not None:
-            for key in self.optimizer.state.keys():
-                if 'exp_avg' not in self.optimizer.state[key]:
-                    continue
-                self.optimizer.state[key]['exp_avg'][self.optimizer.state[key]['exp_avg']!=0] = 0.0
-                self.optimizer.state[key]['exp_avg_sq'][self.optimizer.state[key]['exp_avg_sq']!=0] = 0.0
-
-
         if self.args.save_optim:
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
@@ -857,8 +836,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                                or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
-                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                                 or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.learning_rate,
@@ -867,8 +844,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                            or 'lora3_P' in n or 'lora4_P' in n or 'lora3_Q' in n or 'lora4_Q' in n
-                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n
                                                                                             or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
@@ -876,11 +851,6 @@ class LLaVATrainerPERADA(LLaVATrainerFEDAVG):
                 },
             ]
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-            
-            if self.args.use_hypergradient:
-                from models.AdamW_HD import AdamW_HD
-                optimizer_cls = AdamW_HD
-                optimizer_kwargs['hypergrad_lr'] = self.args.hypergrad_lr
             
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":

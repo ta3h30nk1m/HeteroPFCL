@@ -8,8 +8,6 @@ import torch.distributed as dist
 from torch.utils.data import RandomSampler
 from packaging import version
 from torch import nn
-from utils.train_utils import load_deepspeed
-from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
 import sys, os, time, shutil, datetime
 import math
@@ -21,23 +19,17 @@ from transformers.trainer_utils import (
     has_length,
     speed_metrics,
 )
-from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
+from transformers.trainer_pt_utils import get_model_param_count
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
-from transformers import Trainer
-import bitsandbytes
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
     _is_peft_model, 
     TRAINER_STATE_NAME,
     is_torch_xla_available,
     is_accelerate_available,
-    is_deepspeed_available,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS,
-    SCHEDULER_NAME
+    is_deepspeed_available
 )
-import warnings
 from transformers.integrations import hp_params
 from transformers.trainer_callback import TrainerState, ExportableState
 from transformers.training_args import ParallelMode
@@ -76,7 +68,7 @@ def feddpa_create_trainer(model, tokenizer, training_args, data_module, extra_st
 
 class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
     def __init__(self, client_id, curr_round, test_datalist, processor, data_args,  **kwargs):
-        super(LLaVATrainerFEDDPA, self).__init__( client_id, curr_round, test_datalist, processor, data_args,**kwargs)
+        super(LLaVATrainerFEDDPA, self).__init__(client_id, curr_round, test_datalist, processor, data_args,**kwargs)
         
         self.global_weight = None
         self.local_weight = None
@@ -530,11 +522,6 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                         self.optimizer.step()
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
-                        
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
                             # Delay optimizer scheduling until metrics are generated
@@ -546,29 +533,6 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
                     
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-
-                        # save client model
-                        # if step % 5 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        if args.save_per_step and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % 25 == 0:
-                            output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{int(((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps))}.pth")
-                            state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-                            
-                            if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                                torch.save(state_dict, output_dir)
-                        
-                        # anytime eval
-                        if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:
-                            eval_batch_size=8 # FIXME
-                            eval_start_time = time.time()
-                            args.eval_iter = (step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps
-                            anytime_eval_result = anytime_evaluation(model, self.tokenizer, self.processor, self.test_datalist, eval_batch_size, self.curr_round, self.client_id, args, 512, self.data_args, logger)
-                            print(f'eval elapse time {datetime.timedelta(seconds=int(time.time() - eval_start_time))}')
-                            breakpoint()
-
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
                         )
@@ -674,10 +638,6 @@ class LLaVATrainerFEDDPA(LLaVATrainerFEDAVG):
             output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
             self._save_optimizer_and_scheduler(output_dir)
         ##############################################################################################################
-        
-        if 'ours' in args.mode:
-            self.fisher_old = ((self.fisher_cur.detach().cpu()/self.fisher_cnt) + self.fisher_old) / 2 if self.fisher_old is not None else (self.fisher_cur.detach().cpu()/self.fisher_cnt)
-            self.task_vector = self.fisher_old = self.fisher_old.detach().cpu()
         
         for hook in self.hooks:
             hook.remove()

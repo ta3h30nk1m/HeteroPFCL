@@ -1,3 +1,4 @@
+from federated_methods.fedavg import LLaVATrainerFEDAVG
 import contextlib
 import copy
 import functools
@@ -8,7 +9,6 @@ from torch.utils.data import RandomSampler
 from packaging import version
 from torch import nn
 from utils.train_utils import load_deepspeed
-from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
 import sys, os, time, shutil, datetime
 import math
@@ -20,7 +20,7 @@ from transformers.trainer_utils import (
     has_length,
     speed_metrics,
 )
-from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
+from transformers.trainer_pt_utils import get_model_param_count
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
 from transformers import Trainer
@@ -32,11 +32,7 @@ from transformers.trainer import (
     is_torch_xla_available,
     is_accelerate_available,
     is_deepspeed_available,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS,
-    SCHEDULER_NAME
 )
-import warnings
 from transformers.integrations import hp_params
 from transformers.trainer_callback import TrainerState, ExportableState
 from transformers.training_args import ParallelMode
@@ -56,339 +52,111 @@ if is_accelerate_available():
     if is_deepspeed_available():
         from accelerate.utils import DeepSpeedSchedulerWrapper
 
+import warnings
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+
 logger = logging.get_logger(__name__)
 
-from eval_VLM_CL import anytime_evaluation
-from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
-from utils.align_tokens import _build_alignment, align_hidden
+@torch.no_grad()
+def get_grad_penultimate(logit, label, weight_last, input_penultimate, norm_layer, hidden_states_before_norm):
+    # Compute probabilities using softmax
+    prob = F.softmax(logit, dim=-1).to(torch.bfloat16)
+    
+    # One-hot encode the label
+    oh_label = F.one_hot(label.long(), num_classes=logit.shape[-1]).to(torch.bfloat16)
 
-def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True):
+    # Compute the gradient for the last layer
+    delta = (prob - oh_label) / logit.size(0)
+    
+    # Now, compute the gradient for the penultimate layer
+    grad_penultimate_layer = torch.matmul(delta, weight_last)  # Grad w.r.t. the output of the penultimate layer
+    
+    hidden_states = hidden_states_before_norm.to(torch.float32)
+    variance = hidden_states.pow(2).mean(-1, keepdim=True)
+    norm_factor = torch.rsqrt(variance + norm_layer.variance_epsilon)
+    
+    grad_normalized_hidden_states  = norm_layer.weight * norm_factor * ( 1 - hidden_states * hidden_states / ((variance + norm_layer.variance_epsilon) * hidden_states.size(-1)) )
+    
+    grad = grad_penultimate_layer * grad_normalized_hidden_states.to(torch.bfloat16)
+    
+    # Compute the gradient w.r.t the weights of the penultimate layer using the input to that layer (penultimate input)
+    # grad_weights_penultimate = torch.matmul(grad[:,:1].T, input_penultimate) # col # Backprop through penultimate
+    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate[:,:1]) # row  # Backprop through penultimate
+    # grad_weights_penultimate = torch.matmul(grad.T, input_penultimate).mean(dim=-1).view(-1)
+    grad_weights_penultimate = torch.matmul(grad.T, input_penultimate)
+    
+    return grad_weights_penultimate
+
+
+
+@torch.no_grad()
+def fedmosaic_aggregate_state_dict(global_state_dict_list, local_state_dict_list, selected_ids, num_selection, training_args, **kwargs):
+    return
+
+def fedmosaic_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
-    trainer = LLaVATrainerABInit(model=model,
+    trainer = LLaVATrainerOURS(model=model,
         tokenizer=tokenizer,
         args=training_args,
-        model2 = model2,
-        train_A=train_A,
-        data_args=data_args,
+        client_id = extra_state_dict_dict['client_id'],
+        curr_round = extra_state_dict_dict['curr_round'],
+        test_datalist=extra_state_dict_dict['test_datalist'],
+        processor=extra_state_dict_dict['processor'],
+        data_args=extra_state_dict_dict['data_args'],
+        task_vector=extra_state_dict_dict['task_vector'] if 'task_vector' in extra_state_dict_dict else None,
+        grad_old=extra_state_dict_dict['grad_old'] if 'grad_old' in extra_state_dict_dict else None,
+        grad_freq=extra_state_dict_dict['grad_freq'] if 'grad_freq' in extra_state_dict_dict else 5,
+        model2=extra_state_dict_dict['model2'] if 'model2' in extra_state_dict_dict else None,
         **data_module,
         )
     return trainer
 
-class LLaVATrainerABInit(LLaVATrainer):
-    def __init__(self, model2, train_A,data_args,**kwargs):
-        super(LLaVATrainerABInit, self).__init__(**kwargs)
-        model2, tokenizer2, processor2, model2_id = model2
-        self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
-        self.tokenizer2 = tokenizer2
-        self.processor2 = processor2
-        self.model2_id = model2_id
-        self.train_A = train_A
-        self.data_args=data_args
-        self.hooks = []
-        self.lora_outputs = []
-        self.lora_targets = []
-        # Define a simple function to store the output of a layer
-        def hook_fn_A1(module, input, output):
-            # Store the output for further processing
-            self.lora_outputs.append(output)
-        def hook_fn_A2(module, input, output):
-            # Store the output for further processing
-            self.lora_targets.append(output)
-        def hook_fn_B1(module, input, output):
-            # Store the output for further processing
-            self.lora_outputs.append(output.detach().cpu())
-        def hook_fn_B2(module, input, output):
-            # Store the output for further processing
-            self.lora_targets.append(output.detach().cpu())
-        if self.data_args.is_multimodal:
-            last_layer = len(self.model.base_model.language_model.model.layers) // 4
-            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-            last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
-            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
-        else:
-            last_layer = len(self.model.base_model.model.model.layers) // 4
-            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-            last_layer2 = len(self.model2.base_model.model.model.layers) // 4
-            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+def kl_loss(output, target, temp=2):
+    if output.shape[-1]>3000:
+        p = F.log_softmax(output / temp, dim=-1)
+        q = F.softmax(target / temp, dim=-1)
+    else:
+        p = F.log_softmax(output / temp, dim=1)
+        q = F.softmax(target / temp, dim=1)
+
+    l_kl = F.kl_div(p, q, reduction="batchmean") #FIXME
+    l_kl = l_kl * temp**2
+    return l_kl
+
+class LLaVATrainerOURS(LLaVATrainerFEDAVG):
+    def __init__(self, task_vector=None, grad_old=None, grad_freq=5, model2=None,**kwargs):
+        super(LLaVATrainerOURS, self).__init__(**kwargs)
         
-        
-        # if 'front' in self.args.mode:
-            # self.target_layers = [6,9,12,15,18,21,24,27]
-        # elif 'back' in self.args.mode:
-            # self.target_layers = [2,5,8,11,14,17,20,27]
-        # self.target_layers2 = [1,3,5,7,9,11,13,15]
-        # self.target_layers = [3,7,11,15,19,23,27,31]
-        
-        
-        # self.target_layers = [2,5,8,11,14,17,20,27]
-        # self.target_layers = [3,7,11,15,19,23,27,35]
-        # self.target_layers2 = [2,5,8,11,14,17,20,23]
-        
-        # self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
-        # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
-        # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
-        # self.target_layers2 = [1,2,3,4,5,6,7,9,10,11,12,13,14,15]
-        # last_layer = len(self.model.base_model.language_model.model.layers) // 2
-        # self.target_layers = [last_layer*1 -1,last_layer*2 -1]
-        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
-        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
-        
-        # if 'Optimal2' in self.args.mode:
-        #     self.target_layers = [11,27]
-        #     self.target_layers2 = [8,15]
-        # elif 'Optimal4' in self.args.mode:
-        #     self.target_layers = [5,11,20,27]
-        #     self.target_layers2 = [5,8,12,15]
-        # elif 'Optimal8' in self.args.mode:
-        #     self.target_layers = [5,7,11,14,18,20,23,27]
-        #     self.target_layers2 = [5,6,8,9,11,12,14,15]
-        
-        if train_A:
-            if self.data_args.is_multimodal:
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
-                    if idx in self.target_layers:
-                        for n, p in layer.named_parameters():
-                            if 'lora_A' in n:
-                                p.requires_grad = True
-                            else:
-                                p.requires_grad = False
-                        
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A1))
-                    else:
-                        for n, p in layer.named_parameters():
-                            p.requires_grad = False
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                    if idx in self.target_layers2:
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A2))
-            else:
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model.base_model.model.model.layers):
-                    if idx in self.target_layers:
-                        for n, p in layer.named_parameters():
-                            if 'lora_A' in n:
-                                p.requires_grad = True
-                            else:
-                                p.requires_grad = False
-                        
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A1))
-                    else:
-                        for n, p in layer.named_parameters():
-                            p.requires_grad = False
-                # only makes lora_A for target layers trainable
-                for idx, layer in enumerate(self.model2.base_model.model.model.layers):
-                    if idx in self.target_layers2:
-                        for n, m in layer.named_modules():
-                            if 'lora_A.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_A2))
-        else:
-            # only makes lora_B for target layers trainable
-            # self.lora_B_output_1b = []
-            # self.lora_B_output_3b = []
-            self.layer_name_1b = []
-            self.layer_name_3b = []
+        self.task_vector=task_vector if task_vector is not None and 'tv' not in self.args.mode else None
+        self.grad_old = grad_old #{k:p.cuda() for k, p in grad_old.items()} if grad_old is not None else None
+        self.grad_cur = 0
+        self.grad_cnt = 0
+        self.grad_freq = grad_freq
+        if model2 is not None:
+            model2, tokenizer2, processor2, model2_id = model2
+            self.model2 = model2.cuda()
+            self.tokenizer2 = tokenizer2
+            self.processor2 = processor2
+            self.model2_id = model2_id
+            self.input_penultimate = []
+            self.hidden_states_before_norm = []
+            self.hooks = []
+            def hook_fn(module, input, output):
+                self.input_penultimate.append(input)
+            def hook_fn2(module, input, output):
+                self.hidden_states_before_norm.append(input)
             
             if self.data_args.is_multimodal:
-                for n, p in self.model.named_parameters():
-                    if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers:
-                        self.layer_name_3b.append(n)
-                for n, p in self.model2.named_parameters():
-                    if 'lora_B.default' in n and int(n.split('.')[5]) in self.target_layers2:
-                        self.layer_name_1b.append(n)
-                for idx, layer in enumerate(self.model.base_model.language_model.model.layers):
-                    if idx in self.target_layers:
-                        for n, p in layer.named_parameters():
-                            if 'lora_P' in n:
-                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                            else:
-                                p.requires_grad = True
-                        for n, m in layer.named_modules():
-                            if 'lora_B.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_B1))
-                    else:
-                        for n, p in layer.named_parameters():
-                            p.requires_grad = False
-                self.lora_B_output_1b = [[] for _ in range(len(self.layer_name_1b))]
-                self.lora_B_output_3b = [[] for _ in range(len(self.layer_name_3b))]
-                
-                for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
-                    if idx in self.target_layers2:
-                        for n, p in layer.named_parameters():
-                            if 'lora_P' in n:
-                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                        for n, m in layer.named_modules():
-                            if 'lora_B.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_B2))
+                self.hooks.append(self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.language_model.model.norm.register_forward_hook(hook_fn2))
             else:
-                for n, p in self.model.named_parameters():
-                    if 'lora_B.default' in n and int(n.split('.')[4]) in self.target_layers:
-                        self.layer_name_3b.append(n)
-                for n, p in self.model2.named_parameters():
-                    if 'lora_B.default' in n and int(n.split('.')[4]) in self.target_layers2:
-                        self.layer_name_1b.append(n)
-                for idx, layer in enumerate(self.model.base_model.model.model.layers):
-                    if idx in self.target_layers:
-                        for n, p in layer.named_parameters():
-                            if 'lora_P' in n:
-                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                            else:
-                                p.requires_grad = True
-                        for n, m in layer.named_modules():
-                            if 'lora_B.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_B1))
-                    else:
-                        for n, p in layer.named_parameters():
-                            p.requires_grad = False
-                
-                
-                for idx, layer in enumerate(self.model2.base_model.model.model.layers):
-                    if idx in self.target_layers2:
-                        for n, p in layer.named_parameters():
-                            if 'lora_P' in n:
-                                p.data = torch.eye(p.shape[0]).to(torch.bfloat16).cuda()
-                        for n, m in layer.named_modules():
-                            if 'lora_B.default' in n:
-                                self.hooks.append(m.register_forward_hook(hook_fn_B2))
-        self.model_accepts_loss_kwargs = False
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        self.lora_outputs = []
-        self.lora_targets = []
-        
-        batch_sources = inputs.pop('prompt', None)
-        batchs = len(batch_sources)
-        datalist = LazySupervisedDataset(batch_sources, self.tokenizer2, self.data_args, self.processor2, model_id=self.model2_id)
-        temp_dc = DataCollatorForSupervisedDataset(tokenizer=self.tokenizer2)
-        temp_dataloader = torch.utils.data.DataLoader(datalist, batch_size=len(batch_sources), collate_fn=temp_dc)
-        temp_inputs = next(iter(temp_dataloader))
-        temp_inputs.pop('prompt', None)
-        temp_inputs = self._prepare_inputs(temp_inputs)
-        
-        label = inputs['labels'][..., 1:].contiguous()
-        label2 = temp_inputs['labels'][..., 1:].contiguous()
-        
-        # get token alignment
-        base2blend = []
-        for j in range(batchs):
-            base_tokens   = self.tokenizer2.convert_ids_to_tokens(temp_inputs['input_ids'][j,:-1][label2[j] != -100])
-            blend_tokens  = self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][j,:-1][label[j] != -100])
-            base_special  = 'Ġ'#TOKENIZER_TO_SPECIAL_TOKEN[base_model_tokenizer.__class__]
-            blend_special = 'Ġ'#TOKENIZER_TO_SPECIAL_TOKEN[blending_model_tokenizer.__class__]
-
-            base2blend.append(_build_alignment(
-                blend_tokens, base_tokens,
-                base_special=base_special,
-                blend_special=blend_special,
-            )  # List[List[int]]
-            )
-        
-        if self.train_A:
-            with torch.no_grad():
-                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, temp_inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-
-            loss, outputs = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-        
-        else:
-            with torch.no_grad():
-                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, temp_inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-            
-            # if len(self.lora_B_output_1b) == 0:
-            #     for lora_target in self.lora_targets:
-            #         self.lora_B_output_1b.append(lora_target.reshape(-1, lora_target.size(-1)).detach().cpu())
-            # else:
-            #     for i, lora_target in enumerate(self.lora_targets):
-            #         self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], lora_target.reshape(-1, lora_target.size(-1)).detach().cpu()), dim=0)
-            
-            loss, outputs = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
-        
-            # if len(self.lora_B_output_3b) == 0:
-            #     for lora_output in self.lora_outputs:
-            #         self.lora_B_output_3b.append(lora_output.reshape(-1, lora_output.size(-1)).detach().cpu())
-            # else:
-            #     for i, lora_output in enumerate(self.lora_outputs):
-            #         self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], lora_output.reshape(-1, lora_output.size(-1)).detach().cpu()), dim=0)
-            for i, (output, target) in enumerate(zip(self.lora_outputs, self.lora_targets)):
-                new_targets = []
-                new_outputs = []
-                for j in range(target.shape[0]):
-                    new_target, keep_idx = align_hidden(target[j,:-1][label2[j].cpu() != -100], base2blend[j])
-                    new_targets.append(new_target[keep_idx])
-                    new_outputs.append(output[j,:-1][label[j].cpu() != -100][keep_idx])
-                new_targets = torch.stack(new_targets, dim=0)
-                new_outputs = torch.stack(new_outputs, dim=0)
-                if len(self.lora_B_output_1b[i]) == 0:
-                    self.lora_B_output_1b[i] = new_targets.reshape(-1, new_targets.size(-1)).detach().cpu()
-                    self.lora_B_output_3b[i] = new_outputs.reshape(-1, new_outputs.size(-1)).detach().cpu()
-                else:
-                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], new_targets.reshape(-1, new_targets.size(-1)).detach().cpu()), dim=0)
-                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], new_outputs.reshape(-1, new_outputs.size(-1)).detach().cpu()), dim=0)
-        # l2 loss on output
-        if self.train_A:
-            loss = 0
-            # breakpoint()
-            for idx, (output, target) in enumerate(zip(self.lora_outputs, self.lora_targets)):
-                new_targets = []
-                new_outputs = []
-                for j in range(target.shape[0]):
-                    new_target, keep_idx = align_hidden(target[j,:-1][label2[j] != -100], base2blend[j])
-                    new_targets.append(new_target[keep_idx])
-                    new_outputs.append(output[j,:-1][label[j] != -100][keep_idx])
-                    
-                new_targets = torch.stack(new_targets, dim=0)
-                new_outputs = torch.stack(new_outputs, dim=0)
-                
-                loss += torch.mean((new_outputs - new_targets.detach())**2)
-            
-            # encourage orthogonality
-            cos_loss = 0
-            layer_cnt = 0
-            
-            if self.data_args.is_multimodal:
-                layers = self.model.base_model.language_model.model.layers
-            else:
-                layers = self.model.base_model.model.model.layers
-            
-            for idx, layer in enumerate(layers):
-                if idx in self.target_layers:
-                    for n, p in layer.named_parameters():
-                        if 'lora_A' in n:
-                            # Normalize column vectors (L2 normalization)
-                            weight = F.normalize(p, dim=0)  # Normalize along columns
-
-                            # Compute cosine similarity between all pairs of columns
-                            cosine_sim_matrix = torch.matmul(weight.T, weight)  # (r, r) similarity matrix
-
-                            # Extract the upper triangular part, excluding the diagonal
-                            r = weight.shape[1]
-                            mask = torch.ones((r, r), dtype=torch.bool, device=weight.device)
-                            mask.fill_diagonal_(0)  # Exclude diagonal elements
-
-                            # Compute loss as mean squared cosine similarity (to encourage orthogonality)
-                            cos_loss += (cosine_sim_matrix[mask] ** 2).mean()  # Mean squared cosine similarity
-                            layer_cnt += 1
-            print(f"l2 loss: {loss} | cosine_loss: {cos_loss} / {layer_cnt} * 0.5")
-            loss += 0.5*cos_loss / layer_cnt
-        else:
-            loss *= 0
-        
-        return (loss, outputs) if return_outputs else loss
+                self.hooks.append(self.model2.base_model.model.model.layers[-1].mlp.down_proj.register_forward_hook(hook_fn))
+                self.hooks.append(self.model2.base_model.model.model.norm.register_forward_hook(hook_fn2))
     
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
     ):
-        '''
-        most lines are original transformer trainer code
-        lines surrounded with
-        ##############################################################################################################
-        are added lines
-        '''
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
         if self.args.auto_find_batch_size:
@@ -469,6 +237,13 @@ class LLaVATrainerABInit(LLaVATrainer):
             else:
                 debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
+        # ##############################################################################################################
+        # OURS:
+        self.model.set_state('gate')
+        self.model.activate_lora2()
+        # self.old_weights = {k: t.detach().clone() for k, t in self.model.named_parameters() if t.requires_grad}
+        # ##############################################################################################################
+        
         delay_optimizer_creation = is_sagemaker_mp_enabled() or self.is_fsdp_xla_enabled or self.is_fsdp_enabled
 
         # We need to reset the scheduler, as its parameters may be different on subsequent calls
@@ -575,9 +350,10 @@ class LLaVATrainerABInit(LLaVATrainer):
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
         #############################################################################################################
 
-        # if self.args.save_optim and self.curr_round > 0:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._load_optimizer_and_scheduler(output_dir)
+        if self.args.save_optim and self.curr_round > 0:
+            output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
+            if os.path.exists(output_dir):
+                self._load_optimizer_and_scheduler(output_dir)
             
         ##############################################################################################################
         # important: at this point:
@@ -746,6 +522,15 @@ class LLaVATrainerABInit(LLaVATrainer):
                         else contextlib.nullcontext
                     )
                     
+                    
+                    #############################################
+                    if self.data_args.get_prompt:
+                        batch_sources = inputs.pop('prompt', None)
+                    #############################################
+                    
+                    # if args.is_t5model:
+                    #     temp_inputs = copy.deepcopy(inputs)
+                    
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
 
@@ -803,6 +588,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
+                        
 
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
@@ -811,33 +597,141 @@ class LLaVATrainerABInit(LLaVATrainer):
                                 self.lr_scheduler.step()
 
                         model.zero_grad()
+                        ##############################################################################################################
+                        # compute gradient online
+                        self.input_penultimate = []
+                        self.hidden_states_before_norm = []
+                        # breakpoint()
+                        
+                        if ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.grad_freq == 0:
+                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            #     p.requires_grad = True
+                            
+                            # if args.is_t5model:
+                            #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
+                            #         if 'base_layer' in n:
+                            #             p.requires_grad=True
+                            # else:
+                            #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
+                            #         for n, p in l.named_parameters():
+                                        
+                            #             if 'base_layer' in n:
+                            #                 p.requires_grad=True
+                            
+                            # if not args.is_t5model:                            
+                            datalist = LazySupervisedDataset(batch_sources, self.tokenizer2, self.data_args, self.processor2, model_id=self.model2_id)
+                            temp_dc = DataCollatorForSupervisedDataset(tokenizer=self.tokenizer2)
+                            
+                            temp_dataloader = torch.utils.data.DataLoader(datalist, batch_size=len(batch_sources), collate_fn=temp_dc)
+                            temp_inputs = next(iter(temp_dataloader))
+                            temp_inputs.pop('prompt', None)
+                            
+                            with self.model2.disable_adapter():
+                                inputs = self._prepare_inputs(temp_inputs)
+                                with torch.no_grad():
+                                    output = self.model2(**inputs)#.loss
+                                shift_labels = inputs['labels'][..., 1:]
+                                
+                                if self.data_args.is_multimodal:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.language_model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.language_model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                else:
+                                    grads = get_grad_penultimate(output.logits[..., :-1, :][shift_labels != -100].detach(), shift_labels[shift_labels != -100].detach(), 
+                                                                self.model2.base_model.model.lm_head.weight,
+                                                                self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
+                                                                self.model2.base_model.model.model.norm,
+                                                                self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
+                                # output = self.model2(**inputs)#.loss
+                                # output.loss.backward()
+                                
+                                # grads = []
+                                # if args.is_t5model:
+                                #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
+                                #         if 'base_layer' in n:
+                                #             grads.append(p.grad.detach())
+                                # else:
+                                #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
+                                #         for n, p in l.named_parameters():
+                                #             if 'base_layer' in n:
+                                #                 grads.append(p.grad.detach())
+                                # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                                #     grads.append(p.grad)
+                                    # grads.append(p.grad[:,self.grad_subsample_idx])
+                                # for layer in self.model.base_model.model.model.layers:
+                                #     for p in layer.mlp.down_proj.base_layer.parameters():
+                                #         grads.append(p.grad[:,self.grad_subsample_idx])
+                                
+                                # grads = torch.cat(grads, dim=1)
+                                # grads = torch.cat(grads)
+                                
+                            grad_ratio = int(grads.shape[0] * self.args.gradient_ratio)
+                            grads = grads[:grad_ratio]
+                            
+                            if self.args.gradient_noise_type == "gaussian":
+                                noise = torch.randn_like(grads) * self.args.gradient_noise_std
+
+                            elif self.args.gradient_noise_type == "laplacian":
+                                #u = torch.rand_like(grads)
+                                lap = torch.distributions.Laplace(loc=0.0, scale=self.args.gradient_noise_std)
+                                noise = lap.sample(grads.shape).to(grads.device)
+                                #noise = self.args.gradient_noise_std * torch.sign(u - 0.5) * torch.log1p(-2 * (u - 0.5).abs())
+
+                            else:
+                                raise ValueError(f"Unsupported noise type: {self.args.gradient_noise_type}")
+                            noised_grads = grads + noise
+                            # Accumulate noised gradients
+                            self.grad_cur += noised_grads.detach()
+                            
+                            # self.grad_cur += (grads).detach()
+                            # if self.grad_cur == 0:
+                            #     self.grad_cur = grads
+                            # else:
+                            #     for i in range(len(self.grad_cur)):
+                            #         self.grad_cur[i] += grads[i]
+                            
+                            self.grad_cnt += 1
+                            
+                            # if args.is_t5model:
+                            #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
+                            #         if 'base_layer' in n:
+                            #             p.requires_grad=False
+                            # else:
+                            #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
+                            #         for n, p in l.named_parameters():
+                            #             # print(n)
+                            #             if 'base_layer' in n:
+                            #                 p.requires_grad=False
+                            
+                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
+                            #     p.requires_grad = False
+                            # for layer in self.model.base_model.model.model.layers:
+                            #     for p in layer.mlp.down_proj.base_layer.parameters():
+                            #         p.requires_grad = False
+                            self.model2.zero_grad()
+                            # model.zero_grad()
+                            torch.cuda.empty_cache()
+                        ##############################################################################################################
                         self.state.global_step += 1
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
-                    
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-
+                        
+                        ##############################################################################################################
                         # save client model
                         # if step % 5 == 0:
                         #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        # if step % 25 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
+                        #     self.model.activate_all()
                         #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
                             
                         #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
                         #         torch.save(state_dict, output_dir)
-                        
-                        # anytime eval
-                        # if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:
-                        #     eval_batch_size=8 # FIXME
-                        #     eval_start_time = time.time()
-                        #     args.eval_iter = (step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps
-                        #     anytime_eval_result = anytime_evaluation(model, self.tokenizer, self.processor, self.test_datalist, eval_batch_size, self.curr_round, self.client_id, args, 512, self.data_args, logger)
-                        #     print(f'eval elapse time {datetime.timedelta(seconds=int(time.time() - eval_start_time))}')
-                        #     breakpoint()
+                            
+                        #     self.model.activate_lora2()
 
+                        ##############################################################################################################
+                        
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
                         )
@@ -856,7 +750,6 @@ class LLaVATrainerABInit(LLaVATrainer):
                     if is_torch_xla_available():
                         xm.mark_step()
                     break
-            
             if step < 0:
                 logger.warning(
                     "There seems to be not a single sample in your epoch_iterator, stopping training at step"
@@ -938,17 +831,30 @@ class LLaVATrainerABInit(LLaVATrainer):
         if self.neftune_noise_alpha is not None:
             self._deactivate_neftune(self.model)
 
-        ##############################################################################################################
-        # if self.args.save_optim:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._save_optimizer_and_scheduler(output_dir)
-        ##############################################################################################################
-        del self.lora_outputs, self.lora_targets
+        if self.args.save_optim:
+            output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
+            self._save_optimizer_and_scheduler(output_dir)
+
+        # Decayed gradient
+        self.grad_old = ((self.grad_cur.detach().cpu()/self.grad_cnt) + self.grad_old) / 2 if self.grad_old is not None else (self.grad_cur.detach().cpu()/self.grad_cnt)
+        self.task_vector = self.grad_old = self.grad_old.detach().cpu()
+            
+            # if self.grad_old is not None:
+            #     for i in range(len(self.grad_cur)):
+            #         self.grad_old[i] = ((self.grad_cur[i].detach().cpu()/self.grad_cnt) + self.grad_old[i]) / 2 
+            # else:
+            #     self.grad_old = []
+            #     for i in range(len(self.grad_cur)):
+            #         self.grad_old.append(self.grad_cur[i].detach().cpu()/self.grad_cnt)
+            # # curronly
+            # # self.grad_old = (self.grad_cur.detach().cpu()/self.grad_cnt)
+            # self.task_vector = self.grad_old #= self.grad_old.detach().cpu()
         for hook in self.hooks:
             hook.remove()
-        
-        return TrainOutput(self.state.global_step, train_loss, metrics)
+        self.model.activate_all()
 
+        return TrainOutput(self.state.global_step, train_loss, metrics)
+    
     def create_optimizer(self):
         """
         Setup the optimizer.
@@ -966,23 +872,23 @@ class LLaVATrainerABInit(LLaVATrainer):
             optimizer_grouped_parameters = [
                 {
                     "params": [
-                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n 
-                                                                                                or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                        p for n, p in opt_model.named_parameters() if (p.requires_grad and not ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
+                                                                                                or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
+                    "lr": self.args.learning_rate,
                     "weight_decay": self.args.weight_decay,
                 },
                 {
                     "params": [
                         p for n, p in opt_model.named_parameters() if (p.requires_grad and ('lora_P' in n or 'lora1_P' in n or 'lora2_P' in n or 'lora_Q' in n or 'lora1_Q' in n or 'lora2_Q' in n
-                                                                                            or 'loraT_P' in n or 'loraT1_P' in n or 'loraT2_P' in n or 'loraT_Q' in n or 'loraT1_Q' in n or 'loraT2_Q' in n))
+                                                                                            or 'lora_w_weight' in n or 'lora_w_noise' in n))
                     ],
                     "lr": self.args.mm_projector_lr,
                     "weight_decay": self.args.weight_decay,
                 },
             ]
-            
             optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-
+            
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
             if optimizer_cls.__name__ == "Adam8bit":
                 import bitsandbytes
@@ -999,45 +905,3 @@ class LLaVATrainerABInit(LLaVATrainer):
                 logger.info(f"skipped: {skipped/2**20}M params")
 
         return self.optimizer
-    
-    def _load_optimizer_and_scheduler(self, checkpoint):
-        """If optimizer and scheduler states exist, load them."""
-        if checkpoint is None:
-            return
-
-        if self.is_deepspeed_enabled:
-            from deepspeed.runtime.state_dict_factory import SDLoaderFactory
-            from deepspeed.runtime.pipe.module import PipelineModule
-            latest_tag = "latest"
-            latest_path = os.path.join(checkpoint, latest_tag)
-            if os.path.isfile(latest_path):
-                with open(latest_path, "r") as fd:
-                    tag = fd.read().strip()
-                    
-            ckpt_list = self.model_wrapped._get_all_ckpt_names(checkpoint, tag)
-            sd_loader = SDLoaderFactory.get_sd_loader(ckpt_list, checkpoint_engine=self.model_wrapped.checkpoint_engine)
-
-            is_pipe_parallel = isinstance(self.model_wrapped.module, PipelineModule)
-
-            mp_rank = 0 if self.model_wrapped.mpu is None else self.model_wrapped.mpu.get_model_parallel_rank()
-            load_path, checkpoint_state, _ = sd_loader.load(self.model_wrapped.mp_world_size, mp_rank, is_pipe_parallel=is_pipe_parallel)
-            self.model_wrapped.loaded_checkpoint_dp_world_size = checkpoint_state['dp_world_size']
-            self.model_wrapped.loaded_checkpoint_mp_world_size = checkpoint_state['mp_world_size']
-
-            zero_sd_list = self.model_wrapped._get_all_zero_checkpoints(checkpoint, tag)
-
-            self.model_wrapped.optimizer.load_state_dict(state_dict_list=zero_sd_list,
-                                       load_optimizer_states=True,
-                                       load_from_fp32_weights=self.model_wrapped.zero_load_from_fp32_weights(),
-                                       checkpoint_folder=None,
-                                       load_serial=None)
-            
-            # deepspeed loads optimizer/lr_scheduler together with the model in deepspeed_init
-            if not isinstance(self.lr_scheduler, DeepSpeedSchedulerWrapper):
-                with warnings.catch_warnings(record=True) as caught_warnings:
-                    self.lr_scheduler.load_state_dict(torch.load(os.path.join(checkpoint, SCHEDULER_NAME)))
-                reissue_pt_warnings(caught_warnings)
-            return
-
-        else:
-            super()._load_optimizer_and_scheduler(checkpoint)

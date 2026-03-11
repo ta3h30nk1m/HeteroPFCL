@@ -614,7 +614,7 @@ def get_datalists(args, scenario_num):
         scenario = scenario[1:]
     else:
         incremental_setup = {
-            "num_active_clients": [args.num_clients,]*(args.num_rounds * args.num_tasks)
+            "num_active_clients": [args.num_clients,]*int(args.num_rounds * args.num_tasks)
         }
     assert args.num_clients == len(scenario)
 
@@ -641,7 +641,7 @@ def get_datalists(args, scenario_num):
                 datalist = json.load(fp)
             random.shuffle(datalist)
             samplenum_per_rounds = int(len(datalist) / rounds_per_task)
-            for i in range(rounds_per_task):
+            for i in range(int(rounds_per_task)):
                 train_datalist.append(
                     {'datalist':datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
                      'train_cnt': train_cnt + samplenum_per_rounds})

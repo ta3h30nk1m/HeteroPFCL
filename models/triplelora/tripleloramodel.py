@@ -51,7 +51,7 @@ from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.eetq import dispatch_eetq
 from peft.tuners.lora.gptq import dispatch_gptq
 from peft.tuners.lora.hqq import dispatch_hqq
-from .dual_pqloralayer_full import Conv2d, PQLoraFullLayer, dispatch_default
+from .tripleloralayer import Conv2d, TripleLoraLayer, dispatch_default
 from peft.tuners.lora.torchao import dispatch_torchao
 from peft.tuners.lora.tp_layer import dispatch_megatron
 
@@ -62,7 +62,7 @@ def _adapter_names_pre_forward_hook(target, args, kwargs, adapter_names):
     return args, kwargs
 
 
-class Dual_PQLoraFullModel(BaseTuner):
+class TripleLoraModel(BaseTuner):
     """
     Creates Low Rank Adapter (LoRA) model from a pretrained transformers model.
 
@@ -220,7 +220,7 @@ class Dual_PQLoraFullModel(BaseTuner):
         # note: AdaLoraLayer is a subclass of LoraLayer, we need to exclude it
         from peft.tuners.adalora import AdaLoraLayer
 
-        if isinstance(target, PQLoraFullLayer) and not isinstance(target, AdaLoraLayer):
+        if isinstance(target, TripleLoraLayer) and not isinstance(target, AdaLoraLayer):
             target.update_layer(
                 adapter_name,
                 r,
@@ -294,7 +294,7 @@ class Dual_PQLoraFullModel(BaseTuner):
                         p.requires_grad = True
             elif bias == "lora_only":
                 for m in model.modules():
-                    if isinstance(m, PQLoraFullLayer) and hasattr(m, "bias") and m.bias is not None:
+                    if isinstance(m, TripleLoraLayer) and hasattr(m, "bias") and m.bias is not None:
                         m.bias.requires_grad = True
             else:
                 raise NotImplementedError(f"Requested bias: {bias}, is not implemented.")
@@ -426,7 +426,7 @@ class Dual_PQLoraFullModel(BaseTuner):
             adapter_name (`str` or `list[str]`): Name of the adapter(s) to be activated.
         """
         for module in self.model.modules():
-            if isinstance(module, PQLoraFullLayer):
+            if isinstance(module, TripleLoraLayer):
                 if module.merged:
                     warnings.warn("Adapter cannot be set when the model is merged. Unmerging the model first.")
                     module.unmerge()
@@ -450,9 +450,9 @@ class Dual_PQLoraFullModel(BaseTuner):
         # to check that there is at least one layer with the given name, or else something like typos can easily slip.
         expected_adapters = set()
         for layer in self.modules():
-            if isinstance(layer, PQLoraFullLayer):
-                expected_adapters |= layer.lora_A.keys()
-                expected_adapters |= layer.lora_embedding_A.keys()
+            if isinstance(layer, TripleLoraLayer):
+                expected_adapters |= layer.lora1_A.keys()
+                expected_adapters |= layer.lora1_embedding_A.keys()
         unique_adapters = {name for name in adapter_names if name != "__base__"}
         unexpected_adapters = unique_adapters - expected_adapters
         if unexpected_adapters:
@@ -460,7 +460,7 @@ class Dual_PQLoraFullModel(BaseTuner):
 
         hook_handles = []
         for module in self.modules():
-            if isinstance(module, PQLoraFullLayer) or isinstance(module, ModulesToSaveWrapper):
+            if isinstance(module, TripleLoraLayer) or isinstance(module, ModulesToSaveWrapper):
                 pre_forward = partial(_adapter_names_pre_forward_hook, adapter_names=adapter_names)
                 handle = module.register_forward_pre_hook(pre_forward, with_kwargs=True)
                 hook_handles.append(handle)
@@ -669,13 +669,70 @@ class Dual_PQLoraFullModel(BaseTuner):
         key_list = [key for key, _ in self.model.named_modules() if self.prefix not in key]
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFullLayer):
-                if adapter_name in target.lora_A:
-                    target_lora_A = target.lora_A[adapter_name].weight
-                    target_lora_B = target.lora_B[adapter_name].weight
-                elif adapter_name in target.lora_embedding_A:
-                    target_lora_A = target.lora_embedding_A[adapter_name]
-                    target_lora_B = target.lora_embedding_B[adapter_name]
+            if isinstance(target, TripleLoraLayer):
+                if adapter_name in target.lora1_A:
+                    target_lora_A = target.lora1_A[adapter_name].weight
+                    target_lora_B = target.lora1_B[adapter_name].weight
+                elif adapter_name in target.lora1_embedding_A:
+                    target_lora_A = target.lora1_embedding_A[adapter_name]
+                    target_lora_B = target.lora1_embedding_B[adapter_name]
+                else:
+                    continue
+
+                target_lora_A.data = target_lora_A.data * 0.0
+                target_lora_B.data = target_lora_B.data * 0.0
+                if combination_type == "cat":
+                    loras_A, loras_B = [], []
+                    for adapter, weight in zip(adapters, weights):
+                        if adapter in target.lora_A:
+                            current_adapter_lora_A = target.lora_A[adapter].weight
+                            current_adapter_lora_B = target.lora_B[adapter].weight
+                        elif adapter in target.lora_embedding_A:
+                            current_adapter_lora_A = target.lora_embedding_A[adapter]
+                            current_adapter_lora_B = target.lora_embedding_B[adapter]
+                        else:
+                            continue
+                        loras_A.append(current_adapter_lora_A.data * weight * target.scaling[adapter])
+                        loras_B.append(current_adapter_lora_B.data)
+
+                    if len(loras_A) == 0:
+                        raise ValueError("No matching LoRAs found. Please raise an issue on GitHub.")
+                    loras_A = torch.cat(loras_A, dim=0)
+                    loras_B = torch.cat(loras_B, dim=1)
+                    target_lora_A.data[: loras_A.shape[0], :] = loras_A
+                    target_lora_B.data[:, : loras_B.shape[1]] = loras_B
+                elif combination_type in [
+                    "svd",
+                    "ties_svd",
+                    "dare_linear_svd",
+                    "dare_ties_svd",
+                    "magnitude_prune_svd",
+                ]:
+                    target_lora_A.data, target_lora_B.data = self._svd_generalized_task_arithmetic_weighted_adapter(
+                        combination_type,
+                        adapters,
+                        weights,
+                        new_rank,
+                        target,
+                        target_lora_A,
+                        target_lora_B,
+                        density,
+                        majority_sign_method,
+                        svd_clamp,
+                        full_matrices=svd_full_matrices,
+                        driver=svd_driver,
+                    )
+                elif combination_type in ["linear", "ties", "dare_linear", "dare_ties", "magnitude_prune"]:
+                    target_lora_A.data, target_lora_B.data = self._generalized_task_arithmetic_weighted_adapter(
+                        combination_type, adapters, weights, target, density, majority_sign_method
+                    )
+                    
+                if adapter_name in target.lora2_A:
+                    target_lora_A = target.lora2_A[adapter_name].weight
+                    target_lora_B = target.lora2_B[adapter_name].weight
+                elif adapter_name in target.lora2_embedding_A:
+                    target_lora_A = target.lora2_embedding_A[adapter_name]
+                    target_lora_B = target.lora2_embedding_B[adapter_name]
                 else:
                     continue
 
@@ -854,7 +911,7 @@ class Dual_PQLoraFullModel(BaseTuner):
         new_adapter = None
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFullLayer):
+            if isinstance(target, TripleLoraLayer):
                 target.delete_adapter(adapter_name)
                 if new_adapter is None:
                     new_adapter = target.active_adapters[:]

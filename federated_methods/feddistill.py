@@ -1,4 +1,4 @@
-from federated_methods.fedavg import LLaVATrainerFEDAVG, get_grad_penultimate
+from federated_methods.fedavg import LLaVATrainerFEDAVG
 import contextlib
 import copy
 import functools
@@ -20,11 +20,9 @@ from transformers.trainer_utils import (
     has_length,
     speed_metrics,
 )
-from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
+from transformers.trainer_pt_utils import get_model_param_count
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
-from transformers import Trainer
-import bitsandbytes
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
     _is_peft_model, 
@@ -32,8 +30,6 @@ from transformers.trainer import (
     is_torch_xla_available,
     is_accelerate_available,
     is_deepspeed_available,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS, SCHEDULER_NAME
 )
 from transformers.integrations import hp_params
 from transformers.trainer_callback import TrainerState, ExportableState
@@ -71,72 +67,16 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
     processors = kwargs['processors']
     layer_index = kwargs['LAYER_INDEX']
     
-    # fedavg first
-    if 'Multi' in training_args.mode:
-        for model_id, homo_client_ids in model_ids.items():
-            global_state_dict = global_state_dict_list[homo_client_ids[0]]
-            
-            # only use active clients
-            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
-            
-            cur_layer_num = []
-            for k in global_state_dict.keys():
-                if 'layers.' in k:
-                    cur_layer_num.append(int(k.split('.')[layer_index]))
-            cur_layer_num = sorted(list(set(cur_layer_num)))
-            if 'Multi05' in training_args.mode:
-                cur_layer_num = [len(cur_layer_num)//2 -1, len(cur_layer_num) -1]
-            elif 'Multi' in training_args.mode:
-                cur_layer_num = [len(cur_layer_num)//4 -1,len(cur_layer_num)//2 -1, (len(cur_layer_num)//4) * 3 -1,len(cur_layer_num) -1]
-            else:
-                raise ValueError('wrong mode')
-            
-            for name in global_state_dict.keys():
-                new_param = 0
-                target_key = name
-                splited = target_key.split('.')
-                if int(splited[layer_index]) in cur_layer_num:
-                    if 'lora_P' not in target_key and 'lora_Q' not in target_key and 'lora1_P' not in target_key and 'lora1_Q' not in target_key:
-                        continue
-                    for id in range(training_args.num_clients):
-                        splited = target_key.split('.')
-                        # if layer number is different
-                        layer_num = []
-                        for k in local_state_dict_list[id].keys():
-                            if 'layers.' in k:
-                                layer_num.append(int(k.split('.')[layer_index]))
-                        
-                        if 'Multi05' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 2
-                            target_layers = [layer_num*1 -1,layer_num*2 -1]
-                        elif 'Multi' in training_args.mode:
-                            layer_num = len(set(layer_num)) // 4
-                            target_layers = [layer_num*1 -1,layer_num*2 -1,layer_num*3 -1,layer_num*4 -1]
-                        if cur_layer_num[-1] != target_layers[-1]: # if different size
-                            idx = cur_layer_num.index(int(splited[layer_index]))
-                            splited[layer_index] = str(target_layers[idx])
-                            new_target_key = '.'.join(splited)
-                        else:
-                            new_target_key = target_key
-                    
-                        new_param += local_state_dict_list[id][new_target_key] / len(selected_ids)
-                else:
-                    for id in active_homo_ids:
-                        new_param += local_state_dict_list[id][target_key] / len(active_homo_ids)
-                global_state_dict[name] = new_param
-            for i in homo_client_ids:
-                global_state_dict_list[i] = global_state_dict
-    else:
-        for model_id, homo_client_ids in model_ids.items():
-            global_state_dict = global_state_dict_list[homo_client_ids[0]]
-            
-            # only use active clients
-            active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
-            
-            for key in global_state_dict.keys():
-                global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
-            for i in homo_client_ids:
-                global_state_dict_list[i] = global_state_dict
+    for model_id, homo_client_ids in model_ids.items():
+        global_state_dict = global_state_dict_list[homo_client_ids[0]]
+        
+        # only use active clients
+        active_homo_ids = [id for id in homo_client_ids if id in selected_ids]
+        
+        for key in global_state_dict.keys():
+            global_state_dict[key] = sum([local_state_dict_list[client][key] / len(active_homo_ids) for client in active_homo_ids])
+        for i in homo_client_ids:
+            global_state_dict_list[i] = global_state_dict
     
     
     # get public dataset
@@ -144,8 +84,20 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
         data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     else:
         # data_path = "dataset/FS_LLM_Instruct/dolly_meta.json"
-        data_path = 'chatbotIT.json'
+        data_path = 'dataset/chatbotIT.json'
     public_datalist = json.load(open(data_path, "r"))[:training_args.num_serverdistill]
+    # from nlp_data import DATASET_MAP
+    # data_function = DATASET_MAP['wnli']
+    # trainset, valset, _ = data_function()
+    # public_datalist = []
+    # for item in trainset:
+    #     ktd=[]
+    #     for k in item.keys():
+    #         if k not in ['x', 'y']:
+    #             ktd.append(k)
+    #     for k in ktd:
+    #         del item[k]
+    #     public_datalist.append(item)
     random.shuffle(public_datalist)
 
     for model_id, homo_client_ids in model_ids.items():
@@ -162,8 +114,8 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
                 model.load_state_dict(global_state_dict, strict=False)  
         
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                tokenizer=kwargs['tokenizer'],
-                                                processor=kwargs['processor'],
+                                                tokenizer=tokenizer,
+                                                processor=processor,
                                                 data_args=copy.deepcopy(kwargs['data_args']),
                                                 model_id=model_id)
         trainer = feddistill_create_trainer(model, kwargs['tokenizer'], training_args, data_module, models, processors, model_ids, local_state_dict_list, model_id, kwargs)
@@ -189,8 +141,6 @@ def Distillation_aggregate_state_dict(global_state_dict_list, local_state_dict_l
         torch.cuda.empty_cache()
 
 def feddistill_create_trainer(model, tokenizer, training_args, data_module, models, processors, model_ids, local_state_dict_list, cur_model_id, extra_state_dict_dict):
-    task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
-    ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     trainer = LLaVATrainerDistill(model=model,
@@ -335,6 +285,9 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
 
         pred = shift_logits[shift_labels != -100]
         target = target_logits[shift_labels != -100].detach()
+        
+        # pred = outputs.logits.contiguous()
+        # target = target_logits.contiguous()
         
         loss = kl_loss(pred, target)
         
@@ -764,11 +717,6 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
-                        
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
 
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
@@ -884,9 +832,6 @@ class LLaVATrainerDistill(LLaVATrainerFEDAVG):
             self._deactivate_neftune(self.model)
 
 
-        # if self.args.save_optim:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._save_optimizer_and_scheduler(output_dir)
         if hasattr(self.model, 'set_state'):
             self.model.activate_all()
 

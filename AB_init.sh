@@ -1,15 +1,15 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="debug_8b_multi_llm_llama_abinit_lr5e-4_nopca_AensureOrth"
+NOTE="debug_qwen_llava_align"
 MODE="fedMultipqfullfreeze_ABinit" #"feddualMulti2pqfullfreeze_back_ABinit" "fedMultipqfullfreeze_ABinit"
 MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=204
+SCENARIO=999
 NUM_ROUNDS=5
-NUM_TASKS=3
-NUM_CLIENTS=5
+NUM_TASKS=1
+NUM_CLIENTS=2
 MODEL_MAX_LEN=20000
 NUM_ITER=100
 
@@ -41,13 +41,13 @@ EMA_RATIO=0.9
 
 BATCHSIZE=1
 
-IS_MULTIMODAL=False
+IS_MULTIMODAL=True
 
 LR=5e-5
 MM_PROJECTOR_LR=5e-5 #3e-4
 FINAL_LR=$LR #3e-4
 MM_FINAL_LR=$MM_PROJECTOR_LR #3e-4
-OPT_NAME="sgd" # adam8bit_bnb adamw_torch
+OPT_NAME="adamw_torch" # adam8bit_bnb adamw_torch
 SCHED_NAME="cosine" #cosine
 WARMUP_RATIO=0.1 # SHOULD BE 0.03 / NUM_ROUNDS
 DECAY_RATIO=0.9
@@ -85,8 +85,8 @@ fi
 LOAD_CHECKPOINT="client_states_fedavg_bs4_saveoptim_lr2e-5_sc5_4tasks_5rounds_fixitr100/server_model_round14.pth"
 # train_VLM_CL_abinit.py \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-deepspeed --master_port 29505 \
-    --include localhost:5 \
+deepspeed --master_port 29500 \
+    --include localhost:0 \
     train_VLM_CL_abinit.py \
     --deepspeed ./deepspeed_script/zero2.json \
     --model_name_or_path $MODEL_NAME \
@@ -141,9 +141,8 @@ deepspeed --master_port 29505 \
     --fedours False \
     --is_hetero_model True \
     --is_multimodal $IS_MULTIMODAL \
-    --lora_r 16 \
-    --lora_alpha 32 \
-    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
+    --get_prompt True \
+    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type

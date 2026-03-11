@@ -1,6 +1,7 @@
 $SCRATCH/
 
 dataset/*/
+datasets/*/
 results/
 tensorboard/
 client_states_*/

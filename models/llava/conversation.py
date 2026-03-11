@@ -11,6 +11,7 @@ class SeparatorStyle(Enum):
     SINGLE = auto()
     TWO = auto()
     MPT = auto()
+    MPT2 = auto()
     PLAIN = auto()
     LLAMA_2 = auto()
 
@@ -63,6 +64,15 @@ class Conversation:
                     ret += role + ":"
         elif self.sep_style == SeparatorStyle.MPT:
             ret = self.system #+ self.sep
+            for role, message in messages:
+                if message:
+                    if type(message) is tuple:
+                        message, _, _ = message
+                    ret += role + message + self.sep
+                else:
+                    ret += role
+        elif self.sep_style == SeparatorStyle.MPT2:
+            ret = self.system + self.sep
             for role, message in messages:
                 if message:
                     if type(message) is tuple:
@@ -399,6 +409,26 @@ conv_qwen = Conversation(
     sep="<|im_end|>",
 )
 
+conv_internvl = Conversation(
+        version='internvl2_5',
+        system='<|im_start|>system\n你是书生·万象，英文名是InternVL，是由上海人工智能实验室、清华大学及多家合作单位联合开发的多模态大语言模型。',
+        roles=('<|im_start|>user\n', '<|im_start|>assistant\n'),
+        sep_style=SeparatorStyle.MPT2,
+        sep='<|im_end|>\n',
+        messages=(),
+        offset=0,
+)
+
+conv_internlm2 = Conversation(
+        version='internvl2_5',
+        system='<|im_start|>system\n你是书生·万象，英文名是InternVL，是由上海人工智能实验室、清华大学及多家合作单位联合开发的多模态大语言模型。',
+        roles=('<|im_start|>user\n', '<|im_start|>assistant\n'),
+        sep_style=SeparatorStyle.MPT2,
+        sep='<|im_end|>',
+        messages=(),
+        offset=0,
+)
+
 default_conversation = conv_vicuna_v1
 conv_templates = {
     "default": conv_vicuna_v0,
@@ -423,6 +453,8 @@ conv_templates = {
     
     "llama3": conv_llama3,
     "qwen": conv_qwen,
+    "internvl": conv_internvl,
+    'internlm2': conv_internlm2,
 }
 
 

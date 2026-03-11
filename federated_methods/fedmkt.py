@@ -1,4 +1,4 @@
-from federated_methods.fedavg import LLaVATrainerFEDAVG, get_grad_penultimate
+from federated_methods.fedavg import LLaVATrainerFEDAVG
 import contextlib
 import copy
 import functools
@@ -20,11 +20,9 @@ from transformers.trainer_utils import (
     has_length,
     speed_metrics,
 )
-from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
+from transformers.trainer_pt_utils import get_model_param_count 
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
-from transformers import Trainer
-import bitsandbytes
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
     _is_peft_model, 
@@ -83,8 +81,21 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         data_path = "dataset/llava_finetune/llava_v1_5_mix665k_mixed.json"
     else:
         # data_path = "dataset/FS_LLM_Instruct/dolly_meta.json"
-        data_path = 'chatbotIT.json'
+        data_path = 'dataset/chatbotIT.json'
     public_datalist = json.load(open(data_path, "r"))[:training_args.num_serverdistill]
+    # from nlp_data import DATASET_MAP
+    # data_function = DATASET_MAP['wnli']
+    # trainset, valset, _ = data_function()
+    # public_datalist = []
+    # for item in trainset:
+    #     ktd=[]
+    #     for k in item.keys():
+    #         if k not in ['x', 'y']:
+    #             ktd.append(k)
+    #     for k in ktd:
+    #         del item[k]
+    #     public_datalist.append(item)
+    
     random.shuffle(public_datalist)
     
     # gather loss-logit pairs from clients
@@ -104,8 +115,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(local_state_dict, strict=False) 
 
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                # tokenizer=kwargs['tokenizer'],
-                                                # processor=kwargs['processor'],
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 data_args=copy.deepcopy(kwargs['data_args']),
@@ -136,8 +145,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(global_state_dict, strict=False)  
         
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                # tokenizer=kwargs['tokenizer'],
-                                                # processor=kwargs['processor'],
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 model_id=model_id,
@@ -158,6 +165,8 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         for i, data in enumerate(public_datalist):
             min_client_loss = 10000000
             target_logit = None
+            if i >= len(client_pairs[0][0]):
+                continue
             for client_pair in client_pairs:
                 if client_pair[0][i] < min_client_loss:
                     min_client_loss = client_pair[0][i]
@@ -174,8 +183,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                     model.load_state_dict(global_state_dict, strict=False)  
             
             data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                    # tokenizer=kwargs['tokenizer'],
-                                                    # processor=kwargs['processor'],
                                                     tokenizer=tokenizer,
                                                     processor=processor,
                                                     model_id=model_id,
@@ -217,8 +224,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(global_state_dict, strict=False)  
         
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                # tokenizer=kwargs['tokenizer'],
-                                                # processor=kwargs['processor'],
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 model_id=model_id,
@@ -250,8 +255,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                 model.load_state_dict(local_state_dict, strict=False) 
 
         data_module = make_supervised_data_module(client_data=public_datalist, # sub_dataset
-                                                # tokenizer=kwargs['tokenizer'],
-                                                # processor=kwargs['processor'],
                                                 tokenizer=tokenizer,
                                                 processor=processor,
                                                 model_id=model_id,
@@ -271,6 +274,8 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         valid_datalist = [] 
         target_logits = []
         for i, data in enumerate(public_datalist):
+            if i >= len(global_loss[0]):
+                continue
             if global_loss[0][i] < client_loss[i]:
                 valid_datalist.append(data)
                 target_logits.append(global_loss[1][i])
@@ -283,8 +288,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
                     model.load_state_dict(local_state_dict, strict=False)  
             
             data_module = make_supervised_data_module(client_data=valid_datalist, # sub_dataset
-                                                    # tokenizer=kwargs['tokenizer'],
-                                                    # processor=kwargs['processor'],
                                                     tokenizer=tokenizer,
                                                     processor=processor,
                                                     model_id=model_id,
@@ -305,8 +308,6 @@ def FEDMKT_aggregate_state_dict(global_state_dict_list, local_state_dict_list, s
         
 
 def FEDMKT_create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict,target_logits,model_id, processors):
-    task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
-    ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     trainer = LLaVATrainerFEDMKT(model=model,
@@ -343,6 +344,8 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
             # self.public_logits.append(pred_logits.detach())
             
             loss_fct = nn.CrossEntropyLoss()
+            # shift_logits = pred_logits.contiguous()#[..., :-1, :].contiguous()
+            # shift_labels = labels.contiguous()#[..., 1:].contiguous()
             shift_logits = pred_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss = loss_fct(
@@ -351,7 +354,8 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
             # self.public_logits.append(shift_logits[shift_labels != -100].detach().cpu())
             self.public_logits.append({
                 "logits"     : shift_logits.detach().cpu(),        # (B,L‑1,V_client)
-                "input_ids"  : inputs["input_ids"][:,1:].cpu(),     # aligner will need them
+                # "input_ids"  : inputs["input_ids"].cpu(), #[:,1:]    # aligner will need them 
+                "input_ids"  : inputs["input_ids"][:,1:].cpu(),     # aligner will need them 
                 "model_id"   : self.model_id,                  # pass in step 5
             })
             self.public_losses.append(loss.detach())
@@ -366,7 +370,7 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
             # student stuff
             student_tok = self.tokenizer
             student_vocab = student_tok.get_vocab()
-            student_ids = inputs["input_ids"][:,1:]
+            student_ids = inputs["input_ids"][:,1:] #
 
             if teacher_logits.size(-1) != pred_logits.size(-1):    # cross family
                 print('cross family')
@@ -409,15 +413,20 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
                 teacher_logits = torch.stack(aligned)              # (B',L-1,V_student)
 
             # finally apply the →labels mask exactly as you do for pred
+            # shift_logits   = pred_logits.contiguous()#[...,:-1,:].contiguous()
+            # # shift_teacher  = teacher_logits[...,:-1,:].contiguous()
+            # shift_teacher  = teacher_logits.contiguous()#.contiguous()
+            # shift_labels   = labels.contiguous()#[...,1:].contiguous()
             shift_logits   = pred_logits[...,:-1,:].contiguous()
             # shift_teacher  = teacher_logits[...,:-1,:].contiguous()
             shift_teacher  = teacher_logits.contiguous()
             shift_labels   = labels[...,1:].contiguous()
 
-            pred   = shift_logits [shift_labels != -100]
+            pred   = shift_logits[shift_labels != -100]
             target = shift_teacher[shift_labels != -100].detach()
 
-            loss = cross_entropy(pred, target.to(pred.device))
+            loss = cross_entropy(pred, F.softmax(target.to(pred.device),dim=-1))
+
         self.count += pred_logits.shape[0]
         return (loss, outputs) if return_outputs else loss
     
@@ -848,11 +857,6 @@ class LLaVATrainerFEDMKT(LLaVATrainerFEDAVG):
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
-
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
                             # Delay optimizer scheduling until metrics are generated

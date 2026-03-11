@@ -7,9 +7,11 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, configure_online_datastream, get_keys_to_del, make_supervised_data_module
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del, make_supervised_data_module, find_all_linear_names
 
 from federated_methods.method_manager import select_method
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+from typing import Dict
 
 import copy
 import json
@@ -142,30 +144,34 @@ def main():
         model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_config, data_args)
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
         processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
-    elif data_args.is_multimodal and training_args.use_task_vector and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
+    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'llama3.' in model_id and 'thkim0305/llama3.2_1B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/llama3.2_1B_vl'
         model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/llama3.2_1B_vl'] = model2
         processors['rthkim0305/llama3.2_1B_vl'] = (tokenizer_, processor_)
-    elif data_args.is_multimodal and training_args.use_task_vector and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
+    elif data_args.is_multimodal and (training_args.use_task_vector or training_args.fedours) and 'qwen2.5' in model_id and 'thkim0305/qwen2.5_0.5B_vl' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'thkim0305/qwen2.5_0.5B_vl'
         model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['thkim0305/qwen2.5_0.5B_vl'] = model2
         processors['thkim0305/qwen2.5_0.5B_vl'] = (tokenizer_, processor_)
-    elif not data_args.is_multimodal and training_args.use_task_vector and 'meta-llama/Llama-3.2-1B' not in models.keys():
+    elif not data_args.is_multimodal and not training_args.is_t5model and (training_args.use_task_vector or training_args.fedours) and 'meta-llama/Llama-3.2-1B' not in models.keys():
         new_model_args = copy.deepcopy(model_args)
         new_model_args.model_name_or_path = 'meta-llama/Llama-3.2-1B'
         model2, tokenizer_,processor_,_ = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
         models['meta-llama/Llama-3.2-1B'] = model2
         processors['meta-llama/Llama-3.2-1B'] = (tokenizer_, processor_)
-    
+    elif training_args.is_t5model:
+        model2 = models['t5-small']
+        
     del model_list
     extra_state_dict_dict = {'model_ids':model_ids, 'models':models, 'processors':processors}
     extra_state_dict_dict['LAYER_INDEX'] = LAYER_INDEX
     
     torch.cuda.empty_cache()
+    
+    current_task_vectors = None
 
     training_loss = [[] for i in range(training_args.num_clients)]
     
@@ -184,7 +190,7 @@ def main():
     
     total_rounds = int(training_args.num_rounds * training_args.num_tasks)
     last_task_id = [-1 for _ in range(training_args.num_clients)]
-    grad_olds = [None for _ in range(training_args.num_clients)]
+    fisher_olds = [None for _ in range(training_args.num_clients)]
     task_vectors = [None for _ in range(training_args.num_clients)]
     
     original_weights = {}
@@ -204,18 +210,25 @@ def main():
         
         if curr_round > 0 and training_args.use_task_vector:
             path = os.path.join(training_args.state_dir, f"round{curr_round}_task_vector_local_weights.pth")
-            tv_weight = {'task_vectors': task_vectors}
+            tv_weight = {'task_vectors': task_vectors}#, 'local_state_dict_list': old_local_state_dict_list}
             torch.save(tv_weight, path)
             
             # task vector layerwise cosine sim
             sims = []
-            for grad_idx in range(task_vectors[0].shape[-1]):
-                task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:]], dim=0), dim=-1)
-                sim = torch.matmul(task_vector,
-                                torch.transpose(task_vector, 1, 0))
-                sim = torch.transpose(sim, 1, 0)
-                sims.append(sim)
-                
+            # for grad_idx in range(task_vectors[0].shape[-1]):
+            #     task_vector = F.normalize(torch.stack([tv[:,grad_idx] for tv in task_vectors[:]], dim=0), dim=-1)
+            #     sim = torch.matmul(task_vector,
+            #                     torch.transpose(task_vector, 1, 0))
+            #     sim = torch.transpose(sim, 1, 0)
+            #     sims.append(sim)
+            for layer_idx in range(len(task_vectors[0])):
+                for grad_idx in range(task_vectors[0][layer_idx].shape[-1]):
+                    task_vector = F.normalize(torch.stack([tv[layer_idx][:,grad_idx] for tv in task_vectors[:]], dim=0), dim=-1)
+                    sim = torch.matmul(task_vector,
+                                    torch.transpose(task_vector, 1, 0))
+                    sim = torch.transpose(sim, 1, 0)
+                    sims.append(sim)    
+    
             sim = torch.stack(sims, dim=0).mean(dim=0)
             # sim = torch.ones(10,10)
             
@@ -263,6 +276,8 @@ def main():
             extra_state_dict_dict['processor'] = processor
             extra_state_dict_dict['data_args'] = copy.deepcopy(new_data_args)
             extra_state_dict_dict['tokenizer'] = tokenizer
+            if training_args.use_task_id:
+                extra_state_dict_dict['task_id'] = task_id
             
             new_global_state_dict = None
             new_global_state_dict = load_state_dict(model, global_state_dict_list[client_id], old_local_state_dict_list, client_id, training_args, extra_state_dict_dict)
@@ -282,10 +297,12 @@ def main():
                 logger.info(f'Round {curr_round} | train client {client_id} | num samples {len(sub_dataset)}')
 
             # ===== Train local model on the client side =====
+            if training_args.use_fisher:
+                extra_state_dict_dict['fisher_old'] = fisher_olds[client_id]
+                
             if training_args.use_task_vector:
-                extra_state_dict_dict['grad_old'] = grad_olds[client_id]
                 extra_state_dict_dict['task_vector'] = task_vectors[client_id]
-                extra_state_dict_dict['grad_freq'] = training_args.grad_freq
+                extra_state_dict_dict['fisher_freq'] = training_args.fisher_freq
                 if data_args.is_multimodal:
                     if 'thkim0305/qwen2.5_0.5B_vl' in models.keys():
                         # extra_state_dict_dict['model2'] = models['thkim0305/qwen2.5_0.5B_vl']
@@ -296,17 +313,23 @@ def main():
                         tokenizer2, processor2 = processors['thkim0305/llama3.2_1B_vl']
                         extra_state_dict_dict['model2'] = (models['thkim0305/llama3.2_1B_vl'], tokenizer2, processor2, 'thkim0305/llama3.2_1B_vl')
                 else:
-                    # extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
-                    tokenizer2, processor2 = processors['meta-llama/Llama-3.2-1B']
-                    extra_state_dict_dict['model2'] = (models['meta-llama/Llama-3.2-1B'], tokenizer2, processor2, 'meta-llama/Llama-3.2-1B')
+                    if training_args.is_t5model:
+                        tokenizer2, processor2 = processors['t5-small']
+                        extra_state_dict_dict['model2'] = (models['t5-small'], tokenizer2, processor2, 't5-small')
+                    else:
+                        # extra_state_dict_dict['model2'] = models['meta-llama/Llama-3.2-1B']
+                        tokenizer2, processor2 = processors['meta-llama/Llama-3.2-1B']
+                        extra_state_dict_dict['model2'] = (models['meta-llama/Llama-3.2-1B'], tokenizer2, processor2, 'meta-llama/Llama-3.2-1B')
             
             trainer = create_trainer(model, tokenizer, training_args, data_module, extra_state_dict_dict)
 
             results = trainer.train()
             training_loss[client_id].append(results.training_loss)
-                     
+            if training_args.use_fisher:
+                fisher_olds[client_id] = trainer.fisher_old
+            
             if training_args.use_task_vector:
-                grad_olds[client_id] = trainer.grad_old
+                
                 task_vectors[client_id] = trainer.task_vector
                 
                 if data_args.is_multimodal:
@@ -315,7 +338,10 @@ def main():
                     elif 'thkim0305/llama3.2_1B_vl' in models.keys():
                         extra_state_dict_dict['model2'] = models['thkim0305/llama3.2_1B_vl'].cpu()
                 else:
-                    models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
+                    if training_args.is_t5model:
+                        extra_state_dict_dict['model2'] = models['t5-small'].cpu()
+                    else:
+                        models['meta-llama/Llama-3.2-1B'] = models['meta-llama/Llama-3.2-1B'].cpu()
             
             if training_args.local_rank == 0 or training_args.local_rank == -1: 
                 path = os.path.join(training_args.state_dir, f"{client_id}_trainer_state.json")
@@ -358,6 +384,7 @@ def main():
             torch.cuda.empty_cache()
             logger.info(f"done Round {curr_round} client {client_id} | elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
             
+        
         aggregate_state_dict(global_state_dict_list, local_state_dict_list, training_args=training_args, **extra_state_dict_dict)
         
     if training_args.use_task_vector:
@@ -366,40 +393,59 @@ def main():
         torch.save(tv_weight, path)
     logger.info("total done\n")
 
+from nlp_data import DATASET_MAP
+
 def get_datalists(args, scenario_num):
-    with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
-        scenario = json.load(fp)
     
-    assert args.num_clients == len(scenario)
+    if args.is_t5model:
+        # cola mnli mrpc qnli qqp rte sst2 
+        scenario = [
+            {"client_id": 0,
+             "datasets":["mnli", "qqp"],
+             "model_id":"t5-base"},
+            {"client_id": 1,
+            "datasets":["mrpc", "rte"],
+            "model_id":"t5-small"},
+            {"client_id": 2,
+            "datasets":["sst2", "qnli"],
+            "model_id":"t5-base"},
+            {"client_id": 3,
+            "datasets":["cola", "mrpc"],
+            "model_id":"t5-small"}
+        ]
+        assert args.num_clients == len(scenario)
 
-    train_datalists = {}
-    test_datalists = {}
-    
-    max_iterations = args.num_iter
-    rounds_per_task = args.num_rounds
-
-    for client_data in scenario:
-        client_id = client_data['client_id']
-        train_datalist = []
-        test_datalist = []
+        train_datalists = {}
+        test_datalists = {}
         
-        if args.is_continual: # PFCL
-            # Calculate total number of rounds
-            total_rounds = int(rounds_per_task * len(client_data['datasets']))
+        max_iterations = args.num_iter
+        rounds_per_task = args.num_rounds
+        for client_data in scenario:
+            client_id = client_data['client_id']
+            train_datalist = []
+            test_datalist = []
             
-            # Load all task datasets first
-            task_datasets = []
-            for task_id, data in enumerate(client_data['datasets']):
-                if data['dataset'] == 'dummy':
-                    task_datasets.append({
-                        'task_id': task_id,
-                        'is_dummy': True,
-                        'data': [],
-                        'dataset_info': data
-                    })
-                else:
-                    with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-                        datalist = json.load(fp)
+            if args.is_continual: # PFCL
+                # Calculate total number of rounds
+                total_rounds = int(rounds_per_task * len(client_data['datasets']))
+                
+                # Load all task datasets first
+                task_datasets = []
+                for task_id, data in enumerate(client_data['datasets']):
+                    data_function = DATASET_MAP[data]
+                    trainset, valset, _ = data_function()
+                    
+                    datalist = []
+                    for item in trainset:
+                        ktd=[]
+                        for k in item.keys():
+                            if k not in ['x', 'y']:
+                                ktd.append(k)
+                        for k in ktd:
+                            del item[k]
+                        datalist.append(item)
+                    
+                    del trainset
                     random.shuffle(datalist)
                     task_datasets.append({
                         'task_id': task_id,
@@ -407,103 +453,76 @@ def get_datalists(args, scenario_num):
                         'data': datalist,
                         'dataset_info': data
                     })
-            
-            # Create rounds by distributing task data proportionally
-            for round_idx in range(total_rounds):
-                # Calculate which task(s) this round spans
-                round_start = round_idx / rounds_per_task  # fractional task position
-                round_end = (round_idx + 1) / rounds_per_task
                 
-                round_data = []
-                primary_task_id = int(round_start)  # The main task for this round
-                
-                # Handle case where round spans multiple tasks
-                start_task = int(round_start)
-                end_task = int(round_end)
-                
-                if start_task == end_task:
-                    # Round is entirely within one task
-                    task_info = task_datasets[start_task]
-                    if not task_info['is_dummy']:
-                        task_data = task_info['data']
-                        # Calculate which portion of this task belongs to this round
-                        task_progress_start = round_start - start_task
-                        task_progress_end = round_end - start_task
-                        # print(task_progress_start, task_progress_end)
-                        start_idx = int(task_progress_start * len(task_data))
-                        end_idx = int(task_progress_end * len(task_data))
-                        round_data = task_data[start_idx:end_idx]
-                else:
-                    # Round spans multiple tasks
-                    for task_idx in range(start_task, end_task + 1):
-                        if task_idx >= len(task_datasets):
-                            break
-                            
-                        task_info = task_datasets[task_idx]
-                        if task_info['is_dummy']:
-                            continue
-                            
-                        task_data = task_info['data']
-                        
-                        if task_idx == start_task:
-                            # First task: from round_start to end of task
-                            task_progress_start = round_start - task_idx
-                            start_idx = int(task_progress_start * len(task_data))
-                            round_data.extend(task_data[start_idx:])
-                        elif task_idx == end_task:
-                            # Last task: from beginning to round_end
-                            task_progress_end = round_end - task_idx
-                            end_idx = int(task_progress_end * len(task_data))
-                            round_data.extend(task_data[:end_idx])
-                        else:
-                            # Middle task: entire task
-                            round_data.extend(task_data)
-                # Ensure we have a valid primary task ID
-                primary_task_id = min(primary_task_id, len(client_data['datasets']) - 1)
-                
-                num_iter = max_iterations
-                train_datalist.append({
-                    'datalist': round_data,
-                    'num_iter': num_iter,
-                    'task_id': primary_task_id,
-                    'model_id': client_data['model_id']
-                })
-            
-            # Create test datalists (unchanged logic for test data)
-            for task_id, data in enumerate(client_data['datasets']):
-                if data['dataset'] == 'dummy':
-                    test_datalist.append({'data': [], 'type': ''})
-                    continue
+                # Create rounds by distributing task data proportionally
+                for round_idx in range(total_rounds):
+                    # Calculate which task(s) this round spans
+                    round_start = round_idx / rounds_per_task  # fractional task position
+                    round_end = (round_idx + 1) / rounds_per_task
                     
-                with open(f"./dataset/{data['dataset']}/test/dataset-{str(data['subset_id'])}.json") as fp:
-                    datalist = json.load(fp)
+                    round_data = []
+                    primary_task_id = int(round_start)  # The main task for this round
+                    
+                    # Handle case where round spans multiple tasks
+                    start_task = int(round_start)
+                    end_task = int(round_end)
+                    
+                    if start_task == end_task:
+                        # Round is entirely within one task
+                        task_info = task_datasets[start_task]
+                        if not task_info['is_dummy']:
+                            task_data = task_info['data']
+                            # Calculate which portion of this task belongs to this round
+                            task_progress_start = round_start - start_task
+                            task_progress_end = round_end - start_task
+                            print(task_progress_start, task_progress_end)
+                            start_idx = int(task_progress_start * len(task_data))
+                            end_idx = int(task_progress_end * len(task_data))
+                            round_data = task_data[start_idx:end_idx]
+                    else:
+                        # Round spans multiple tasks
+                        for task_idx in range(start_task, end_task + 1):
+                            if task_idx >= len(task_datasets):
+                                break
+                                
+                            task_info = task_datasets[task_idx]
+                            if task_info['is_dummy']:
+                                continue
+                                
+                            task_data = task_info['data']
+                            
+                            if task_idx == start_task:
+                                # First task: from round_start to end of task
+                                task_progress_start = round_start - task_idx
+                                start_idx = int(task_progress_start * len(task_data))
+                                round_data.extend(task_data[start_idx:])
+                            elif task_idx == end_task:
+                                # Last task: from beginning to round_end
+                                task_progress_end = round_end - task_idx
+                                end_idx = int(task_progress_end * len(task_data))
+                                round_data.extend(task_data[:end_idx])
+                            else:
+                                # Middle task: entire task
+                                round_data.extend(task_data)
+                    # Ensure we have a valid primary task ID
+                    primary_task_id = min(primary_task_id, len(client_data['datasets']) - 1)
+                    
+                    num_iter = max_iterations
+                    train_datalist.append({
+                        'datalist': round_data,
+                        'num_iter': num_iter,
+                        'task_id': primary_task_id,
+                        'model_id': client_data['model_id']
+                    })
                 
-                test_datalist.append({
-                    "data_name": f"{data['dataset']}-{data['subset_id']}",
-                    "type": data['type'],
-                    "data": datalist,
-                    "train_start_round": int(rounds_per_task * task_id)
-                })
-            
-            train_datalists[client_id] = train_datalist
-            test_datalists[client_id] = test_datalist
-        else: # PFL
-            combined_datalist = []
-            for task_id, data in enumerate(client_data['datasets']):
-                with open(f"./dataset/{data['dataset']}/train/dataset-{str(data['subset_id'])}.json") as fp:
-                    datalist = json.load(fp)
-                combined_datalist.extend(datalist)
-            random.shuffle(combined_datalist)
-            samplenum_per_rounds = int(len(combined_datalist)/ (args.num_rounds * args.num_tasks))
-            num_iter = max_iterations
-            for i in range(args.num_rounds * args.num_tasks):
-                train_datalist.append(
-                    {'datalist':combined_datalist[i*samplenum_per_rounds:(i+1)*samplenum_per_rounds],
-                    'num_iter': num_iter,
-                    'task_id': 0,
-                    'model_id': client_data['model_id']})
-            train_datalists[client_id] = train_datalist
-            test_datalists[client_id] = test_datalist
+                # Create test datalists (unchanged logic for test data)
+                for task_id, data in enumerate(client_data['datasets']):
+                    test_datalist.append({'data': [], 'type': ''})
+                
+                train_datalists[client_id] = train_datalist
+                test_datalists[client_id] = test_datalist
+    else:
+        raise NotImplementedError("Only T5 model is implemented in this script.")
 
     return train_datalists, test_datalists
 

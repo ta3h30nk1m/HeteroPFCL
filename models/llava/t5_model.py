@@ -1,17 +1,16 @@
-from transformers import LlamaForCausalLM, AutoModel, AutoModelForCausalLM
+from transformers import T5ForConditionalGeneration, AutoModel, AutoModelForCausalLM
 import torch
 from torch import nn
 from typing import List, Optional, Tuple, Union
 from transformers.utils import logging
 
 from models.duallora_moe.dualmoeloralayer import DualMOELoraLayer
-from models.colora.coloralayer import CoLoraLayer
 from models.duallora.dualloralayer import DualLoraLayer
 from models.triplelora.tripleloralayer import TripleLoraLayer
-
+from models.colora.coloralayer import CoLoraLayer
 logger = logging.get_logger(__name__)
 
-class CustomLlamaForCausalLM(LlamaForCausalLM):
+class CustomT5ForConditionalGeneration(T5ForConditionalGeneration):
     def __init__(self, config):
         super().__init__(config)
         
@@ -22,7 +21,7 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
         self.active_state = state
         
         for name, module in self.named_modules():
-            
+            if isinstance(module, DualMOELoraLayer) or isinstance(module, CoLoraLayer) or isinstance(module, TripleLoraLayer) or isinstance(module, DualLoraLayer):
                 module.set_state(state)
 
     def activate_all(self):

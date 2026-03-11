@@ -8,7 +8,7 @@ from configuration.VLM_config_new import DataArguments
 from typing import Dict, Sequence, List
 from PIL import Image
 from dataclasses import dataclass
-from models.llava.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
+from models.llava.constants import IGNORE_INDEX
 from models.llava import conversation as conversation_lib_llava
 from packaging import version
 # from utils.augment import DataAugmentation
@@ -146,32 +146,6 @@ class DataCollatorForGenerationDataset(object):
 
         return batch
 
-class ViTSupervisedDataset(Dataset):
-    """Dataset for supervised image classification with ViT."""
-
-    def __init__(self, datalist, processor, data_args=None, image_folder="."):
-        super().__init__()
-        self.datalist = datalist
-        self.processor = processor
-        self.data_args = data_args or {}
-        self.image_folder = image_folder
-
-    def __len__(self):
-        return len(self.datalist)
-
-    def __getitem__(self, idx):
-        sample = self.datalist[idx]
-        # ./val/n03930630/ILSVRC2012_val_00010012.JPEG
-        # /home/vision/smh/HeteroPFCL/val/n02123159/ILSVRC2012_val_00015741.JPEG
-        image_path = os.path.join(self.image_folder, sample['file_name'])
-        image = Image.open(image_path).convert('RGB')
-
-        inputs = self.processor(images=image, return_tensors='pt')
-
-        return {
-            'pixel_values': inputs['pixel_values'].squeeze(0),
-            'labels': torch.tensor(sample['label'], dtype=torch.long)
-        }
 
 class LazySupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
@@ -318,18 +292,6 @@ class LazySupervisedDataset(Dataset):
             data_dict['prompt'] = qs
         
         return data_dict
-
-
-@dataclass
-class DataCollatorForImageClassification:    
-    def __call__(self, instances: List[dict]):
-        pixel_values = torch.stack([x['pixel_values'] for x in instances])
-        labels = torch.tensor([x['labels'] for x in instances], dtype=torch.long)
-        
-        return {
-            'pixel_values': pixel_values,
-            'labels': labels
-            }
 
 @dataclass
 class DataCollatorForSupervisedDataset(object):

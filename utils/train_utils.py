@@ -1,7 +1,7 @@
 import torch
 from torch import nn
+import numpy as np
 import math
-import os
 import logging
 import transformers
 import models.llava.conversation as conversation_lib_llava
@@ -9,12 +9,23 @@ from peft.tuners.lora import LoraLayer
 from functools import reduce
 import torch.nn.utils as nn_utils
 
-from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, LlavaForConditionalGeneration, AutoModelForCausalLM
+from transformers import AutoConfig, AutoProcessor, AutoModelForImageTextToText, AutoModelForCausalLM
 
 from models.llava.llava_multi import LlavaMultiForConditionalGeneration
 from models.llava.llava_fedsim import FEDSIMLlavaMultiForConditionalGeneration
 from models.llava.llama_model import CustomLlamaForCausalLM
 import copy
+
+from typing import Dict
+from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+
+from datasets import Dataset, load_dataset
+import typing as tp
+import pandas as pd
+from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
+from transformers.trainer_pt_utils import get_parameter_names
+import random
+
 ACCESS_TOKEN = ""
 
 def deepcopy_layer_with_weight_norm(LayerInit, feature_dim, layer):
@@ -74,7 +85,19 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 token=ACCESS_TOKEN
             )
     else:
-        if 'llama' in model_args.model_name_or_path.lower():
+        if 't5' in model_args.model_name_or_path.lower():
+            from models.llava.t5_model import CustomT5ForConditionalGeneration
+            model = CustomT5ForConditionalGeneration.from_pretrained(
+                model_args.model_name_or_path,
+                torch_dtype=compute_dtype,
+                token=ACCESS_TOKEN
+            )
+            if tokenizer.eos_token is None:
+                tokenizer.add_special_tokens({"eos_token": "<|endoftext|>"})
+                model.resize_token_embeddings(len(tokenizer))
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+        elif 'llama' in model_args.model_name_or_path.lower():
             model = CustomLlamaForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
                 torch_dtype=compute_dtype,
@@ -152,16 +175,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             lora_config.peft_type = 'DUALMOELORA'
 
         elif training_args.mode in ['fedmosaic', 'fedmosaic_2block', 'fedmosaic_8block']:
-            from models.dual_pqlora_freeze_full_moe.dual_pqloramodel_freeze_full_moe import Dual_PQMOELorafreezeModel
+            from models.colora.coloramodel import CoLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = Dual_PQMOELorafreezeModel
+            PEFT_TYPE_TO_MODEL_MAPPING['DUALPQMOEFullFreezeLORA'] = CoLoraModel
             lora_config.peft_type = 'DUALPQMOEFullFreezeLORA'
         
-        elif training_args.mode in ['sft_pqlora', 'sft_pqlora_2block', 'sft_pqlora_8block']:
-            from models.pqlora_full.pqloramodel_full import PQLoraModel
-            from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
-            PEFT_TYPE_TO_MODEL_MAPPING['PQFullLORA'] = PQLoraModel
-            lora_config.peft_type = 'PQFullLORA'
         elif training_args.mode in ['pqlora_ABinit', 'pqlora_ABinit_8block']:
             from models.pqlora_full_init.pqloramodel_full_init import PQLoraModel
             from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING
@@ -170,17 +188,6 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
             
         # rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
-    
-    elif training_args.ia3_enable:
-        from peft import IA3Config, get_peft_model
-        ia3_config = IA3Config(
-            exclude_modules=r".*vision_tower.*",
-            target_modules=["k_proj", "v_proj", "down_proj"], 
-            feedforward_modules=["down_proj"],
-            task_type="CAUSAL_LM",
-        )
-        
-        model = get_peft_model(model, ia3_config)
 
     if 'llama3' in model_args.model_name_or_path.lower() or 'llama-3' in model_args.model_name_or_path.lower():
         conversation_lib_llava.default_conversation = conversation_lib_llava.conv_templates['llama3']
@@ -199,39 +206,55 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     if data_args.is_multimodal:
         total_layers = model.base_model.language_model.model.layers
     else:
-        total_layers = model.base_model.model.model.layers
+        if training_args.is_t5model:
+            total_layers = model.base_model.model.encoder.block + model.base_model.model.decoder.block
+        else:
+            total_layers = model.base_model.model.model.layers
     
     #FIXME
     # lora initialization & freeze
-    if training_args.mode in ['sft_pqlora', 'sft_pqlora_2block', 'sft_pqlora_8block']:
-        from models.pqlora_full.pqloralayer_full import PQLoraFullLayer
-        if training_args.mode == 'sft_pqlora':
-            last_layer = len(total_layers) // 4
-            target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-        elif training_args.mode == 'sft_pqlora_2block':
-            block_layer_num = 2
-            block_num = len(total_layers) // block_layer_num
-            target_layers = [block_layer_num*(i+1)-1 for i in range(block_num)]
-        elif training_args.mode == 'sft_pqlora_8block': 
-            if 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                target_layers = [2,5,8,11,14,17,20,27]
-            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                target_layers = [1,3,5,7,9,11,13,15]
+    if training_args.is_t5model and training_args.mode == 'fedmosaic':
+        from models.colora.coloralayer import CoLoraLayer
+        last_layer = len(total_layers) // 4
+        target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
         for idx, layer in enumerate(total_layers):
             if idx in target_layers:
-                for n, m in layer.named_modules():
-                    if isinstance(m,PQLoraFullLayer):
-                        m.lora_A['default'].apply(orthonormal_kaiming_uniform_init)
-                        m.lora_B['default'].apply(orthonormal_kaiming_uniform_init)
+                for n, p in layer.named_parameters():
+                    if 'lora1_A' in n or 'lora2_A' in n:
+                        p.requires_grad = False
+                    elif 'lora1_B' in n:
+                        p.requires_grad = False
+                        init_B = torch.empty_like(p)
+                        nn.init.kaiming_uniform_(init_B, a=math.sqrt(5))
+                        # Get the current shape of the weight matrix
+                        rows, cols = p.size()
 
-                        m.lora_A['default'].weight.requires_grad = False
-                        m.lora_B['default'].weight.requires_grad = False
+                        # Ensure the matrix is contiguous
+                        init_B = init_B.contiguous()
+
+                        # Perform Singular Value Decomposition
+                        u, _, v = torch.svd(init_B, some=False)
                         
-                        nn.init.zeros_(m.lora_P['default'])
-                        nn.init.zeros_(m.lora_Q['default'])
+                        u = u.contiguous()
+                        v = v.contiguous()
+
+                        # Use U or V from SVD based on the shape of the weight matrix
+                        if rows > cols:
+                            init_B.data = u[:, :cols].to(torch.bfloat16)
+                        else:
+                            init_B.data = v[:rows, :].to(torch.bfloat16)
+                        p.data = copy.deepcopy(init_B)
+                        new_n = n.replace('lora1_B', 'lora2_B')
+                        dict(layer.named_parameters())[new_n].data = copy.deepcopy(init_B)
+                        dict(layer.named_parameters())[new_n].requires_grad = False
+                    elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
+                        nn.init.zeros_(p)
+                for n, m in layer.named_modules():
+                    if isinstance(m, CoLoraLayer):
+                        m.freeze_AB = True
             else:
                 for n, m in layer.named_modules():
-                    if isinstance(m, PQLoraFullLayer):
+                    if isinstance(m, CoLoraLayer):
                         m.use_pq = False
     
     elif training_args.mode == 'fedMultipqfullfreeze_ABinit':
@@ -298,7 +321,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     
     
     elif training_args.mode in ['fedmosaic', 'fedmosaic_2block', 'fedmosaic_8block']:
-        from models.dual_pqlora_freeze_full_moe.dual_pqloralayer_freeze_full_moe import PQMOELoraFullFreezeLayer
+        from models.colora.coloralayer import CoLoraLayer
         if '2block' in training_args.mode:
             block_layer_num = 2
             block_num = len(total_layers) // block_layer_num
@@ -352,11 +375,11 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                     elif 'lora1_P' in n or 'lora2_P' in n or 'lora1_Q' in n or 'lora2_Q' in n:
                         nn.init.zeros_(p)
                 for n, m in layer.named_modules():
-                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                    if isinstance(m, CoLoraLayer):
                         m.freeze_AB = True
             else:
                 for n, m in layer.named_modules():
-                    if isinstance(m, PQMOELoraFullFreezeLayer):
+                    if isinstance(m, CoLoraLayer):
                         m.use_pq = False
               
     model.config.mm_projector_lr = training_args.mm_projector_lr
@@ -366,36 +389,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
     
     # load pretrained lora
     if training_args.load_pretrained_lora:
-        if training_args.mode in ['sft_pqlora', 'sft_pqlora_2block', 'sft_pqlora_8block']:
-            if not data_args.is_multimodal:
-                if 'Llama-3.2-1B' in model_args.model_name_or_path:
-                    state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-                elif 'Llama-3.2-3B' in model_args.model_name_or_path:
-                    state_dict = torch.load('llama_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-                elif 'Llama-3.1-8B' in model_args.model_name_or_path:
-                    state_dict = torch.load('llama_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-            elif 'llama3.2_1B_vl' in model_args.model_name_or_path:
-                if '8block' in training_args.mode:
-                    state_dict = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
-            elif 'llama3.2_3B_vl' in model_args.model_name_or_path:
-                if '8block' in training_args.mode:
-                    state_dict = torch.load('llava_3b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
-                else:
-                    state_dict = torch.load('llava_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-            elif 'llama3.1_8B_vl' in model_args.model_name_or_path:
-                if '8block' in training_args.mode:
-                        state_dict = torch.load('llava_8b_blockwise2_back_orthnormal_init_new_new.pth', map_location='cpu')
-                else:
-                    state_dict = torch.load('llava_8b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-            elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
-                state_dict = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-            elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
-                state_dict = torch.load('qwen_1.5b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-            elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
-                state_dict = torch.load('qwen_3b_blockwise_orthnormal_init_new_new.pth', map_location='cpu')
-
-            model.load_state_dict(state_dict, strict=False)
-        elif training_args.mode in ['fedmosaic', 'fedmosaic_2block', 'fedmosaic_8block']:
+        if training_args.mode in ['fedmosaic', 'fedmosaic_2block', 'fedmosaic_8block']:
             if not data_args.is_multimodal:
                 if 'Llama-3.2-1B' in model_args.model_name_or_path:
                     state_dict = torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
@@ -407,7 +401,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
                 if 'llama3.2_3B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('llava_3b_qwen_init.pth', map_location='cpu')
                 elif 'qwen2.5_1.5B_vl' in model_args.model_name_or_path:
-                    state_dict = torch.load('qwen_1.5b_random_init.pth', map_location='cpu')
+                    state_dict = torch.load('qwen_1.5b_qwen_init.pth', map_location='cpu')
                 elif 'qwen2.5_0.5B_vl' in model_args.model_name_or_path:
                     state_dict = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
                 elif 'qwen2.5_3B_vl' in model_args.model_name_or_path:
@@ -462,7 +456,7 @@ def get_VLMmodel(model_args, training_args, bnb_model_from_pretrained_args, data
 def find_all_linear_names(model):
     cls = torch.nn.Linear
     lora_module_names = set()
-    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler']
+    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler', 'mlp1', 'vision_model']
     for name, module in model.named_modules():
         if any(mm_keyword in name for mm_keyword in multimodal_keywords):
             continue
@@ -474,8 +468,7 @@ def find_all_linear_names(model):
         lora_module_names.remove('lm_head')
     return list(lora_module_names)
 
-from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
-from transformers.trainer_pt_utils import get_parameter_names
+
 
 def smart_tokenizer_and_embedding_resize(
     special_tokens_dict,
@@ -567,7 +560,6 @@ def maybe_zero_3(param, ignore_status=False, name=None):
         param = param.detach().cpu().clone()
     return param
 
-from torch import nn
 
 def load_deepspeed(state_dict, module: nn.Module, prefix="", strict=True):
     import deepspeed
@@ -583,7 +575,7 @@ def load_deepspeed(state_dict, module: nn.Module, prefix="", strict=True):
         if child is not None:
             load_deepspeed(state_dict, child, prefix + name + ".")
 
-import numpy as np
+
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
     e_x = np.exp(x - np.max(x))
@@ -597,25 +589,6 @@ def configure_online_datastream(sub_dataset, num_iterations, training_args, clie
     count_decay_ratio = training_args.online_stream_count_decay_ratio
     
     if not training_args.is_streamonly:
-        # memory-only
-        # for i, sample in enumerate(sub_dataset):
-        #     if len(memory[client_id]) == memory_size:
-        #         memory[client_id].pop(random.randrange(memory_size))
-        #     memory[client_id].append(sample)
-        #     iteration += iter_ratio
-        #     if iteration >= 1:
-        #         for _ in range(int(iteration)):
-        #             batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
-        #             mul = (total_batchsize//len(batch)) + 1
-        #             batch = (batch*mul)[:total_batchsize]
-        #             datalist.extend(batch[:])
-        #             iteration -= 1
-        # if len(datalist) < num_iterations*total_batchsize:
-        #     batch = random.sample(memory[client_id], k=min(len(memory[client_id]), total_batchsize))
-        #     mul = (total_batchsize//len(batch)) + 1
-        #     batch = (batch*mul)[:total_batchsize]
-        #     datalist.extend(batch[:])
-        
         # memory only: priority-based sampling
         for i, sample in enumerate(sub_dataset):
             if len(memory[client_id]) == memory_size:
@@ -747,56 +720,65 @@ def orthonormal_kaiming_uniform_init(m):
         if m.bias is not None:
             m.bias.data.zero_()
 
-from typing import Dict
-from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
+
+def SeqToSeqEncode(example, tokenizer, max_length=None, ignore_masked_token=False):
+    inputs = tokenizer(
+        example["x"],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+    )
+    outputs = tokenizer(
+        example["y"],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+    )
+
+    results = {
+        "input_ids": inputs["input_ids"],
+        "attention_mask": inputs["attention_mask"],
+        "labels": outputs["input_ids"],
+        "decoder_attention_mask": outputs["attention_mask"],
+    }
+
+    if ignore_masked_token:
+        results["labels"][outputs["attention_mask"] == 0] = -100
+
+    return results
+
+
+def preprocess_dataset(
+    dataset: tp.Union[Dataset, tp.List[tp.Tuple[str, str]], tp.List[tp.Dict[str, str]]]
+) -> Dataset:
+    if isinstance(dataset, list) and isinstance(dataset[0], tuple):
+        dataset = Dataset.from_pandas(pd.DataFrame(dataset, columns=["x", "y"]))
+    elif isinstance(dataset, list) and isinstance(dataset[0], dict):
+        dataset = Dataset.from_dict(
+            {k: [dic[k] for dic in dataset] for k in dataset[0]}
+        )
+    elif isinstance(dataset, dict):
+        dataset = Dataset.from_dict(dataset)
+    elif isinstance(dataset, Dataset):
+        pass
+    else:
+        raise ValueError("Wrong format")
+    return dataset
+
+
 def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedTokenizer, processor,
                                 data_args, model_id=None) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor, model_id=model_id)
-    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
+    
+    if 't5' in model_id:
+        train_dataset = preprocess_dataset(client_data)
+        train_dataset.set_transform(lambda x: SeqToSeqEncode(x, tokenizer, 128))
+        data_collator=None
+    else:
+        train_dataset = LazySupervisedDataset(client_data, tokenizer, data_args, processor, model_id=model_id)
+        data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,
                 data_collator=data_collator)
-
-import random
-from federated_methods.fedours import fedours_ema_distill_create_trainer
-def get_task_vectors(model, tokenizer, processor, train_datalists, training_args, data_args, global_state_dict_list, make_supervised_data_module, model2):
-    random.seed(training_args.seed)
-    client_task_vectors = []
-    for client_id in range(len(train_datalists)):
-        datalist = train_datalists[client_id][0]['datalist']
-        
-        sub_datalist = random.sample(datalist, 4*training_args.iter_to_get_grad)
-        
-        data_module = make_supervised_data_module(client_data=sub_datalist, # sub_dataset
-                                                tokenizer=tokenizer,
-                                                processor=processor,
-                                                data_args=copy.deepcopy(data_args))
-    
-        extra_state_dict_dict = {}
-        extra_state_dict_dict['client_id']=0
-        extra_state_dict_dict['curr_round']=0
-        extra_state_dict_dict['fisher_freq'] = 1
-        extra_state_dict_dict['test_datalist'] = []
-        extra_state_dict_dict['processor'] = processor
-        extra_state_dict_dict['data_args'] = data_args
-        extra_state_dict_dict['model2'] = model2
-        copy_training_args = copy.deepcopy(training_args)
-        copy_training_args.per_gpu_train_batch_size = 1
-        copy_training_args.gradient_accumulation_steps = 4
-        trainer = fedours_ema_distill_create_trainer(model, tokenizer, copy_training_args, data_module, extra_state_dict_dict)
-
-        results = trainer.train()
-        
-        task_vector = trainer.task_vector
-        
-        client_task_vectors.append(task_vector)
-        
-        trainer.deepspeed.empty_partition_cache()
-        del trainer
-        
-        with torch.no_grad():
-            model.load_state_dict(global_state_dict_list[client_id], strict=False)
-    
-    extra_state_dict_dict['fisher_freq']=5
-    return client_task_vectors

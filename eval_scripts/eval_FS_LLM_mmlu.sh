@@ -1,15 +1,15 @@
 #!/bin/bash
-
+export CUBLAS_WORKSPACE_CONFIG=:16:8
 # CIL CONFIG
-NOTE="sft_bs4_saveoptim_lr2e-5_sc56_4tasks_5rounds_fixitr100_T0125_decay099"
-MODE="sft"
+NOTE="new_fedours_moe_T05_freq10_bs4_saveoptim_r16_32_lr3e-4_5e-4_sc205_4tasks_5rounds_fixitr29_T0125_decay099"
+MODE="fedours_moe"
 MODEL_ARCH="llama3_3b" # llava llama3_1b llama3_3b
 
 # fed args
-SCENARIO=56
+SCENARIO=205
 NUM_ROUNDS=5
 NUM_TASKS=4
-NUM_CLIENTS=10
+NUM_CLIENTS=5
 MODEL_MAX_LEN=20000
 MAX_NEW_TOKENS=512
 
@@ -35,12 +35,12 @@ else
 fi
 
 # ROUND_TO_EVALS=$2
-ROUND_TO_EVALS=(17)
+ROUND_TO_EVALS=(20)
 ITER_TO_EVAL=0
 
 for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    CUDA_VISIBLE_DEVICES=$1 python eval_VLM_CL.py \
+    CUDA_VISIBLE_DEVICES=$1 python -m eval_scripts.eval_FS_LLM_mmlu \
         --is_eval True \
         --model_name_or_path $MODEL_NAME \
         --model_name_for_dataarg $MODEL_NAME \
@@ -71,8 +71,13 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --set_state "gate" \
         --is_prompt False \
         --use_task_vector False \
+        --is_multimodal False \
+        --lora_r 16 \
+        --lora_alpha 32 \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
-        --output_dir "./nohup" #> ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
+        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_mmlu.log 2>&1 & #_iter${ITER_TO_EVAL}
 done
 # --eval_period $EVAL_PERIOD
 #--eval_iter $ITER_TO_EVAL \
+        # --lora_r 16 \
+        # --lora_alpha 16 \

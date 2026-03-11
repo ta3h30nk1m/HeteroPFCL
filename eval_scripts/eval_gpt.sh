@@ -26,7 +26,7 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
             
             echo "Processing ${dataset} (client ${i})..."
             OPENAI_API_KEY="" \
-            python eval_gpt_aya.py -r "$input_file" -o "$output_file" --random_seed 42 > gpteval.out 2>&1 &
+            python -m eval_scripts.eval_gpt_aya -r "$input_file" -o "$output_file" --random_seed 42 > gpteval.out 2>&1 &
         done
     done
 done

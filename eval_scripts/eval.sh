@@ -1,15 +1,15 @@
 #!/bin/bash
-export CUBLAS_WORKSPACE_CONFIG=:16:8
+
 # CIL CONFIG
-NOTE="new_fedours_moe_T05_freq10_bs4_saveoptim_r16_32_lr3e-4_5e-4_sc205_4tasks_5rounds_fixitr29_T0125_decay099"
-MODE="fedours_moe"
+NOTE="sft_bs4_saveoptim_lr2e-5_sc56_4tasks_5rounds_fixitr100_T0125_decay099"
+MODE="sft"
 MODEL_ARCH="llama3_3b" # llava llama3_1b llama3_3b
 
 # fed args
-SCENARIO=205
+SCENARIO=4
 NUM_ROUNDS=5
 NUM_TASKS=4
-NUM_CLIENTS=5
+NUM_CLIENTS=10
 MODEL_MAX_LEN=20000
 MAX_NEW_TOKENS=512
 
@@ -35,12 +35,12 @@ else
 fi
 
 # ROUND_TO_EVALS=$2
-ROUND_TO_EVALS=(20)
+ROUND_TO_EVALS=(17)
 ITER_TO_EVAL=0
 
 for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    CUDA_VISIBLE_DEVICES=$1 python eval_FS_LLM_math.py \
+    CUDA_VISIBLE_DEVICES=$1 python -m eval_scripts.eval_VLM_CL \
         --is_eval True \
         --model_name_or_path $MODEL_NAME \
         --model_name_for_dataarg $MODEL_NAME \
@@ -57,25 +57,12 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --tf32 True \
         --note $NOTE \
         --mode $MODE \
-        --eval_server False \
         --unseen_task False \
-        --zeroshot False \
+        --zeroshot True \
         --lora_enable True \
-        --ia3_enable False \
-        --generator_output_size 512 \
-        --generator_hidden_dim 8 \
-        --generator_hidden_feature 8 \
-        --key_embed_size 64 \
-        --prompt_top_k 1 \
-        --pool_size 40 \
         --set_state "gate" \
-        --is_prompt False \
-        --use_task_vector False \
-        --is_multimodal False \
-        --lora_r 16 \
-        --lora_alpha 32 \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
-        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_math.log 2>&1 & #_iter${ITER_TO_EVAL}
+        --output_dir "./nohup" #> ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
 done
 # --eval_period $EVAL_PERIOD
 #--eval_iter $ITER_TO_EVAL \

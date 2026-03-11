@@ -68,7 +68,6 @@ class TrainingConfig(transformers.TrainingArguments):
     is_eval: bool = False
     round_to_eval: int = None
     eval_temp: float = 0.0
-    eval_server: bool = False
     unseen_task: bool = False
     eval_client: int = field(default=None)
     eval_iter: int = field(default=None)
@@ -78,6 +77,7 @@ class TrainingConfig(transformers.TrainingArguments):
     eval_client_end: int = field(default=None)
     eval_client_eval_start: int = field(default=None)
     eval_client_eval_end: int = field(default=None)
+    set_state: str = field(default="gate")
     
     remove_unused_columns: bool = field(default=False)
     freeze_mm_mlp_adapter: bool = field(default=False)

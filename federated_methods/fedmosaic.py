@@ -603,7 +603,12 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         self.hidden_states_before_norm = []
                         # breakpoint()
                         
-                        if ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.grad_freq == 0:
+                        # batch size must be 1 & modify total batch size by gradient_accumulation_steps
+                        total_sampling_batch = steps_in_epoch // args.gradient_accumulation_steps // self.grad_freq
+                        grad_sampling_steps = [i * steps_in_epoch // (total_sampling_batch * args.gradient_accumulation_steps) for i in range(int(total_sampling_batch*args.gradient_accumulation_steps))]
+                        if (step+1-args.gradient_accumulation_steps) in grad_sampling_steps:
+                        # if ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.grad_freq == 0:
+                        
                             # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
                             #     p.requires_grad = True
                             

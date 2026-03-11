@@ -7,12 +7,12 @@ MODEL_ARCH="llama3_3b" # llavea gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=0
+SCENARIO=4
 NUM_ROUNDS=4
 NUM_TASKS=4
 NUM_CLIENTS=4
 MODEL_MAX_LEN=20000
-NUM_ITER=10
+NUM_ITER=100
 
 ##
 MEMORY_SIZE=100000
@@ -90,7 +90,7 @@ deepspeed --master_port 29715 \
     --load_pretrained_lora False \
     --save_per_step False \
     --softmax_temp 0.5 \
-    --grad_freq 5 \
+    --grad_freq 10 \
     --is_multimodal $IS_MULTIMODAL \
     --get_prompt True \
     --is_cross_model_series False \

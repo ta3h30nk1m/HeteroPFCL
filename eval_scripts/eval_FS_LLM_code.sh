@@ -40,7 +40,7 @@ ITER_TO_EVAL=0
 
 for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-    CUDA_VISIBLE_DEVICES=$1 python eval_FS_LLM_mmlu.py \
+    CUDA_VISIBLE_DEVICES=$1 python -m eval_scripts.eval_FS_LLM_code \
         --is_eval True \
         --model_name_or_path $MODEL_NAME \
         --model_name_for_dataarg $MODEL_NAME \
@@ -72,10 +72,10 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --is_prompt False \
         --use_task_vector False \
         --is_multimodal False \
+        --round_to_eval ${ROUND_TO_EVALS[$index]} \
         --lora_r 16 \
         --lora_alpha 32 \
-        --round_to_eval ${ROUND_TO_EVALS[$index]} \
-        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_mmlu.log 2>&1 & #_iter${ITER_TO_EVAL}
+        --output_dir "./nohup" > ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}_code.log 2>&1 & #_iter${ITER_TO_EVAL}
 done
 # --eval_period $EVAL_PERIOD
 #--eval_iter $ITER_TO_EVAL \

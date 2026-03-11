@@ -32,7 +32,7 @@ from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.dora import DoraConv2dLayer, DoraConv3dLayer, DoraEmbeddingLayer, DoraLinearLayer, _DoraConvNdLayer
 
 
-class PQLoraFullInitLayer(BaseTunerLayer):
+class CoLoraInitLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
     adapter_layer_names = ("lora_A", "lora_B", "lora_embedding_A", "lora_embedding_B", "lora_P", "lora_Q")
     # All names of other parameters that may contain adapter-related parameters
@@ -430,7 +430,7 @@ class PQLoraFullInitLayer(BaseTunerLayer):
 #  ------------------------------------------------------------------------------------------
 
 
-class Linear(nn.Module, PQLoraFullInitLayer):
+class Linear(nn.Module, CoLoraInitLayer):
     # Lora implemented in a dense layer
     def __init__(
         self,
@@ -448,7 +448,7 @@ class Linear(nn.Module, PQLoraFullInitLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQLoraFullInitLayer.__init__(self, base_layer, **kwargs)
+        CoLoraInitLayer.__init__(self, base_layer, **kwargs)
         self.fan_in_fan_out = fan_in_fan_out
 
         self._active_adapter = adapter_name
@@ -670,7 +670,7 @@ class Linear(nn.Module, PQLoraFullInitLayer):
         return "lora." + rep
 
 
-class Embedding(nn.Module, PQLoraFullInitLayer):
+class Embedding(nn.Module, CoLoraInitLayer):
     # LoRA implemented in a Embedding layer
     def __init__(
         self,
@@ -690,7 +690,7 @@ class Embedding(nn.Module, PQLoraFullInitLayer):
             raise ValueError(f"lora_bias={lora_bias} is not supported for {self.__class__.__name__}.")
 
         super().__init__()
-        PQLoraFullInitLayer.__init__(self, base_layer)
+        CoLoraInitLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self.update_layer(
@@ -930,7 +930,7 @@ class Embedding(nn.Module, PQLoraFullInitLayer):
         return "lora." + rep
 
 
-class _ConvNd(nn.Module, PQLoraFullInitLayer):
+class _ConvNd(nn.Module, CoLoraInitLayer):
     # Lora implemented in a conv(2,3)d layer
     def __init__(
         self,
@@ -946,7 +946,7 @@ class _ConvNd(nn.Module, PQLoraFullInitLayer):
         **kwargs,
     ) -> None:
         super().__init__()
-        PQLoraFullInitLayer.__init__(self, base_layer)
+        CoLoraInitLayer.__init__(self, base_layer)
 
         self._active_adapter = adapter_name
         self._kernel_dim = base_layer.weight.dim()

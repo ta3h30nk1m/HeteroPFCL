@@ -82,6 +82,8 @@ pip install -U scikit-learn
 
     - final core
 ```bash
+https://drive.google.com/drive/folders/1VcqZMGiVuyS59AnuTJ_q5Ky6nVmDPWFZ?usp=drive_link
+
 llava 1b (4block): gdrive files download 1_sNX5TjuDjr9Sw4zOimlHxee8RAAljcs
 llava 3b (4block): gdrive files download 1xCewPkTCfMAjWSix7q8AiJnpAIbhbDOx
 llava 8b (4block): gdrive files download 1LmhTUJBGSfF2mWWcjF7YDUzrVWEXYTBP

@@ -7,7 +7,7 @@ import torch.distributed as dist
 from torch.utils.data import RandomSampler
 from packaging import version
 from torch import nn
-from utils.train_utils import load_deepspeed
+from utils.train_utils import get_target_layers
 from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
 import sys, os, time, shutil, datetime
@@ -23,8 +23,8 @@ from transformers.trainer_utils import (
 from transformers.trainer_pt_utils import get_model_param_count, get_dataloader_sampler, reissue_pt_warnings
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint
-from transformers import Trainer
-import bitsandbytes
+from transformers import Trainer, TrainerState, TrainingArguments
+
 from transformers.trainer import (
     is_sagemaker_mp_enabled, 
     _is_peft_model, 
@@ -32,8 +32,6 @@ from transformers.trainer import (
     is_torch_xla_available,
     is_accelerate_available,
     is_deepspeed_available,
-    get_parameter_names,
-    ALL_LAYERNORM_LAYERS,
     SCHEDULER_NAME
 )
 import warnings
@@ -58,10 +56,6 @@ if is_accelerate_available():
 
 logger = logging.get_logger(__name__)
 
-from eval_VLM_CL import anytime_evaluation
-from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
-from utils.align_tokens import _build_alignment, align_hidden
-
 def ABInit_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A=True):
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
@@ -80,14 +74,12 @@ class LLaVATrainerABInit(LLaVATrainer):
         super(LLaVATrainerABInit, self).__init__(**kwargs)
         model2, tokenizer2, processor2, model2_id = model2
         self.model2 = model2.cuda() if model2 is not None else None # llava 3b model
-        self.tokenizer2 = tokenizer2
-        self.processor2 = processor2
-        self.model2_id = model2_id
         self.train_A = train_A
         self.data_args=data_args
         self.hooks = []
         self.lora_outputs = []
         self.lora_targets = []
+        self.num_blocks = self.args.num_blocks
         # Define a simple function to store the output of a layer
         def hook_fn_A1(module, input, output):
             # Store the output for further processing
@@ -102,47 +94,13 @@ class LLaVATrainerABInit(LLaVATrainer):
             # Store the output for further processing
             self.lora_targets.append(output.detach().cpu())
         if self.data_args.is_multimodal:
-            last_layer = len(self.model.base_model.language_model.model.layers) // 4
-            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-            last_layer2 = len(self.model2.base_model.language_model.model.layers) // 4
-            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
+            model_total_layer_num = len(self.model.base_model.language_model.model.layers)
+            model2_total_layer_num = len(self.model2.base_model.language_model.model.layers)
         else:
-            last_layer = len(self.model.base_model.model.model.layers) // 4
-            self.target_layers = [last_layer*1 -1,last_layer*2 -1,last_layer*3 -1,last_layer*4 -1]
-            last_layer2 = len(self.model2.base_model.model.model.layers) // 4
-            self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1,last_layer2*3 -1,last_layer2*4 -1]
-        
-        
-        # if 'front' in self.args.mode:
-            # self.target_layers = [6,9,12,15,18,21,24,27]
-        # elif 'back' in self.args.mode:
-            # self.target_layers = [2,5,8,11,14,17,20,27]
-        # self.target_layers2 = [1,3,5,7,9,11,13,15]
-        # self.target_layers = [3,7,11,15,19,23,27,31]
-        
-        
-        # self.target_layers = [2,5,8,11,14,17,20,27]
-        # self.target_layers = [3,7,11,15,19,23,27,35]
-        # self.target_layers2 = [2,5,8,11,14,17,20,23]
-        
-        # self.target_layers = list(range(len(self.model.base_model.language_model.model.layers)))
-        # self.target_layers2 = list(range(len(self.model2.base_model.language_model.model.layers)))
-        # self.target_layers = [1,3,5,7,9,11,13,15,17,19,21,23,25,27]
-        # self.target_layers2 = [1,2,3,4,5,6,7,9,10,11,12,13,14,15]
-        # last_layer = len(self.model.base_model.language_model.model.layers) // 2
-        # self.target_layers = [last_layer*1 -1,last_layer*2 -1]
-        # last_layer2 = len(self.model2.base_model.language_model.model.layers) // 2
-        # self.target_layers2 = [last_layer2*1 -1,last_layer2*2 -1]
-        
-        # if 'Optimal2' in self.args.mode:
-        #     self.target_layers = [11,27]
-        #     self.target_layers2 = [8,15]
-        # elif 'Optimal4' in self.args.mode:
-        #     self.target_layers = [5,11,20,27]
-        #     self.target_layers2 = [5,8,12,15]
-        # elif 'Optimal8' in self.args.mode:
-        #     self.target_layers = [5,7,11,14,18,20,23,27]
-        #     self.target_layers2 = [5,6,8,9,11,12,14,15]
+            model_total_layer_num = len(self.model.base_model.model.model.layers)
+            model2_total_layer_num = len(self.model2.base_model.model.model.layers)
+        self.target_layers = get_target_layers(model_total_layer_num, self.num_blocks)
+        self.target_layers2 = get_target_layers(model2_total_layer_num, self.num_blocks)
         
         if train_A:
             if self.data_args.is_multimodal:
@@ -191,8 +149,8 @@ class LLaVATrainerABInit(LLaVATrainer):
                                 self.hooks.append(m.register_forward_hook(hook_fn_A2))
         else:
             # only makes lora_B for target layers trainable
-            # self.lora_B_output_1b = []
-            # self.lora_B_output_3b = []
+            self.lora_B_output_1b = []
+            self.lora_B_output_3b = []
             self.layer_name_1b = []
             self.layer_name_3b = []
             
@@ -216,8 +174,7 @@ class LLaVATrainerABInit(LLaVATrainer):
                     else:
                         for n, p in layer.named_parameters():
                             p.requires_grad = False
-                self.lora_B_output_1b = [[] for _ in range(len(self.layer_name_1b))]
-                self.lora_B_output_3b = [[] for _ in range(len(self.layer_name_3b))]
+                
                 
                 for idx, layer in enumerate(self.model2.base_model.language_model.model.layers):
                     if idx in self.target_layers2:
@@ -259,92 +216,40 @@ class LLaVATrainerABInit(LLaVATrainer):
                                 self.hooks.append(m.register_forward_hook(hook_fn_B2))
         self.model_accepts_loss_kwargs = False
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        inputs.pop('prompt', None)
         self.lora_outputs = []
         self.lora_targets = []
-        
-        batch_sources = inputs.pop('prompt', None)
-        batchs = len(batch_sources)
-        datalist = LazySupervisedDataset(batch_sources, self.tokenizer2, self.data_args, self.processor2, model_id=self.model2_id)
-        temp_dc = DataCollatorForSupervisedDataset(tokenizer=self.tokenizer2)
-        temp_dataloader = torch.utils.data.DataLoader(datalist, batch_size=len(batch_sources), collate_fn=temp_dc)
-        temp_inputs = next(iter(temp_dataloader))
-        temp_inputs.pop('prompt', None)
-        temp_inputs = self._prepare_inputs(temp_inputs)
-        
-        label = inputs['labels'][..., 1:].contiguous()
-        label2 = temp_inputs['labels'][..., 1:].contiguous()
-        
-        # get token alignment
-        base2blend = []
-        for j in range(batchs):
-            base_tokens   = self.tokenizer2.convert_ids_to_tokens(temp_inputs['input_ids'][j,:-1][label2[j] != -100])
-            blend_tokens  = self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][j,:-1][label[j] != -100])
-            base_special  = 'Ġ'#TOKENIZER_TO_SPECIAL_TOKEN[base_model_tokenizer.__class__]
-            blend_special = 'Ġ'#TOKENIZER_TO_SPECIAL_TOKEN[blending_model_tokenizer.__class__]
-
-            base2blend.append(_build_alignment(
-                blend_tokens, base_tokens,
-                base_special=base_special,
-                blend_special=blend_special,
-            )  # List[List[int]]
-            )
-        
         if self.train_A:
             with torch.no_grad():
-                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, temp_inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
 
             loss, outputs = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
         else:
             with torch.no_grad():
-                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, temp_inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+                _, _ = super(LLaVATrainerABInit, self).compute_loss(self.model2, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
             
-            # if len(self.lora_B_output_1b) == 0:
-            #     for lora_target in self.lora_targets:
-            #         self.lora_B_output_1b.append(lora_target.reshape(-1, lora_target.size(-1)).detach().cpu())
-            # else:
-            #     for i, lora_target in enumerate(self.lora_targets):
-            #         self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], lora_target.reshape(-1, lora_target.size(-1)).detach().cpu()), dim=0)
+            if len(self.lora_B_output_1b) == 0:
+                for lora_target in self.lora_targets:
+                    self.lora_B_output_1b.append(lora_target.reshape(-1, lora_target.size(-1)).detach().cpu())
+            else:
+                for i, lora_target in enumerate(self.lora_targets):
+                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], lora_target.reshape(-1, lora_target.size(-1)).detach().cpu()), dim=0)
             
             loss, outputs = super(LLaVATrainerABInit, self).compute_loss(model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
         
-            # if len(self.lora_B_output_3b) == 0:
-            #     for lora_output in self.lora_outputs:
-            #         self.lora_B_output_3b.append(lora_output.reshape(-1, lora_output.size(-1)).detach().cpu())
-            # else:
-            #     for i, lora_output in enumerate(self.lora_outputs):
-            #         self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], lora_output.reshape(-1, lora_output.size(-1)).detach().cpu()), dim=0)
-            for i, (output, target) in enumerate(zip(self.lora_outputs, self.lora_targets)):
-                new_targets = []
-                new_outputs = []
-                for j in range(target.shape[0]):
-                    new_target, keep_idx = align_hidden(target[j,:-1][label2[j].cpu() != -100], base2blend[j])
-                    new_targets.append(new_target[keep_idx])
-                    new_outputs.append(output[j,:-1][label[j].cpu() != -100][keep_idx])
-                new_targets = torch.stack(new_targets, dim=0)
-                new_outputs = torch.stack(new_outputs, dim=0)
-                if len(self.lora_B_output_1b[i]) == 0:
-                    self.lora_B_output_1b[i] = new_targets.reshape(-1, new_targets.size(-1)).detach().cpu()
-                    self.lora_B_output_3b[i] = new_outputs.reshape(-1, new_outputs.size(-1)).detach().cpu()
-                else:
-                    self.lora_B_output_1b[i] = torch.cat((self.lora_B_output_1b[i], new_targets.reshape(-1, new_targets.size(-1)).detach().cpu()), dim=0)
-                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], new_outputs.reshape(-1, new_outputs.size(-1)).detach().cpu()), dim=0)
+            if len(self.lora_B_output_3b) == 0:
+                for lora_output in self.lora_outputs:
+                    self.lora_B_output_3b.append(lora_output.reshape(-1, lora_output.size(-1)).detach().cpu())
+            else:
+                for i, lora_output in enumerate(self.lora_outputs):
+                    self.lora_B_output_3b[i] = torch.cat((self.lora_B_output_3b[i], lora_output.reshape(-1, lora_output.size(-1)).detach().cpu()), dim=0)
+            
         # l2 loss on output
         if self.train_A:
             loss = 0
-            # breakpoint()
             for idx, (output, target) in enumerate(zip(self.lora_outputs, self.lora_targets)):
-                new_targets = []
-                new_outputs = []
-                for j in range(target.shape[0]):
-                    new_target, keep_idx = align_hidden(target[j,:-1][label2[j] != -100], base2blend[j])
-                    new_targets.append(new_target[keep_idx])
-                    new_outputs.append(output[j,:-1][label[j] != -100][keep_idx])
-                    
-                new_targets = torch.stack(new_targets, dim=0)
-                new_outputs = torch.stack(new_outputs, dim=0)
-                
-                loss += torch.mean((new_outputs - new_targets.detach())**2)
+                loss += torch.mean((output - target)**2)
             
             # encourage orthogonality
             cos_loss = 0
@@ -573,13 +478,7 @@ class LLaVATrainerABInit(LLaVATrainer):
 
         # Check if saved optimizer or scheduler states exist
         self._load_optimizer_and_scheduler(resume_from_checkpoint)
-        #############################################################################################################
-
-        # if self.args.save_optim and self.curr_round > 0:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._load_optimizer_and_scheduler(output_dir)
-            
-        ##############################################################################################################
+        
         # important: at this point:
         # self.model         is the Transformers Model
         # self.model_wrapped is DDP(Transformers Model), Deepspeed(Transformers Model),
@@ -815,29 +714,6 @@ class LLaVATrainerABInit(LLaVATrainer):
                         self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
                         self.control = self.callback_handler.on_step_end(args, self.state, self.control)
                     
-                        # wsd
-                        if self.args.is_wsd == 'WSD' and math.ceil(self.state.epoch*steps_in_epoch) == math.ceil(self.args.decay_ratio*steps_in_epoch):
-                            self.global_weight = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-
-                        # save client model
-                        # if step % 5 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        # if step % 25 == 0:
-                        #     output_dir = os.path.join(self.args.state_dir, f"{self.client_id}_client_model_round{self.curr_round+1}_itr{step}.pth")
-                        #     state_dict = {k: t.detach().cpu().clone() for k, t in self.model.named_parameters() if t.requires_grad}
-                            
-                        #     if (self.args.local_rank == 0 or self.args.local_rank == -1):
-                        #         torch.save(state_dict, output_dir)
-                        
-                        # anytime eval
-                        # if args.anytime_eval and ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % args.anytime_eval_freq == 0:
-                        #     eval_batch_size=8 # FIXME
-                        #     eval_start_time = time.time()
-                        #     args.eval_iter = (step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps
-                        #     anytime_eval_result = anytime_evaluation(model, self.tokenizer, self.processor, self.test_datalist, eval_batch_size, self.curr_round, self.client_id, args, 512, self.data_args, logger)
-                        #     print(f'eval elapse time {datetime.timedelta(seconds=int(time.time() - eval_start_time))}')
-                        #     breakpoint()
-
                         self._maybe_log_save_evaluate(
                             tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
                         )
@@ -939,10 +815,6 @@ class LLaVATrainerABInit(LLaVATrainer):
             self._deactivate_neftune(self.model)
 
         ##############################################################################################################
-        # if self.args.save_optim:
-        #     output_dir = f'client_states_{self.args.note}/client_{self.client_id}/'
-        #     self._save_optimizer_and_scheduler(output_dir)
-        ##############################################################################################################
         del self.lora_outputs, self.lora_targets
         for hook in self.hooks:
             hook.remove()
@@ -999,45 +871,3 @@ class LLaVATrainerABInit(LLaVATrainer):
                 logger.info(f"skipped: {skipped/2**20}M params")
 
         return self.optimizer
-    
-    def _load_optimizer_and_scheduler(self, checkpoint):
-        """If optimizer and scheduler states exist, load them."""
-        if checkpoint is None:
-            return
-
-        if self.is_deepspeed_enabled:
-            from deepspeed.runtime.state_dict_factory import SDLoaderFactory
-            from deepspeed.runtime.pipe.module import PipelineModule
-            latest_tag = "latest"
-            latest_path = os.path.join(checkpoint, latest_tag)
-            if os.path.isfile(latest_path):
-                with open(latest_path, "r") as fd:
-                    tag = fd.read().strip()
-                    
-            ckpt_list = self.model_wrapped._get_all_ckpt_names(checkpoint, tag)
-            sd_loader = SDLoaderFactory.get_sd_loader(ckpt_list, checkpoint_engine=self.model_wrapped.checkpoint_engine)
-
-            is_pipe_parallel = isinstance(self.model_wrapped.module, PipelineModule)
-
-            mp_rank = 0 if self.model_wrapped.mpu is None else self.model_wrapped.mpu.get_model_parallel_rank()
-            load_path, checkpoint_state, _ = sd_loader.load(self.model_wrapped.mp_world_size, mp_rank, is_pipe_parallel=is_pipe_parallel)
-            self.model_wrapped.loaded_checkpoint_dp_world_size = checkpoint_state['dp_world_size']
-            self.model_wrapped.loaded_checkpoint_mp_world_size = checkpoint_state['mp_world_size']
-
-            zero_sd_list = self.model_wrapped._get_all_zero_checkpoints(checkpoint, tag)
-
-            self.model_wrapped.optimizer.load_state_dict(state_dict_list=zero_sd_list,
-                                       load_optimizer_states=True,
-                                       load_from_fp32_weights=self.model_wrapped.zero_load_from_fp32_weights(),
-                                       checkpoint_folder=None,
-                                       load_serial=None)
-            
-            # deepspeed loads optimizer/lr_scheduler together with the model in deepspeed_init
-            if not isinstance(self.lr_scheduler, DeepSpeedSchedulerWrapper):
-                with warnings.catch_warnings(record=True) as caught_warnings:
-                    self.lr_scheduler.load_state_dict(torch.load(os.path.join(checkpoint, SCHEDULER_NAME)))
-                reissue_pt_warnings(caught_warnings)
-            return
-
-        else:
-            super()._load_optimizer_and_scheduler(checkpoint)

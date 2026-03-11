@@ -3,9 +3,7 @@ from typing import Callable, Tuple, Type, Dict
 from federated_methods.fedavg import fedavg_load_state_dict, fedavg_aggregate_state_dict, fedavg_create_trainer 
 from federated_methods.sft import sft_load_state_dict, fedper_load_state_dict
 from federated_methods.fedmosaic import fedmosaic_create_trainer, fedmosaic_aggregate_state_dict 
-from federated_methods.fedmosaic_utils import (fedmosaic_load_state_dict,
-                                     fedmosaic_2block_load_state_dict, fedmosaic_4block_load_state_dict, fedmosaic_8block_load_state_dict
-                                     )
+from federated_methods.fedmosaic_utils import (fedmosaic_homo_load_state_dict, fedmosaic_load_state_dict)
 
 
 from federated_methods.feddat import feddat_create_trainer, feddat_hetero_load_state_dict, feddat_aggregate_state_dict
@@ -41,17 +39,10 @@ def select_method(mode: str) -> Tuple[Callable, Callable, Callable, Callable, Di
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedper_load_state_dict, perada_create_trainer, Distillation_aggregate_state_dict
     elif mode in ['fedmkt']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, sft_load_state_dict, fedavg_create_trainer, FEDMKT_aggregate_state_dict
-    
-    elif mode in ['fedmosaic']:
-        # from federated_methods.fedpq import feddualMultipq_homoAgg_t5_load_state_dict
-        # set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, feddualMultipq_homoAgg_t5_load_state_dict, fedmosaic_create_trainer, OURS_aggregate_state_dict
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedmosaic_4block_load_state_dict, fedmosaic_create_trainer, fedmosaic_aggregate_state_dict
     elif mode in ['fedmosaic_homo']:
+        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedmosaic_homo_load_state_dict, fedmosaic_create_trainer, fedmosaic_aggregate_state_dict
+    elif mode in ['fedmosaic']:
         set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedmosaic_load_state_dict, fedmosaic_create_trainer, fedmosaic_aggregate_state_dict
-    elif mode in ['fedmosaic_2block']:
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedmosaic_2block_load_state_dict, fedmosaic_create_trainer, fedmosaic_aggregate_state_dict
-    elif mode in ['fedmosaic_8block']:
-        set_state_dict, load_state_dict, create_trainer, aggregate_state_dict = dummy_function, fedmosaic_8block_load_state_dict, fedmosaic_create_trainer, fedmosaic_aggregate_state_dict
     else:
         raise NotImplementedError(mode)
     return set_state_dict, load_state_dict, create_trainer, aggregate_state_dict, extra_modules

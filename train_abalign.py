@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from configuration.VLM_config_new import ModelArguments, DataArguments, TrainingConfig
 import transformers
-from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_task_vectors, load_deepspeed, configure_online_datastream, get_keys_to_del
+from utils.train_utils import get_VLMmodel, get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, get_target_layers
 
 from federated_methods.method_manager import select_method
 from utils.data_loader_VLM import LazySupervisedDataset, DataCollatorForSupervisedDataset
@@ -20,7 +20,6 @@ import time
 import datetime
 import torch.nn.functional as F
 
-from federated_methods.AB_init import ABInit_create_trainer
 os.environ["WANDB_DISABLED"] = "true"
 def main():
     parser = transformers.HfArgumentParser(
@@ -83,188 +82,59 @@ def main():
     model_list = {}
     models = {}
     processors = {}
-    global_state_dict_list = []
-    local_state_dict_list = []
-    old_local_state_dict_list = []
     for client_id in range(len(train_datalists)):
         train_datalist = train_datalists[client_id]
         model_id = train_datalist[0]['model_id']
         
         if model_id in model_list.keys():
-            local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
-            old_local_state_dict_list.append(copy.deepcopy(model_list[model_id]))
-            global_state_dict = copy.deepcopy(model_list[model_id])
-            keys_to_del = get_keys_to_del(training_args, global_state_dict, data_args)
-            for k in keys_to_del:
-                del global_state_dict[k]
-            global_state_dict_list.append(global_state_dict)
-            
-            model_ids[model_id].append(client_id)
+            continue
         else:
             new_model_args = copy.deepcopy(model_args)
             new_model_args.model_name_or_path = model_id
             model, tokenizer_, processor_, new_data_args = get_VLMmodel(new_model_args, training_args, bnb_model_from_pretrained_args, data_args)
-            
-            if training_args.load_checkpoint is not None and not training_args.fedours:
-                logger.info(f'load {training_args.load_checkpoint}')
-                server_state_dict = torch.load(training_args.load_checkpoint, map_location='cpu')
-                
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
-                
-                if ('fedours' in training_args.load_checkpoint) and training_args.mode not in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    server_state_dict = local_state_dict
-                
-                with torch.no_grad():
-                    model.load_state_dict(server_state_dict, strict=False)
-                    
-                if training_args.mode in ['fedours', 'ours_generator', 'ours_generator2']:
-                    local_state_dict = {}
-                    for name in server_state_dict.keys():
-                        if 'lora1' in name:
-                            target_key = name.replace('lora1', 'lora2')
-                        elif 'ia3_l_1' in name:
-                            target_key = name.replace('ia3_l_1', 'ia3_l_2')
-                        local_state_dict[target_key] = server_state_dict[name]
-                    
-                    model.load_state_dict(local_state_dict, strict=False)
-            
-            
-            global_state_dict = get_peft_state_maybe_zero_3(
-                        model.named_parameters(), training_args.lora_bias
-                    )
-            non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-                model.named_parameters()
-            )
-            global_state_dict.update(non_lora_state_dict)
-            
-            local_state_dict_list.append(copy.deepcopy(global_state_dict))
-            old_local_state_dict_list.append(copy.deepcopy(global_state_dict))
-            new_global_state_dict=copy.deepcopy(global_state_dict)
-            keys_to_del = get_keys_to_del(training_args, new_global_state_dict, data_args)
-            for k in keys_to_del:
-                del new_global_state_dict[k]
-            global_state_dict_list.append(new_global_state_dict)
-            
-            model_list[model_id] = global_state_dict
             
             models[model_id] = model
             processors[model_id] = (tokenizer_, processor_)
             
             model_ids[model_id] = [client_id]
             
-    del model_list
     extra_state_dict_dict = {'model_ids':model_ids}
     
+    if training_args.is_cross_model_series:
+        from federated_methods.AB_init_cross_model_arch import ABInit_create_trainer
+    else:
+        from federated_methods.AB_init import ABInit_create_trainer
+    
     ##############################################################################################
-    model2_id = "thkim0305/llama3.2_3B_vl"
-    model_id = 'thkim0305/qwen2.5_1.5B_vl'
-    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl
+    # model2_id = "thkim0305/llama3.2_1B_vl" # smaller, anchor model
+    model2_id = "thkim0305/qwen2.5_0.5B_vl" # smaller, anchor model
+    model_id = 'thkim0305/llama3.2_3B_vl' # larger, training model
+    # model keys: thkim0305/llama3.2_3B_vl, thkim0305/llama3.2_1B_vl, thkim0305/llama3.1_8B_vl, thkim0305/qwen2.5_0.5B_vl, thkim0305/qwen2.5_1.5B_vl, thkim0305/qwen2.5_3B_vl
     # llm models: meta-llama/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-3B-Instruct meta-llama/Llama-3.1-8B-Instruct
-    # model2 = models["thkim0305/llama3.2_1B_vl"]
     model2 = models[model2_id]
-    # model2 = models["meta-llama/Llama-3.2-3B"]
     tokenizer2, processor2 = processors[model2_id]
     
-    # data_path = "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
-    #  "/disk1/thkim/FederatedCL/dataset/llava_dataset/llava_finetune/llava_v1_5_mix665k.json"
-    # data_path = 'chatbotIT.json'
-    data_path = 'dataset/llava_finetune/llava_v1_5_mix665k_updated.json'
-    public_datalist = json.load(open(data_path, "r"))
-    
-    # Filter out items without the "image" key
-    public_datalist = [item for item in public_datalist if "image" in item]
-    
+    if new_data_args.is_multimodal:
+        data_path = 'dataset/llava_finetune/llava_v1_5_mix665k_updated.json'
+        public_datalist = json.load(open(data_path, "r"))
+        # Filter out items without the "image" key
+        public_datalist = [item for item in public_datalist if "image" in item]
+    else:
+        data_path = 'dataset/chatbotIT.json'
+        public_datalist = json.load(open(data_path, "r"))
     random.shuffle(public_datalist)
 
-    ##### A_PCA init #####
-    # public_datalist_ = public_datalist[:200]
-    
-    # data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
-    #                                             tokenizer=tokenizer,
-    #                                             processor=processor,
-    #                                             data_args=copy.deepcopy(new_data_args))
-    
     # train bigger model
     model = models[model_id]
     tokenizer, processor = processors[model_id]
-    # model = models['thkim0305/qwen2.5_1.5B_vl']
-    # model = models['thkim0305/qwen2.5_3B_vl']
-    # model = models["thkim0305/llama3.1_8B_vl"]
-    # model = models["meta-llama/Llama-3.2-3B"]
-    # model = models["meta-llama/Llama-3.1-8B"]
     model = model.to(torch.bfloat16)
     model2= model2.to(torch.bfloat16)
-    
-    # from federated_methods.A_init_PCA import A_PCA_Init_create_trainer
-    # trainer = A_PCA_Init_create_trainer(model, tokenizer, training_args, data_module, model2, data_args, train_A = True)
 
-    # results = trainer.train()
+    ##### A init #####
+    state_dict = torch.load('llava_qwen_0_5b_blockwise4_random.pth', map_location='cpu')
+    model2.load_state_dict(state_dict, strict=False)
 
-    # lora_A_input_1bs = trainer.lora_A_input_1b
-    # lora_A_input_3bs = trainer.lora_A_input_3b
-    
-    # layer_name_1b = trainer.layer_name_1b
-    # layer_name_3b = trainer.layer_name_3b
-    
-    # state_dict = get_peft_state_maybe_zero_3(
-    #     model.named_parameters(), training_args.lora_bias
-    # )
-    
-    # state_dict2 = get_peft_state_maybe_zero_3(
-    #     model2.named_parameters(), training_args.lora_bias
-    # )
-    # lora_r = 128
-    # for idx, (lora_A_input_1b, lora_A_input_3b) in enumerate(zip(lora_A_input_1bs, lora_A_input_3bs)):
-    #     _, _, V_1b = torch.pca_lowrank(lora_A_input_1b.float(), q=lora_r)
-    #     _, _, V_3b = torch.pca_lowrank(lora_A_input_3b.float(), q=lora_r)
-
-    #     with torch.no_grad():
-    #         print("state_dict[layer_name_3b[idx]]", state_dict[layer_name_3b[idx]].shape, "V_3b[:, :lora_r]", V_3b[:, :lora_r].shape)
-    #         print("state_dict2[layer_name_1b[idx]]", state_dict2[layer_name_1b[idx]].shape, "V_1b[:, :lora_r]", V_1b[:, :lora_r].shape)
-    #         state_dict[layer_name_3b[idx]] = V_3b[:, :lora_r].to(torch.bfloat16).T
-    #         state_dict2[layer_name_1b[idx]] = V_1b[:, :lora_r].to(torch.bfloat16).T
-
-
-    # # output_dir2 = os.path.join(training_args.state_dir, f"llava_1b_PCA_orthnormal_init.pth")
-    # output_dir2 = os.path.join(training_args.state_dir, f"qwen_0.5b_PCA_orthnormal_init.pth")
-    # torch.save(state_dict2, output_dir2)
-    
-    # # output_dir = os.path.join(training_args.state_dir, f"llava_3b_PCA_orthnormal_init.pth")
-    # output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_PCA_orthnormal_init.pth")
-    # torch.save(state_dict, output_dir)
-
-    # trainer.deepspeed.empty_partition_cache()
-    # trainer.accelerator.free_memory()
-    # del trainer, lora_A_input_1bs, lora_A_input_3bs
-    # model = model.cpu()
-    # gc.collect()
-    # torch.cuda.empty_cache()
-
-    # ##### A init #####
-    # model.load_state_dict(state_dict, strict=False) 
-    
-    # load pretrained 1b weight
-    # state_dict2 = torch.load('llava_1b_blockwise_pca_init.pth', map_location='cpu')
-    # state_dict2 = torch.load('llava_1b_blockwise2_back_pca_init.pth', map_location='cpu')
-    # state_dict2 = torch.load('llava_1b_blockwise_half_pca_init.pth', map_location='cpu')
-    # state_dict2 = torch.load('llava_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-    # state_dict2 = torch.load('llava_1b_blockwise2_back_orthnormal_init_new.pth', map_location='cpu')
-    # state_dict2 = torch.load('qwen_0.5b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-    # state_dict2= torch.load('llama_1b_blockwise_orthnormal_init_new.pth', map_location='cpu')
-    # model2.load_state_dict(state_dict2, strict=False) 
-
-    public_datalist_ = public_datalist[2000:4500]
-    # public_datalist_ = public_datalist[1000:10000]
-    
+    public_datalist_ = public_datalist[:training_args.AB_align_data_size]
     
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
@@ -272,19 +142,11 @@ def main():
                                                 data_args=copy.deepcopy(new_data_args),
                                                 model_id=model_id)
     
-    # # train bigger model
-    # # model = models["thkim0305/llama3.2_3B_vl"]
-    # # model = models["thkim0305/qwen2.5_1.5B_vl"]
-    # # model = models['thkim0305/qwen2.5_3B_vl']
-    # # model = models["thkim0305/llama3.1_8B_vl"]
-    # # model = models["meta-llama/Llama-3.2-3B-Instruct"]
-    from federated_methods.AB_init import ABInit_create_trainer
     trainer = ABInit_create_trainer(model, tokenizer, training_args, data_module, (model2,tokenizer2, processor2, model2_id), data_args, train_A = True)
 
     results = trainer.train()
     
-    # output_dir = os.path.join(training_args.state_dir, f"llava_3b_orthnormal_init_FT_A.pth")
-    output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_orthnormal_init_FT_A.pth")
+    output_dir = os.path.join(training_args.state_dir, f"llava_llama_3b_blockwise{training_args.num_blocks}_A_align.pth")
     state_dict = get_peft_state_maybe_zero_3(
         model.named_parameters(), training_args.lora_bias
     )
@@ -295,13 +157,20 @@ def main():
     
     torch.save(state_dict, output_dir)
     # ##################################################
-    target_layers = [6,13,20,27]
+    # ensure orthogonality
+    # target_layers = [6,13,20,27]
     # target_layers = [7,15,23,31]
     # target_layers = [8,17,26,35]
     # target_layers = [2,5,8,11,14,17,20,27]
     # target_layers = [3,7,11,15,19,23,27,31]
-    # prefix_ = 'base_model.model.model.layers'
-    prefix_ = 'base_model.model.language_model.model.layers'
+    
+    if new_data_args.is_multimodal:
+        prefix_ = 'base_model.model.language_model.model.layers'
+        target_layers = get_target_layers(len(model.base_model.model.language_model.model.layers), training_args.num_blocks)
+    else:
+        prefix_ = 'base_model.model.model.layers'
+        target_layers = get_target_layers(len(model.base_model.model.model.layers), training_args.num_blocks)
+    
     mid_insert = ['self_attn.k_proj','self_attn.q_proj','self_attn.v_proj','self_attn.o_proj', 'mlp.gate_proj','mlp.up_proj','mlp.down_proj']
     for i in target_layers:
         for mid in mid_insert:
@@ -309,18 +178,8 @@ def main():
             B_key = prefix_ + f'.{i}.' + mid + '.lora_B.default.weight'
             
             A = state_dict[A_key]
-            # B = state_dict[B_key]
-            
-            # A_, B_ = orthogonalize_lora_pair(A, B)
-            
-            # state_dict[A_key] = A_
-            # state_dict[B_key] = B_
             
             A_, err = closest_row_orthonormal(A)
-            print(err)
-            # avg_cos, fro_dev = orthogonality_metrics(A_)
-            # print(f"Avg |cosine| similarity: {avg_cos:.4e}")
-            # print(f"Fro. deviation / n    : {fro_dev:.4e}")
             state_dict[A_key] = A_
     
     torch.save(state_dict, output_dir)
@@ -337,9 +196,7 @@ def main():
     # state_dict = torch.load('client_states_debug_qwen_llava_align/llava_3b_orthnormal_init_FT_A.pth',map_location='cpu')
     # model.load_state_dict(state_dict, strict=False) 
     ##### B init #####
-    public_datalist_ = public_datalist[12000:12100]
-    # public_datalist_ = public_datalist[7000:7100]
-    # public_datalist_ = public_datalist[7000:7080]
+    public_datalist_ = random.sample(public_datalist_, 100)
     data_module = make_supervised_data_module(client_data=public_datalist_, # sub_dataset
                                                 tokenizer=tokenizer,
                                                 processor=processor,
@@ -364,8 +221,6 @@ def main():
     state_dict2 = get_peft_state_maybe_zero_3(
         model2.named_parameters(), training_args.lora_bias
     )
-
-
     gamma=1e-4
     
     def matrix_inv_sqrt(S):
@@ -396,19 +251,7 @@ def main():
         # Perform SVD:  M = U * Sigma * V^T
         U, Sigma, Vt = torch.linalg.svd(M, full_matrices=False)
         
-        # print(S33_neg_sqrt.shape, Vt.T.shape, U.T.shape, S11_sqrt.T.shape)
-        
-        # P1 = S11_inv_sqrt @ U  # shape: [d1, d1]
-        # P3 = S33_inv_sqrt @ Vt.mT  # shape: [d3, d3]
-        
-        # for coeff in [1e-9,1e-8,1e-7,1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1.0,10.0,100.0]:
-        #     try:
-        #         P1_pinv = torch.linalg.pinv(P1 + (torch.eye(P1.shape[0])*coeff).cuda())  # shape [k, d1]
-        #         break
-        #     except Exception as e:
-        #         print(coeff, e)
         with torch.no_grad():
-            # mapping_mat = (S33_neg_sqrt @ Vt.T @ U.T @ S11_sqrt.T).T
             mapping_mat = (S11_neg_sqrt @ Vt.T @ U.T @ S33_sqrt.T).T
             state_dict[layer_name_3b[idx]] = (mapping_mat @ state_dict2[layer_name_1b[idx]].to(torch.float32).cuda()).to(torch.bfloat16).detach().cpu()
             
@@ -420,14 +263,11 @@ def main():
         if 'lora_P' in key or 'lora_Q' in key:
             state_dict2[key] = torch.zeros_like(state_dict2[key])
     
-    # output_dir2 = os.path.join(training_args.state_dir, f"llama_1b_random_init.pth")
-    output_dir2 = os.path.join(training_args.state_dir, f"llava_3b_random_init.pth")
-    # output_dir2 = os.path.join(training_args.state_dir, f"qwen_1.5b_random_init.pth")
+    output_dir2 = os.path.join(training_args.state_dir, f'llava_llama_1b_blockwise{training_args.num_blocks}_random.pth')
     torch.save(state_dict2, output_dir2)
     
-    # output_dir = os.path.join(training_args.state_dir, f"llama_8b_random_init_FT_AB.pth")
-    # output_dir = os.path.join(training_args.state_dir, f"llava_3b_random_init_FT_AB.pth")
-    output_dir = os.path.join(training_args.state_dir, f"qwen_1.5b_orthnormal_init_FT_AB.pth")
+    
+    output_dir = os.path.join(training_args.state_dir, f'llava_llama_3b_blockwise{training_args.num_blocks}_AB_align.pth')
     torch.save(state_dict, output_dir)
     return
     ################################################################################################

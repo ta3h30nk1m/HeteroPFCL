@@ -528,9 +528,6 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         batch_sources = inputs.pop('prompt', None)
                     #############################################
                     
-                    # if args.is_t5model:
-                    #     temp_inputs = copy.deepcopy(inputs)
-                    
                     with context():
                         tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
 
@@ -608,22 +605,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                         grad_sampling_steps = [i * steps_in_epoch // (total_sampling_batch * args.gradient_accumulation_steps) for i in range(int(total_sampling_batch*args.gradient_accumulation_steps))]
                         if (step+1-args.gradient_accumulation_steps) in grad_sampling_steps:
                         # if ((step-args.gradient_accumulation_steps+1)/args.gradient_accumulation_steps) % self.grad_freq == 0:
-                        
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = True
-                            
-                            # if args.is_t5model:
-                            #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
-                            #         if 'base_layer' in n:
-                            #             p.requires_grad=True
-                            # else:
-                            #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
-                            #         for n, p in l.named_parameters():
-                                        
-                            #             if 'base_layer' in n:
-                            #                 p.requires_grad=True
-                            
-                            # if not args.is_t5model:                            
+                                     
                             datalist = LazySupervisedDataset(batch_sources, self.tokenizer2, self.data_args, self.processor2, model_id=self.model2_id)
                             temp_dc = DataCollatorForSupervisedDataset(tokenizer=self.tokenizer2)
                             
@@ -649,29 +631,7 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                                                                 self.input_penultimate[0][0][..., :-1, :][shift_labels != -100].detach(),
                                                                 self.model2.base_model.model.model.norm,
                                                                 self.hidden_states_before_norm[0][0][..., :-1, :][shift_labels != -100].detach(),)
-                                # output = self.model2(**inputs)#.loss
-                                # output.loss.backward()
-                                
-                                # grads = []
-                                # if args.is_t5model:
-                                #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
-                                #         if 'base_layer' in n:
-                                #             grads.append(p.grad.detach())
-                                # else:
-                                #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
-                                #         for n, p in l.named_parameters():
-                                #             if 'base_layer' in n:
-                                #                 grads.append(p.grad.detach())
-                                # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                                #     grads.append(p.grad)
-                                    # grads.append(p.grad[:,self.grad_subsample_idx])
-                                # for layer in self.model.base_model.model.model.layers:
-                                #     for p in layer.mlp.down_proj.base_layer.parameters():
-                                #         grads.append(p.grad[:,self.grad_subsample_idx])
-                                
-                                # grads = torch.cat(grads, dim=1)
-                                # grads = torch.cat(grads)
-                                
+
                             grad_ratio = int(grads.shape[0] * self.args.gradient_ratio)
                             grads = grads[:grad_ratio]
                             
@@ -699,22 +659,6 @@ class LLaVATrainerOURS(LLaVATrainerFEDAVG):
                             
                             self.grad_cnt += 1
                             
-                            # if args.is_t5model:
-                            #     for n,p in self.model2.base_model.model.decoder.block[-1].layer[2].DenseReluDense.wo.named_parameters():
-                            #         if 'base_layer' in n:
-                            #             p.requires_grad=False
-                            # else:
-                            #     for l in self.model2.base_model.language_model.model.layers[-args.gradient_layernum:]:
-                            #         for n, p in l.named_parameters():
-                            #             # print(n)
-                            #             if 'base_layer' in n:
-                            #                 p.requires_grad=False
-                            
-                            # for p in self.model2.base_model.language_model.model.layers[-1].mlp.down_proj.base_layer.parameters():
-                            #     p.requires_grad = False
-                            # for layer in self.model.base_model.model.model.layers:
-                            #     for p in layer.mlp.down_proj.base_layer.parameters():
-                            #         p.requires_grad = False
                             self.model2.zero_grad()
                             # model.zero_grad()
                             torch.cuda.empty_cache()

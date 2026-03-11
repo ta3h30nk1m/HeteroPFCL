@@ -2,17 +2,17 @@
 
 # CIL CONFIG fedsim_feddualMultipqfullfreeze_homoAgg
 NOTE="debug_fedmosaic"
-MODE="fedmosaic"
+MODE="perada"
 MODEL_ARCH="llama3_3b" # llavea gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=4
-NUM_ROUNDS=4
+SCENARIO=0
+NUM_ROUNDS=10
 NUM_TASKS=4
 NUM_CLIENTS=4
 MODEL_MAX_LEN=20000
-NUM_ITER=100
+NUM_ITER=10
 
 ##
 MEMORY_SIZE=100000
@@ -21,7 +21,7 @@ IS_STREAMONLY=False #################!!!!!!!!!!!!
 LORA_ENABLE=True
 SAVE_OPTIM=True ##########
 
-USE_TASK_VECTOR=True
+USE_TASK_VECTOR=False
 
 BATCHSIZE=1
 
@@ -67,7 +67,7 @@ deepspeed --master_port 29715 \
     --gradient_checkpointing True \
     --num_train_epochs 1 \
     --num_iter $NUM_ITER \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 8 \
     --bits $BITS \
     --bf16 True \
     --tf32 True \

@@ -51,7 +51,7 @@ from peft.tuners.lora.config import LoraConfig
 from peft.tuners.lora.eetq import dispatch_eetq
 from peft.tuners.lora.gptq import dispatch_gptq
 from peft.tuners.lora.hqq import dispatch_hqq
-from .pqloralayer_full_init import Conv2d, PQLoraFullInitLayer, dispatch_default
+from .colora_init_layer import Conv2d, CoLoraInitLayer, dispatch_default
 from peft.tuners.lora.torchao import dispatch_torchao
 from peft.tuners.lora.tp_layer import dispatch_megatron
 
@@ -62,7 +62,7 @@ def _adapter_names_pre_forward_hook(target, args, kwargs, adapter_names):
     return args, kwargs
 
 
-class PQLoraModel_ViT(BaseTuner):
+class CoLoraInitModel(BaseTuner):
     """
     Creates Low Rank Adapter (LoRA) model from a pretrained transformers model.
 
@@ -155,19 +155,9 @@ class PQLoraModel_ViT(BaseTuner):
                 "set bias to 'none' for all adapters."
             )
 
-    def forward(self, pixel_values=None, labels=None, **kwargs):
-        # Custom forward for ViT inputs only.
-        return self.model(pixel_values=pixel_values, labels=labels)
-
     @staticmethod
     def _check_target_module_exists(lora_config, key):
         return check_target_module_exists(lora_config, key)
-
-    def forward(self, pixel_values=None, labels=None, **kwargs):
-        """
-        Custom forward for ViT inputs only.
-        """
-        return self.model(pixel_values=pixel_values, labels=labels)
 
     def _prepare_model(self, peft_config: LoraConfig, model: nn.Module):
         r"""
@@ -230,7 +220,7 @@ class PQLoraModel_ViT(BaseTuner):
         # note: AdaLoraLayer is a subclass of LoraLayer, we need to exclude it
         from peft.tuners.adalora import AdaLoraLayer
 
-        if isinstance(target, PQLoraFullInitLayer) and not isinstance(target, AdaLoraLayer):
+        if isinstance(target, CoLoraInitLayer) and not isinstance(target, AdaLoraLayer):
             target.update_layer(
                 adapter_name,
                 r,
@@ -304,7 +294,7 @@ class PQLoraModel_ViT(BaseTuner):
                         p.requires_grad = True
             elif bias == "lora_only":
                 for m in model.modules():
-                    if isinstance(m, PQLoraFullInitLayer) and hasattr(m, "bias") and m.bias is not None:
+                    if isinstance(m, CoLoraInitLayer) and hasattr(m, "bias") and m.bias is not None:
                         m.bias.requires_grad = True
             else:
                 raise NotImplementedError(f"Requested bias: {bias}, is not implemented.")
@@ -436,7 +426,7 @@ class PQLoraModel_ViT(BaseTuner):
             adapter_name (`str` or `list[str]`): Name of the adapter(s) to be activated.
         """
         for module in self.model.modules():
-            if isinstance(module, PQLoraFullInitLayer):
+            if isinstance(module, CoLoraInitLayer):
                 if module.merged:
                     warnings.warn("Adapter cannot be set when the model is merged. Unmerging the model first.")
                     module.unmerge()
@@ -460,7 +450,7 @@ class PQLoraModel_ViT(BaseTuner):
         # to check that there is at least one layer with the given name, or else something like typos can easily slip.
         expected_adapters = set()
         for layer in self.modules():
-            if isinstance(layer, PQLoraFullInitLayer):
+            if isinstance(layer, CoLoraInitLayer):
                 expected_adapters |= layer.lora_A.keys()
                 expected_adapters |= layer.lora_embedding_A.keys()
         unique_adapters = {name for name in adapter_names if name != "__base__"}
@@ -470,7 +460,7 @@ class PQLoraModel_ViT(BaseTuner):
 
         hook_handles = []
         for module in self.modules():
-            if isinstance(module, PQLoraFullInitLayer) or isinstance(module, ModulesToSaveWrapper):
+            if isinstance(module, CoLoraInitLayer) or isinstance(module, ModulesToSaveWrapper):
                 pre_forward = partial(_adapter_names_pre_forward_hook, adapter_names=adapter_names)
                 handle = module.register_forward_pre_hook(pre_forward, with_kwargs=True)
                 hook_handles.append(handle)
@@ -679,7 +669,7 @@ class PQLoraModel_ViT(BaseTuner):
         key_list = [key for key, _ in self.model.named_modules() if self.prefix not in key]
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFullInitLayer):
+            if isinstance(target, CoLoraInitLayer):
                 if adapter_name in target.lora_A:
                     target_lora_A = target.lora_A[adapter_name].weight
                     target_lora_B = target.lora_B[adapter_name].weight
@@ -864,7 +854,7 @@ class PQLoraModel_ViT(BaseTuner):
         new_adapter = None
         for key in key_list:
             _, target, _ = _get_submodules(self.model, key)
-            if isinstance(target, PQLoraFullInitLayer):
+            if isinstance(target, CoLoraInitLayer):
                 target.delete_adapter(adapter_name)
                 if new_adapter is None:
                     new_adapter = target.active_adapters[:]

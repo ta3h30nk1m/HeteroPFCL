@@ -61,6 +61,9 @@ class TrainingConfig(transformers.TrainingArguments):
     gradient_noise_type: str = "gaussian"
     gradient_noise_std: float = 1e-4
     
+    AB_align_data_size: int = 5000
+    num_blocks:int = 4
+    
     # distillation config
     num_serverdistill: int = 80
     
@@ -111,5 +114,3 @@ class TrainingConfig(transformers.TrainingArguments):
     lora_bias: str = "none"
     mm_projector_lr: Optional[float] = 2e-5
     group_by_modality_length: bool = field(default=True)
-    
-    is_t5model: bool = False

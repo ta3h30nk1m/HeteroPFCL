@@ -155,8 +155,6 @@ def TAKFL_aggregate_state_dict(global_state_dict_list, local_state_dict_list, se
         torch.cuda.empty_cache()
 
 def takfl_create_trainer(model, tokenizer, training_args, data_module, models, local_state_dict_list, cur_model_id, teacher_model_id, teacher_client_ids, extra_state_dict_dict):
-    task_id = extra_state_dict_dict['task_id'] if 'task_id' in extra_state_dict_dict else None
-    ema_ratio = training_args.ema_ratio
     training_args.max_seq_length = training_args.model_max_length
     training_args.packing=False
     trainer = LLaVATrainerTAKFL(model=model,
@@ -750,11 +748,6 @@ class LLaVATrainerTAKFL(LLaVATrainerFEDAVG):
 
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
                         
-                        if self.args.use_hypergradient:
-                            # update self.lr_scheduler.base_lrs
-                            for param_id, param_group in enumerate(self.optimizer.param_groups):
-                                self.lr_scheduler.base_lrs[param_id] = param_group['lr']
-
                         optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
                         if optimizer_was_run:
                             # Delay optimizer scheduling until metrics are generated

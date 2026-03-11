@@ -17,8 +17,6 @@ from transformers import BitsAndBytesConfig
 import time
 import datetime
 import torch.nn.functional as F
-import glob
-import re
 
 os.environ["WANDB_DISABLED"] = "true"
 def main():    
@@ -188,15 +186,6 @@ def main():
     task_vectors = [None for _ in range(training_args.num_clients)]
     
     original_weights = {}
-    if 'tv' in training_args.mode:
-        if 'pq' in training_args.mode:
-            for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-                if 'lora2_P' in n or 'lora2_Q' in n or 'lora_P' in n or 'lora_Q' in n:
-                    original_weights[n] = p.clone().detach().cpu().flatten()
-        else:
-            for n,p in model.base_model.language_model.model.layers[-1].named_parameters():
-                if 'lora' in n:
-                    original_weights[n] = p.clone().detach().cpu().flatten()
     lr_step = (init_lr - final_lr)/total_rounds
     mm_lr_step = (mm_init_lr - mm_final_lr)/total_rounds
     for curr_round in range(total_rounds):

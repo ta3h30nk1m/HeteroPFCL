@@ -16,26 +16,26 @@
 # rm MultiModalQA
 
 # WebQA
-gdrive files download 1uskKtaMtKVqjMX9cjPZ70c3I9q2Xux4e
-unzip WebQA.zip
-rm WebQA.zip
+#gdrive files download 1uskKtaMtKVqjMX9cjPZ70c3I9q2Xux4e
+#unzip WebQA.zip
+#rm WebQA.zip
 
-gdrive files download 1yrKz3_aF320FUY0Pzuc43YyOliYV8A8L
+./gdrive files download 1yrKz3_aF320FUY0Pzuc43YyOliYV8A8L
 unzip TQA.zip
 rm TQA.zip
 
-mkdir AQUA
-wget https://researchdata.aston.ac.uk/380/1/SemArt.zip
-unzip SemArt.zip
-mv SemArt/Images AQUA
-rm SemArt.zip
-rm -rf SemArt
-git clone https://github.com/noagarcia/ArtVQA
-mv ArtVQA/AQUA/*.json AQUA
-rm -rf ArtVQA
-cd AQUA
-mv Images images
+#mkdir AQUA
+#wget https://researchdata.aston.ac.uk/380/1/SemArt.zip
+#unzip SemArt.zip
+#mv SemArt/Images AQUA
+#rm SemArt.zip
+#rm -rf SemArt
+#git clone https://github.com/noagarcia/ArtVQA
+#mv ArtVQA/AQUA/*.json AQUA
+#rm -rf ArtVQA
+#cd AQUA
+#mv Images images
 
-gdrive files download 1jXip1cW30g7g7MfXvb4cI2iGa_qqgYDM
+./gdrive files download 1jXip1cW30g7g7MfXvb4cI2iGa_qqgYDM
 tar -xvf dvqa.tar
 rm dvqa.tar

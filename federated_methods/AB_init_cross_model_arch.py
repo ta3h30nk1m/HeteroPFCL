@@ -7,7 +7,7 @@ import torch.distributed as dist
 from torch.utils.data import RandomSampler
 from packaging import version
 from torch import nn
-from utils.train_utils import load_deepspeed
+from utils.train_utils import get_target_layers
 from models.llava.llava_trainer import LLaVATrainer
 from transformers.utils import logging
 import sys, os, time, shutil, datetime
@@ -85,6 +85,7 @@ class LLaVATrainerABInit(LLaVATrainer):
         self.hooks = []
         self.lora_outputs = []
         self.lora_targets = []
+        self.num_blocks = self.args.num_blocks
         # Define a simple function to store the output of a layer
         def hook_fn_A1(module, input, output):
             # Store the output for further processing

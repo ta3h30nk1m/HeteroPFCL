@@ -356,7 +356,7 @@ def main():
     logger.info("total done\n")
 
 def get_datalists(args, scenario_num):
-    with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
+    with open(f"./scenarios/{scenario_num}.json") as fp:
         scenario = json.load(fp)
     
     assert args.num_clients == len(scenario)

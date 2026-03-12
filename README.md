@@ -92,10 +92,10 @@ Before running, edit the top section of `train_VLM_CL.sh` to configure your expe
 
 | Variable | Default | Description |
 |---|---|---|
-| `SCENARIO` | `0` | Scenario index defined in the scenario JSON file |
+| `SCENARIO` | `DRAKE_hetero_llava_llama_1B_3B` | Scenario name defined in the `scenarios/` folder |
 | `NUM_ROUNDS` | `5` | Number of federated communication rounds per task |
 | `NUM_TASKS` | `4` | Number of tasks per client defined in the scenario JSON file |
-| `NUM_CLIENTS` | `4` | Number of federated clients defined in the scenario JSOn file |
+| `NUM_CLIENTS` | `10` | Number of federated clients defined in the scenario JSOn file |
 | `NUM_ITER` | `100` | Local training iterations per round (method-dependent, see below) |
 | `IS_MULTIMODAL` | `True` | Enable multimodal (vision-language) training |
 
@@ -114,7 +114,7 @@ Before running, edit the top section of `train_VLM_CL.sh` to configure your expe
 
 Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings for fair comparison. Set `MODE` to one of the following and adjust accordingly:
 
-| `MODE` | `NUM_ITER` | `--gradient_accumulation_steps` | Notes |
+| `MODE` | `NUM_ITER` | `BATCHSIZE` | Notes |
 |---|---|---|---|
 | `fedmosaic` | `94` | `4` | Set `USE_TASK_VECTOR=True` |
 | `sft` / `fedavg` / `feddpa` | `100` | `4` | |
@@ -124,14 +124,14 @@ Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings
 | `feddat` | `43` | `8` | |
 
 > ⚠️ `USE_TASK_VECTOR=True` should **only** be set for `fedmosaic`. Using them with other methods will cause errors.
-
+> Methods that update local and global modules in local training steps require doubling the batch size to correctly update both modules with the same batch size to other methods when using `deepspeed`.
 ---
 
 ### Dataset-Specific Settings
 
 Adjust learning rates and multimodal flags depending on the dataset used:
 
-| Dataset | `LR` | `MM_PROJECTOR_LR` | `--is_multimodal` | `--lora_r` | `--lora_alpha` | `SCHED_NAME` | `sft NUM_ITER` |
+| Dataset | `LR` | `MM_PROJECTOR_LR` | `IS_MULTIMODAL` | `--lora_r` | `--lora_alpha` | `SCHED_NAME` | `sft NUM_ITER` |
 |---|---|---|---|---|---|---|---|
 | DRAKE / HFLB | `2e-5` | `5e-5` | `True` | `128` | `256` | `constant` | `100` |
 | Fed-Scope / Fed-aya | `3e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `30` / `50` |

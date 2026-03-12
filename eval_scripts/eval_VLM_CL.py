@@ -561,7 +561,7 @@ def main():
     
     logger.info(f"elapsed time {datetime.timedelta(seconds=int(time.time() - start_time))} | ")
 def get_datalists(args, scenario_num):
-    with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
+    with open(f"./scenarios/{scenario_num}.json") as fp:
         scenario = json.load(fp)
     incremental_setup = {
         "num_active_clients": [args.num_clients,]*int(args.num_rounds * args.num_tasks)

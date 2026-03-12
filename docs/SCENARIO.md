@@ -7,6 +7,9 @@ We load the FL configuration from `scenarios/scenario-{SCENARIO}.json` when you 
 ## Client Model Configuration per Experiment
 
 The table below summarizes some of configuration of each scenario JSON that we used in the paper with the number of clients per model family/size.
+The LLaVA models with various sizes are trained by ourselves following [LLaVA-v1.5 training recipes](https://github.com/haotian-liu/LLaVA).
+The models are available in [here](https://huggingface.co/collections/thkim0305/llava-variable-sizes).
+
 
 ### Multi-modal Experiments
 set `IS_MULTIMODAL = True` to run multi-modal experiments

@@ -26,7 +26,7 @@ class TrainingConfig(transformers.TrainingArguments):
     # exp config
     mode: str = field(default="er") # method
     note: str = field(default=None) # decide output directory
-    scenario: int = field(default=1) # read data config in scenarios/scenario-N.json
+    scenario: str = field(default='DRAKE_hetero_llava_llama_1B_3B') # read data config in scenarios/scenario-N.json
     
     # federated learning
     num_clients: int = 10

@@ -602,7 +602,7 @@ def get_datalists(args, scenario_num):
                 "data_name": f"{data['dataset']}-{data['subset_id']}",
                 "type": data['type'] if 'type' in data else 'open-ended',
                 "model_id": client_data['model_id'],
-                "data": datalist if scenario_num not in [90,91,92,93] else datalist[:15],
+                "data": datalist,# if scenario_num not in [90,91,92,93] else datalist[:15],
                 "eval_cnt": eval_cnt})
             eval_cnt += len(datalist)
             

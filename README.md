@@ -104,8 +104,8 @@ Before running, edit the top section of `train_VLM_CL.sh` to configure your expe
 | Variable | Default | Description |
 |---|---|---|
 | `BATCHSIZE` | `4` | Gradient accumulation steps (effective total batch size) |
-| `LR` | `2e-5` | Base learning rate |
-| `MM_PROJECTOR_LR` | `5e-5` | Learning rate for the multimodal projector |
+| `LR` | `2e-5` | Base learning rate for lora weights (A, B) |
+| `MM_PROJECTOR_LR` | `5e-5` | Learning rate for other weights (e.g., Co-LoRA's P & Q) |
 | `SCHED_NAME` | `"constant"` | LR scheduler type (`constant` or `cosine`) |
 
 ---
@@ -131,10 +131,11 @@ Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings
 
 Adjust learning rates and multimodal flags depending on the dataset used:
 
-| Dataset | `LR` | `MM_PROJECTOR_LR` | `--is_multimodal` | `--lora_r` | `--lora_alpha` | `SCHED_NAME` |
-|---|---|---|---|---|---|---|
-| DRAKE / HFLB | `2e-5` | `5e-5` | `True` | `128` | `256` | `constant` |
-| FS-LLM / Fed-aya | `3e-4` | `5e-4` | `False` | `16` | `32` | `cosine` |
+| Dataset | `LR` | `MM_PROJECTOR_LR` | `--is_multimodal` | `--lora_r` | `--lora_alpha` | `SCHED_NAME` | `sft NUM_ITER` |
+|---|---|---|---|---|---|---|---|
+| DRAKE / HFLB | `2e-5` | `5e-5` | `True` | `128` | `256` | `constant` | `100` |
+| Fed-Scope / Fed-aya | `3e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `30` / `50` |
+| Fed-LLM | `1e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `10`? |
 
 ---
 

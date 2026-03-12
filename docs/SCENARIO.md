@@ -1,33 +1,33 @@
 # Federated Learning Scenarios
 
+We load the FL configuration from `scenarios/scenario-{SCENARIO}.json` when you set `SCENARIO={SCENARIO}` in the training script.
 
+---
 
-- old scenario (기존 실험에 사용했던 시나리오)
-    - sc132: DRAKE 1B 3B hetero (llama)
-    - sc137: DRAKE 1B 3B 8B hetero (llama)
-    - sc1137: DRAKE 1B 3B 8B hetero (qwen)
-    - sc203: fs-llm hetero (llama)
-    - sc262: fed-aya hetero (llama)
+## Client Model Configuration per Experiment
 
-- new scenario (hetero client 제대로 설정한 시나리오들)
-    - scenario-0~5: DRAKE (sc1 - 3B homo, sc4 - 1B/3B hetero, sc5 - 1B/3B/8B hetero)
-    - scenario-7~12: unseen
-    - scenario-20~24: HFLB (sc21 - 3B homo, sc23 - 1B/3B hetero)
-    - scenario-60~ : fed-aya (sc62)
-    - scenario-70~ : fed-llm (sc74)
-    - sc103 - DRAKE Qwen hetero
+The table below summarizes some of configuration of each scenario JSON that we used in the paper with the number of clients per model family/size.
 
+### Multi-modal Experiments
+set `IS_MULTIMODAL = True` to run multi-modal experiments
+| Scenario | LLaVA-Llama3 1B | LLaVA-Llama3 3B | LLaVA-Llama3 8B | LLaVA-Qwen2.5 0.5B | LLaVA-Qwen2.5 1.5B | LLaVA-Qwen2.5 3B |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|
+| `DRAKE_homo_llava_llama_3B` | 0 | 10 | 0 | 0 | 0 | 0 |
+| `DRAKE_hetero_llava_llama_1B_3B` |  4 | 6 | 0 | 0 | 0 | 0 |
+| `DRAKE_hetero_llava_llama_1B_3B_8B` | 3 | 5 | 2 | 0 | 0 | 0 |
+| `DRAKE_homo_llava_qwen_1_5B` | 0 | 0 | 0 | 0 | 10 | 0 |
+| `DRAKE_hetero_llava_qwen_0_5B_1_5B_3B` |  0 | 0 | 0 | 2 | 3 | 5 |
+| `DRAKE_hetero_llava_llama_1B_3B_qwen_1_5B` | 2 | 5 | 0 | 0 | 3 | 0 |
+| `DRAKE_hetero_llava_llama_3B_qwen_1_5B_3B` | 0 | 3 | 0 | 0 | 4 | 3 |
+| `HFLB_homo_llava_llama_3B` | 0 | 9 | 0 | 0 | 0 | 0 |
+| `HFLB_hetero_llava_llama_1B_3B` | 3 | 6 | 0 | 0 | 0 | 0 |
 
-- Large scale NLP 실험:
-    - 시나리오: 90 (52 clients), 93 (36 clients)
-    - 데이터셋: gdrive files download 1QJK0JtrmrD2AsZvk78WpqT0_TsDHJXVc
-        - `dataset` 폴더 안에서 다운 후 `tar -xvf nlp_datasets.tar`
-    - 핵심 하이퍼파라미터:
-        - lr 1e-4/5e-4 
-        - batch size 4
-        - cosine scheduler
-        - 2 rounds per task
-        - 30 rounds (for sft, reduce the iteration for baseline)
-        - lora r 16 / lora alpha 32
-    - `train_VLM_CL_for_NLP.sh` 참고
-    - 테스트셋은 현재 task당 15개씩만 가져오도록 설정되어있음 (eval_VLM_CL.py L655)
+### Text-only Experiments
+set `IS_MULTIMODAL = False` to run text-only experiments
+| Scenario |Llama-3 1B | Llama-3 3B | Llama-3 8B |
+|:---:|---|:---:|:---:|
+| `Fed-LLM_hetero_llama_1B_3B` | 26 | 26 | 0 |
+| `Fed-Scope_hetero_llama_3B_8B` | 0 | 3 | 2 |
+| `Fed-aya_hetero_llama_1B_3B` |  4 | 4 | 0 |
+
+---

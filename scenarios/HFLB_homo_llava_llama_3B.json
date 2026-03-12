@@ -82,10 +82,10 @@
     {
         "client_id": 8,
         "datasets":[
-            {"dataset": "AQUA","subset_id": 100,"type":"multi-choice"},
-            {"dataset": "AQUA","subset_id": 101, "type":"multi-choice"},
-            {"dataset": "AQUA","subset_id": 102,"type":"multi-choice"},
-            {"dataset": "AQUA","subset_id": 103,"type":"multi-choice"}
+            {"dataset": "AQUA","subset_id": 0,"type":"multi-choice"},
+            {"dataset": "AQUA","subset_id": 1, "type":"multi-choice"},
+            {"dataset": "AQUA","subset_id": 2,"type":"multi-choice"},
+            {"dataset": "AQUA","subset_id": 3,"type":"multi-choice"}
         ],
         "model_id": "thkim0305/llama3.2_3B_vl"
     }

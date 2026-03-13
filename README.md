@@ -1,17 +1,40 @@
 # Co-LoRA: Collaborative Model Personalization on Heterogeneous Multi-Modal Clients
 
 <p align="center">
-  <a href="https://openreview.net/forum?id=0g5Dk4Qfh0"><img src="https://img.shields.io/badge/ICLR_2026-Paper-blue" alt="Paper"></a>
-  <a href="https://github.com/"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
+  <a href="https://openreview.net/forum?id=0g5Dk4Qfh0">
+    <img src="https://img.shields.io/badge/ICLR_2026-Paper-blue" alt="Paper">
+  </a>
+  <a href="https://github.com/">
+    <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+  </a>
   <img src="https://img.shields.io/badge/Python-3.10-yellow" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-2.3.0-orange" alt="PyTorch">
 </p>
 
-> **Official repository** for [Co-LoRA: Collaborative Model Personalization on Heterogeneous Multi-Modal Clients (ICLR 2026)](https://openreview.net/forum?id=0g5Dk4Qfh0&referrer=%5BAuthor%20Console%5D(%2Fgroup%3Fid%3DICLR.cc%2F2026%2FConference%2FAuthors%23your-submissions))
+<p align="center">
+  Official implementation of <br>
+  <strong>Co-LoRA: Collaborative Model Personalization on Heterogeneous Multi-Modal Clients</strong>
+</p>
 
 ---
 
-## 📋 Table of Contents
+## Overview
+
+This repository contains the official code for **Co-LoRA**, introduced in our ICLR 2026 paper.  
+It supports training and evaluation of **FedMosaic**, our federated continual learning framework for **heterogeneous multi-modal clients**, together with several federated learning baselines.
+
+The central idea is **Co-LoRA**, a dimension-agnostic LoRA design that enables collaborative knowledge sharing across heterogeneous client models.
+
+### Main features
+
+- Federated continual learning for heterogeneous vision-language clients
+- Support for multiple baseline methods alongside **FedMosaic**
+- Scenario-based client/model/task assignment through JSON configuration
+- Training and evaluation pipelines for DRAKE, HFLB, and related benchmarks
+
+---
+
+## Table of Contents
 
 - [Overview](#overview)
 - [Environment Setup](#environment-setup)
@@ -24,20 +47,13 @@
   - [Dataset-Specific Settings](#dataset-specific-settings)
 - [Evaluation](#evaluation)
 - [Pretrained Checkpoints](#pretrained-checkpoints)
-
----
-
-## Overview
-
-**FedMosaic** is federated continual learning frameworks designed for heterogeneous multi-modal clients.
-It is possible by the use of **Co-LoRA**, the dimension-agnostic LoRA that allows collaborative knowledge sharing among heterogeneous models. 
-This repo supports training and evaluation of various federated learning baselines alongside our proposed method.
+- [Citation](#citation)
 
 ---
 
 ## Environment Setup
 
-We recommend using a conda virtual environment.
+We recommend using a fresh conda environment.
 
 ```bash
 conda create -n fcl2 python=3.10
@@ -59,7 +75,10 @@ pip install -U scikit-learn
 
 Place all datasets under the `dataset/` folder at the project root.
 
-DRAKE benchmark is available in [huggingface](https://huggingface.co/datasets/SNUMPR/DRAKE)
+DRAKE benchmark is available in Hugging Face:
+- [SNUMPR/DRAKE](https://huggingface.co/datasets/SNUMPR/DRAKE): large-scale multi-modal personalized federated continual learning benchmark
+- [SNUMPR/HFLB](https://huggingface.co/datasets/SNUMPR/HFLB): 
+
 
 #### Download Instruction:
 To download all at once:
@@ -143,7 +162,7 @@ rm llava_ft_jsons.tar
 
 #### Dataset Structure
 
-Once all archives are extracted, the folder layout will look like this:
+After extraction, the directory layout should look like:
 
 ```
 dataset/
@@ -166,7 +185,9 @@ dataset/
         ├── dataset-0.json
         └── ...
 ```
-Each `id` for `dataset-<id>.json` is the subset task id splitted by ourselves. Please refer to the paper and [task_list.json](scenarios/DRAKE_task_list.json).
+Each `dataset-<id>.json` corresponds to a task subset defined by our benchmark split. 
+
+Please refer to the paper and [scenarios/DRAKE_task_list.json](scenarios/DRAKE_task_list.json).
 
 ## Federated Learning Configuration
 
@@ -229,8 +250,10 @@ Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings
 | `ditto` / `perada` | `50` | `8` | |
 | `feddat` | `43` | `8` | |
 
-> ⚠️ `USE_TASK_VECTOR=True` should **only** be set for `fedmosaic`. Using them with other methods will cause errors.
-> Methods that update local and global modules in local training steps require doubling the batch size to correctly update both modules with the same batch size to other methods when using `deepspeed`.
+> **Note**
+> - `USE_TASK_VECTOR=True` should **only** be set for `fedmosaic`.
+> - Methods that update both local and global modules during local training may require a larger batch size under `deepspeed` to preserve fair effective updates across methods.
+
 ---
 
 ### Dataset-Specific Settings
@@ -241,7 +264,7 @@ Adjust learning rates and multimodal flags depending on the dataset used:
 |---|---|---|---|---|---|---|---|
 | DRAKE / HFLB | `2e-5` | `5e-5` | `True` | `128` | `256` | `constant` | `100` |
 | Fed-Scope / Fed-aya | `3e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `30` / `50` |
-| Fed-LLM | `1e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `10`? |
+| Fed-LLM-Large | `1e-4` | `5e-4` | `False` | `16` | `32` | `cosine` | `10`? |
 
 ---
 
@@ -253,7 +276,7 @@ Default **Self** and **Others** evaluation is performed using:
 bash eval_scripts/eval.sh
 ```
 
-> ⚠️ Make sure `MODE`, `NOTE` and `SCENARIO` in `eval_scripts/eval.sh` match the values used during training so that the correct checkpoints are loaded.
+> Make sure `MODE`, `NOTE` and `SCENARIO` in `eval_scripts/eval.sh` match the values used during training so that the correct checkpoints are loaded.
 
 ### Script Arguments
 

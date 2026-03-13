@@ -1,12 +1,12 @@
 #!/bin/bash
 # CIL CONFIG
-NOTE="debug_qwen_llava_1b_align"
+NOTE="debug_qwen_llava_3b_align"
 MODE="fedMultipqfullfreeze_ABinit" #"feddualMulti2pqfullfreeze_back_ABinit" "fedMultipqfullfreeze_ABinit"
 MODEL_ARCH="llama3_1b" # llava gemma_vl
 RND_SEED=1
 
 # fed args
-SCENARIO=999
+SCENARIO=AB_align
 NUM_ROUNDS=5
 NUM_TASKS=1
 NUM_CLIENTS=2
@@ -86,7 +86,7 @@ deepspeed --master_port 29500 \
     --get_prompt True \
     --num_blocks 4 \
     --is_cross_model_series True \
-    --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &
+    --output_dir "./results/test/" > ./nohup/${NOTE}.log 2>&1 &
 
 # --eval_period $EVAL_PERIOD
 # lr_scheduler_type

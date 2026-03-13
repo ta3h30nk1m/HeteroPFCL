@@ -1,38 +1,21 @@
 #!/bin/bash
 
 # CIL CONFIG
-NOTE="sft_bs4_saveoptim_lr2e-5_sc56_4tasks_5rounds_fixitr100_T0125_decay099"
-MODE="sft"
-MODEL_ARCH="llama3_3b" # llava llama3_1b llama3_3b
+NOTE="debug_fedmosaic"
+MODE="fedmosaic"
 
 # fed args
-SCENARIO=4
+SCENARIO=DRAKE_hetero_llava_llama_1B_3B
 NUM_ROUNDS=5
 NUM_TASKS=4
 NUM_CLIENTS=10
 MODEL_MAX_LEN=20000
 MAX_NEW_TOKENS=512
 
-if [ "$MODEL_ARCH" == "llava" ]; then
-    MODEL_NAME="llava-hf/llava-1.5-7b-hf"
-    VERSION="v1"
-    MODEL_TYPE="llama"
-    BITS=16
-
-elif [ "$MODEL_ARCH" == "llama3_1b" ]; then
-    MODEL_NAME="thkim0305/llama3.2_1B_vl"
-    VERSION="llama3"
-    MODEL_TYPE="llama3"
-    BITS=16
-elif [ "$MODEL_ARCH" == "llama3_3b" ]; then
-    MODEL_NAME="thkim0305/llama3.2_3B_vl"
-    VERSION="llama3"
-    MODEL_TYPE="llama3"
-    BITS=16
-else
-    echo "Undefined setting"
-    exit 1
-fi
+MODEL_NAME="thkim0305/llama3.2_1B_vl"
+VERSION="llama3"
+MODEL_TYPE="llama3"
+BITS=16
 
 # ROUND_TO_EVALS=$2
 ROUND_TO_EVALS=(17)
@@ -58,9 +41,10 @@ for ((index=0; index<${#ROUND_TO_EVALS[@]}; index++)); do
         --note $NOTE \
         --mode $MODE \
         --unseen_task False \
-        --zeroshot True \
+        --zeroshot False \
         --lora_enable True \
         --set_state "gate" \
+        --eval_all False \
         --round_to_eval ${ROUND_TO_EVALS[$index]} \
         --output_dir "./nohup" #> ./nohup/${NOTE}_eval_round${ROUND_TO_EVALS[$index]}.log 2>&1 & #_iter${ITER_TO_EVAL}
 done

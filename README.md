@@ -203,7 +203,8 @@ Before running, edit the top section of `train_VLM_CL.sh` to configure your expe
 | `NUM_CLIENTS` | `10` | Number of federated clients defined in the scenario JSOn file |
 | `NUM_ITER` | `100` | Local training iterations per round (method-dependent, see below) |
 | `IS_MULTIMODAL` | `True` | Enable multimodal (vision-language) training |
-
+| `IS_CONTINUAL` | `True` | Enable PFL-Dynamic setup |
+| `--is_cross_model_series` | `False` | set `True` if FL scenario contains different model series, e.g., llama and qwen |
 #### Optimization Settings
 
 | Variable | Default | Description |
@@ -252,7 +253,17 @@ Default **Self** and **Others** evaluation is performed using:
 bash eval_scripts/eval.sh
 ```
 
-> ⚠️ Make sure `MODE` and `NOTE` in `eval_scripts/eval.sh` match the values used during training so that the correct checkpoints are loaded.
+> ⚠️ Make sure `MODE`, `NOTE` and `SCENARIO` in `eval_scripts/eval.sh` match the values used during training so that the correct checkpoints are loaded.
+
+### Script Arguments
+
+| Variable | Default | Description |
+|---|---|---|
+| `--zeroshot` | `False` | Enable base model evaluation without loading trained checkpoint |
+| `--eval_all` | `False` | Enable evaluation on all tasks in the given scenarios, including `Self` tasks and `Others` tasks |
+
+
+> If set `--eval_all True`, we highly recommend to run the evaluation per client in parallel, using arguments `--eval_client_start`, `--eval_client_end`, `--eval_client_eval_start`, `--eval_client_eval_end`.
 
 ---
 

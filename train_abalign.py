@@ -146,7 +146,7 @@ def main():
 
     results = trainer.train()
     
-    output_dir = os.path.join(training_args.state_dir, f"llava_llama_3b_blockwise{training_args.num_blocks}_A_align.pth")
+    output_dir = os.path.join(training_args.state_dir, f"llava_llama_3b_blockwise{training_args.num_blocks}_qwen_A_align.pth")
     state_dict = get_peft_state_maybe_zero_3(
         model.named_parameters(), training_args.lora_bias
     )
@@ -263,11 +263,11 @@ def main():
         if 'lora_P' in key or 'lora_Q' in key:
             state_dict2[key] = torch.zeros_like(state_dict2[key])
     
-    output_dir2 = os.path.join(training_args.state_dir, f'llava_llama_1b_blockwise{training_args.num_blocks}_random.pth')
+    output_dir2 = os.path.join(training_args.state_dir, f'llava_qwen_1b_blockwise{training_args.num_blocks}_random.pth')
     torch.save(state_dict2, output_dir2)
     
     
-    output_dir = os.path.join(training_args.state_dir, f'llava_llama_3b_blockwise{training_args.num_blocks}_AB_align.pth')
+    output_dir = os.path.join(training_args.state_dir, f'llava_llama_3b_blockwise{training_args.num_blocks}_qwen_AB_align.pth')
     torch.save(state_dict, output_dir)
     return
     ################################################################################################
@@ -298,7 +298,7 @@ def make_supervised_data_module(client_data, tokenizer: transformers.PreTrainedT
                 data_collator=data_collator)
 
 def get_datalists(args, scenario_num):
-    with open(f"./scenarios/scenario-{scenario_num}.json") as fp:
+    with open(f"./scenarios/{scenario_num}.json") as fp:
         scenario = json.load(fp)
     assert args.num_clients == len(scenario)
 

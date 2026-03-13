@@ -2,29 +2,24 @@
 
 # CIL CONFIG fedsim_feddualMultipqfullfreeze_homoAgg
 NOTE="debug_fedmosaic"
-MODE="perada"
-MODEL_ARCH="llama3_3b" # llavea gemma_vl
+MODE="fedmosaic"
 RND_SEED=1
 
 # fed args
-SCENARIO=0
-NUM_ROUNDS=10
+SCENARIO=DRAKE_hetero_llava_llama_1B_3B
+NUM_ROUNDS=5
 NUM_TASKS=4
-NUM_CLIENTS=4
+NUM_CLIENTS=10
 MODEL_MAX_LEN=20000
-NUM_ITER=10
+NUM_ITER=94
 
-##
+
 MEMORY_SIZE=100000
-IS_STREAMONLY=False #################!!!!!!!!!!!!
+IS_CONTINUAL=False
 
-LORA_ENABLE=True
-SAVE_OPTIM=True ##########
+USE_TASK_VECTOR=True
 
-USE_TASK_VECTOR=False
-
-BATCHSIZE=1
-
+BATCHSIZE=4
 IS_MULTIMODAL=True
 ONLINE_T=0.125
 ONLINE_DECAY_RATIO=0.99
@@ -34,9 +29,10 @@ MM_PROJECTOR_LR=5e-5 #3e-4
 FINAL_LR=$LR #3e-4
 MM_FINAL_LR=$MM_PROJECTOR_LR #3e-4
 OPT_NAME="adamw_torch" # adam8bit_bnb adamw_torch
-SCHED_NAME="constant" #constant cosine #################!!!!!!!!!!!!!!!!!!
-WARMUP_RATIO=0.1 # SHOULD BE 0.03 / NUM_ROUNDS
+SCHED_NAME="constant" #constant cosine
+WARMUP_RATIO=0.1 
 DECAY_RATIO=0.9
+SAVE_OPTIM=True
 
 # dummy model input - real model used is defined in scenario file
 MODEL_NAME="thkim0305/llama3.2_1B_vl"
@@ -59,15 +55,16 @@ deepspeed --master_port 29715 \
     --num_tasks $NUM_TASKS \
     --scenario $SCENARIO \
     --note $NOTE \
+    --is_multimodal $IS_MULTIMODAL \
     --memory_size $MEMORY_SIZE \
-    --is_streamonly $IS_STREAMONLY \
+    --is_streamonly False \
     --online_stream_T $ONLINE_T \
     --online_stream_count_decay_ratio $ONLINE_DECAY_RATIO \
-    --is_continual True \
+    --is_continual $IS_CONTINUAL \
     --gradient_checkpointing True \
     --num_train_epochs 1 \
     --num_iter $NUM_ITER \
-    --gradient_accumulation_steps 8 \
+    --gradient_accumulation_steps $BATCHSIZE \
     --bits $BITS \
     --bf16 True \
     --tf32 True \
@@ -78,20 +75,19 @@ deepspeed --master_port 29715 \
     --weight_decay 0. \
     --warmup_ratio $WARMUP_RATIO \
     --decay_ratio $DECAY_RATIO \
-    --learning_rate $LR --per_gpu_train_batch_size $BATCHSIZE \
+    --learning_rate $LR --per_gpu_train_batch_size 1 \
     --final_lr $FINAL_LR --mm_final_lr $MM_FINAL_LR \
     --mm_projector_lr $MM_PROJECTOR_LR \
     --evaluation_strategy "no" \
     --save_strategy "no" \
     --logging_steps 2 \
-    --lora_enable $LORA_ENABLE \
+    --lora_enable True \
     --save_optim $SAVE_OPTIM \
-    --use_task_vector $USE_TASK_VECTOR \
-    --load_pretrained_lora False \
     --save_per_step False \
+    --use_task_vector $USE_TASK_VECTOR \
+    --load_pretrained_lora True \
     --softmax_temp 0.5 \
     --grad_freq 10 \
-    --is_multimodal $IS_MULTIMODAL \
     --get_prompt True \
     --is_cross_model_series False \
     --output_dir "./results/test/" #> ./nohup/${NOTE}.log 2>&1 &

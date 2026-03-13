@@ -59,9 +59,87 @@ pip install -U scikit-learn
 
 Place all datasets under the `dataset/` folder at the project root.
 
-Download all data for DRAKE from [here]().
+DRAKE benchmark is available in [huggingface](https://huggingface.co/datasets/SNUMPR/DRAKE)
+
+#### Download Instruction:
+To download all at once:
+```bash
+mkdir dataset
+cd dataset
+huggingface-cli download SNUMPR/DRAKE --local-dir ./ --repo-type dataset
+```
+But we **highly recommend** to download each dataset in DRAKE separately due to enormous dataset size, by:
+```bash
+# example: downloading Fashion200K dataset
+cd dataset
+huggingface-cli download SNUMPR/DRAKE Fashion200K.tar --local-dir ./ --repo-type dataset
+tar -xvf Fashion200K.tar
+rm Fashion200K.tar
+```
 
 ---
+
+<details>
+<summary>Additionally download LLaVA-v1.5 fine-tuning dataset</summary>
+Additionally download LLaVA-v1.5 fine-tuning dataset to use it as public dataset
+
+```bash
+# Inside dataset/ folder,
+
+mkdir llava_finetune
+cd llava_finetune
+
+# original llava json file
+wget https://huggingface.co/datasets/liuhaotian/LLaVA-Instruct-150K/resolve/main/llava_v1_5_mix665k.json?download=true
+mv llava_v1_5_mix665k.json?download=true llava_v1_5_mix665k.json
+
+# coco
+mkdir coco
+cd coco
+wget http://images.cocodataset.org/zips/train2017.zip
+unzip train2017.zip
+rm train2017.zip
+cd..
+
+# gqa
+mkdir gqa
+cd gqa
+wget https://downloads.cs.stanford.edu/nlp/data/gqa/images.zip
+unzip images.zip
+rm images.zip
+cd ..
+
+# textvqa
+mkdir textvqa
+cd textvqa
+wget https://dl.fbaipublicfiles.com/textvqa/images/train_val_images.zip
+unzip train_val_images.zip
+rm train_val_images.zip
+cd ..
+
+# vg
+mkdir vg
+cd vg
+wget https://cs.stanford.edu/people/rak248/VG_100K_2/images.zip
+unzip images.zip
+rm images.zip
+wget https://cs.stanford.edu/people/rak248/VG_100K_2/images2.zip
+unzip images2.zip
+rm images2.zip
+cd ..
+
+# ocr_vqa
+huggingface-cli download SNUMPR/DRAKE llava_ft/ocr_vqa.tar --local-dir ./ --repo-type dataset
+tar -xvf ocr_vqa.tar
+rm ocr_vqa.tar
+
+# splited json files
+huggingface-cli download SNUMPR/DRAKE llava_ft/llava_ft_jsons.tar --local-dir ./ --repo-type dataset
+tar -xvf llava_ft_jsons.tar
+rm llava_ft_jsons.tar
+
+```
+</details>
 
 ## Federated Learning Configuration
 

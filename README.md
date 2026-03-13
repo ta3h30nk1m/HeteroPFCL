@@ -141,6 +141,33 @@ rm llava_ft_jsons.tar
 ```
 </details>
 
+#### Dataset Structure
+
+Once all archives are extracted, the folder layout will look like this:
+
+```
+dataset/
+├── Fashion200K/
+│   ├── full/images/             # raw image files
+│   ├── train/
+│   │   ├── dataset-0.json       # task split 0
+│   │   ├── dataset-1.json       # task split 1
+│   │   └── ...
+│   └── test/
+│       ├── dataset-0.json
+│       ├── dataset-1.json
+│       └── ...
+└── <other_datasets>/
+    ├── <image_folder>/
+    ├── train/
+    │   ├── dataset-0.json
+    │   └── ...
+    └── test/
+        ├── dataset-0.json
+        └── ...
+```
+Each `id` for `dataset-<id>.json` is the subset task id splitted by ourselves. Please refer to the paper and [task_list.json](scenarios/DRAKE_task_list.json).
+
 ## Federated Learning Configuration
 
 Client tasks and model assignments are managed via a single JSON scenario file. For a summary of all scenarios used in the paper, see [docs/SCENARIO.md](docs/SCENARIO.md).

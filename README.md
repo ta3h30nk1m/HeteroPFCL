@@ -22,7 +22,7 @@
 
 ## Overview
 
-This repository contains the official code for **Co-LoRA**, introduced in our ICLR 2026 paper.  
+This repository contains the official code for **Co-LoRA (ICLR 2026)**.  
 It supports training and evaluation of **FedMosaic**, our federated continual learning framework for **heterogeneous multi-modal clients**, together with several federated learning baselines.
 
 The central idea is **Co-LoRA**, a dimension-agnostic LoRA design that enables collaborative knowledge sharing across heterogeneous client models.

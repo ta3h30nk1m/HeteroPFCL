@@ -13,7 +13,9 @@
 
 <p align="center">
   Official implementation of <br>
-  <strong>Co-LoRA: Collaborative Model Personalization on Heterogeneous Multi-Modal Clients</strong>
+  <a href="https://openreview.net/forum?id=0g5Dk4Qfh0">
+    <strong>Co-LoRA: Collaborative Model Personalization on Heterogeneous Multi-Modal Clients</strong>
+  </a>
 </p>
 
 ---
@@ -239,7 +241,7 @@ Before running, edit the top section of `train_VLM_CL.sh` to configure your expe
 
 ### Method-Specific Settings
 
-Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings for fair comparison. Set `MODE` to one of the following and adjust accordingly:
+Different federated methods require specific `NUM_ITER` and `BATCHSIZE` settings for fair computational comparison (See Sec.A.8). Set `MODE` to one of the following and adjust accordingly:
 
 | `MODE` | `NUM_ITER` | `BATCHSIZE` | Notes |
 |---|---|---|---|
